@@ -2,17 +2,19 @@ import React from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../theme/theme';
 
-export const MobileHeader = ({ title, onMenuPress }: any) => {
+export const MobileHeader = ({ title, onMenuPress, rightContent }: any) => {
   const theme = useTheme();
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
       <TouchableOpacity onPress={onMenuPress} style={{ padding: theme.spacing.sm }}>
         <Text style={{ color: theme.colors.text, fontSize: 24 }}>☰</Text>
       </TouchableOpacity>
-      <Text style={{ color: theme.colors.text, fontSize: theme.typography.sizes.lg, fontWeight: theme.typography.weights.bold as any }}>
+      <Text style={{ flex: 1, textAlign: 'center', color: theme.colors.text, fontSize: theme.typography.sizes.lg, fontWeight: theme.typography.weights.bold as any }}>
         {title}
       </Text>
-      <View style={{ width: 24 }} />
+      <View style={{ minWidth: 40, alignItems: 'flex-end' }}>
+        {rightContent}
+      </View>
     </View>
   );
 };

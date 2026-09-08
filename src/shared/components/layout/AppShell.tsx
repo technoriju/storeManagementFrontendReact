@@ -6,6 +6,7 @@ import { DesktopHeader } from './DesktopHeader';
 import { MobileHeader } from './MobileHeader';
 import { Sidebar } from './Sidebar';
 import { AppDrawer } from '../feedback/AppDrawer';
+import { SyncStatusIndicator } from '../../../core/sync/SyncStatusIndicator';
 
 const TABS = [
   { id: 'dashboard', label: 'Home', icon: 'home' },
@@ -53,9 +54,9 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {isLargeScreen ? (
-        <DesktopHeader title={currentTabLabel} />
+        <DesktopHeader title={currentTabLabel} rightContent={<SyncStatusIndicator />} />
       ) : (
-        <MobileHeader title={currentTabLabel} onMenuPress={handleMenuPress} />
+        <MobileHeader title={currentTabLabel} onMenuPress={handleMenuPress} rightContent={<SyncStatusIndicator />} />
       )}
       
       <View style={styles.body}>

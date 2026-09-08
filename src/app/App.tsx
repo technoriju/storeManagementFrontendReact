@@ -9,6 +9,8 @@ import { AuthService } from '../core/auth/auth.service';
 import { setupInterceptors } from '../core/api/api-client';
 import { LoginScreen } from '../features/auth/screens/LoginScreen';
 
+import { ProductsModule } from '../features/products';
+
 const AuthenticatedApp = () => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -32,33 +34,45 @@ const AuthenticatedApp = () => {
     );
   }
 
+  const renderContent = () => {
+    if (activeTab === 'products') {
+      return <ProductsModule />;
+    }
+    
+    return (
+      <View style={styles.content}>
+        <Text style={[
+          styles.title, 
+          { 
+            color: theme.colors.text,
+            fontSize: theme.typography.sizes.xxl,
+            fontWeight: theme.typography.weights.bold as any
+          }
+        ]}>
+          {activeTab.toUpperCase()}
+        </Text>
+        
+        <Text style={[
+          styles.subtitle,
+          { color: theme.colors.textSecondary }
+        ]}>
+          Running on {getPlatform()}
+        </Text>
+      </View>
+    );
+  };
+
   return (
     <>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       <AppShell activeTab={activeTab} onTabChange={setActiveTab}>
-        <View style={styles.content}>
-          <Text style={[
-            styles.title, 
-            { 
-              color: theme.colors.text,
-              fontSize: theme.typography.sizes.xxl,
-              fontWeight: theme.typography.weights.bold as any
-            }
-          ]}>
-            {activeTab.toUpperCase()}
-          </Text>
-          
-          <Text style={[
-            styles.subtitle,
-            { color: theme.colors.textSecondary }
-          ]}>
-            Running on {getPlatform()}
-          </Text>
-        </View>
+        {renderContent()}
       </AppShell>
     </>
   );
 };
+
+import { syncEngine } from '../core/sync/SyncEngine';
 
 const RootNavigator = () => {
   const { isInitializing, isAuthenticated, initialize, logout } = useAuthStore();
@@ -70,6 +84,13 @@ const RootNavigator = () => {
       logout();
     });
     initialize();
+    
+    // Initialize SyncEngine
+    syncEngine.init();
+    
+    return () => {
+      syncEngine.destroy();
+    };
   }, [initialize, logout]);
 
   if (isInitializing) {
