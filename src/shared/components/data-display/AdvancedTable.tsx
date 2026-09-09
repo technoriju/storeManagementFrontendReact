@@ -99,7 +99,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
                 </View>
               ))}
               {renderRowActions && (
-                <View style={[styles.cell, { width: 120 }]} />
+                <View style={[styles.cell, { width: 140, paddingRight: 24 }]} />
               )}
             </View>
 
@@ -142,7 +142,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
                     </View>
                   ))}
                   {renderRowActions && (
-                    <View style={[styles.cell, { width: 120, alignItems: 'flex-end', flexDirection: 'row', justifyContent: 'center', gap: 12 }]}>
+                    <View style={[styles.cell, { width: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, paddingRight: 24 }]}>
                       {renderRowActions(item)}
                     </View>
                   )}
