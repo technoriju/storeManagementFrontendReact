@@ -10,6 +10,8 @@ import { setupInterceptors } from '../core/api/api-client';
 import { LoginScreen } from '../features/auth/screens/LoginScreen';
 
 import { ProductsModule } from '../features/products';
+import { PurchasesModule } from '../features/purchases/PurchasesModule';
+import { InventoryModule } from '../features/inventory/InventoryModule';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
@@ -37,6 +39,12 @@ const AuthenticatedApp = () => {
   const renderContent = () => {
     if (activeTab === 'products') {
       return <ProductsModule />;
+    }
+    if (activeTab === 'purchases') {
+      return <PurchasesModule />;
+    }
+    if (activeTab === 'inventory') {
+      return <InventoryModule />;
     }
     
     return (
