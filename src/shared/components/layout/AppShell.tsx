@@ -15,6 +15,7 @@ const TABS = [
   { id: 'customers', label: 'Customers', icon: 'people' },
   { id: 'suppliers', label: 'Suppliers', icon: 'business' },
   { id: 'inventory', label: 'Inventory', icon: 'list' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'more', label: 'More', icon: 'menu' },
 ];
 

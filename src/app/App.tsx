@@ -15,6 +15,7 @@ import { InventoryModule } from '../features/inventory/InventoryModule';
 import { POSModule } from '../features/pos/POSModule';
 import { CustomersModule } from '../features/customers/CustomersModule';
 import { SuppliersModule } from '../features/suppliers/SuppliersModule';
+import { SettingsModule } from '../features/settings/SettingsModule';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
@@ -57,6 +58,9 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'suppliers') {
       return <SuppliersModule />;
+    }
+    if (activeTab === 'settings') {
+      return <SettingsModule />;
     }
     
     return (

@@ -14,6 +14,7 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
     { id: 'purchases', label: 'Purchases' },
     { id: 'pos', label: 'POS' },
     { id: 'reports', label: 'Reports' },
+    { id: 'settings', label: 'Settings' },
   ];
 
   return (
