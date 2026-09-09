@@ -1,6 +1,7 @@
 import { db } from '../database/db';
 import { Setting } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class SettingRepository {
   async get(key: string): Promise<Setting | null> {
@@ -52,7 +53,7 @@ export class SettingRepository {
 
   protected async syncWithApi(setting: Setting): Promise<void> {
     try {
-      await apiClient.put(`/settings/${setting.key}`, { value: setting.value });
+      await apiClient.put(API_ENDPOINTS.SETTINGS.BY_KEY(setting.key), { value: setting.value });
     } catch (error) {
       console.error(`Failed to sync setting ${setting.key} with API:`, error);
     }
@@ -60,7 +61,7 @@ export class SettingRepository {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/settings');
+      const response = await apiClient.get(API_ENDPOINTS.SETTINGS.BASE);
       // Assume API returns an object of key-value pairs or an array of Setting objects
       const items = response.data;
       if (Array.isArray(items)) {

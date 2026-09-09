@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { Supplier } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class SupplierRepository extends BaseRepository<Supplier> {
   protected tableName = 'suppliers';
@@ -48,11 +49,11 @@ export class SupplierRepository extends BaseRepository<Supplier> {
   protected async syncWithApi(entity: Supplier, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/suppliers', entity);
+        await apiClient.post(API_ENDPOINTS.SUPPLIERS.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/suppliers/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.SUPPLIERS.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/suppliers/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.SUPPLIERS.BY_ID(entity.id));
       }
       
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
@@ -66,7 +67,7 @@ export class SupplierRepository extends BaseRepository<Supplier> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/suppliers');
+      const response = await apiClient.get(API_ENDPOINTS.SUPPLIERS.BASE);
       const items: Supplier[] = response.data;
 
       for (const item of items) {

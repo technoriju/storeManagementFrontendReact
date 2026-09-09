@@ -1,6 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Env } from '../env';
+import { API_ENDPOINTS } from './api-urls';
 
 export const apiClient = axios.create({
   baseURL: Env.API_URL,
@@ -38,7 +39,7 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
           }
 
           // Try to refresh token
-          const { data } = await axios.post(`${Env.API_URL}/auth/refresh`, {
+          const { data } = await axios.post(`${Env.API_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
             refreshToken,
           });
 

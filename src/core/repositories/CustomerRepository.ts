@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { Customer } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class CustomerRepository extends BaseRepository<Customer> {
   protected tableName = 'customers';
@@ -48,11 +49,11 @@ export class CustomerRepository extends BaseRepository<Customer> {
   protected async syncWithApi(entity: Customer, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/customers', entity);
+        await apiClient.post(API_ENDPOINTS.CUSTOMERS.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/customers/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.CUSTOMERS.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/customers/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.CUSTOMERS.BY_ID(entity.id));
       }
       
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
@@ -66,7 +67,7 @@ export class CustomerRepository extends BaseRepository<Customer> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/customers');
+      const response = await apiClient.get(API_ENDPOINTS.CUSTOMERS.BASE);
       const items: Customer[] = response.data;
 
       for (const item of items) {

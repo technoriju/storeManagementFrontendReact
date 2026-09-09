@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { Product } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class ProductRepository extends BaseRepository<Product> {
   protected tableName = 'products';
@@ -58,11 +59,11 @@ export class ProductRepository extends BaseRepository<Product> {
   protected async syncWithApi(entity: Product, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/products', entity);
+        await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/products/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/products/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(entity.id));
       }
       
       // If successful, ensure syncStatus is 'synced'
@@ -78,7 +79,7 @@ export class ProductRepository extends BaseRepository<Product> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/products');
+      const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE);
       const products: Product[] = response.data;
 
       // Basic full replace or upsert logic

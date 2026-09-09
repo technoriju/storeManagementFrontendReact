@@ -1,4 +1,5 @@
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from './auth.store';
 
@@ -7,7 +8,7 @@ export const AuthService = {
     try {
       useAuthStore.getState().setLoading(true);
       
-      const { data } = await apiClient.post('/auth/login', { email, password });
+      const { data } = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, { email, password });
       
       await Promise.all([
         AsyncStorage.setItem('accessToken', data.accessToken),
@@ -25,7 +26,7 @@ export const AuthService = {
   loadPermissions: async () => {
     try {
       // Assuming a permissions endpoint exists
-      const { data } = await apiClient.get('/auth/permissions');
+      const { data } = await apiClient.get(API_ENDPOINTS.AUTH.PERMISSIONS);
       useAuthStore.getState().setPermissions(data.permissions || []);
     } catch (e) {
       console.error('Failed to load permissions', e);

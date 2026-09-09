@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { User } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class UserRepository extends BaseRepository<User> {
   protected tableName = 'users';
@@ -48,11 +49,11 @@ export class UserRepository extends BaseRepository<User> {
   protected async syncWithApi(entity: User, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/users', entity);
+        await apiClient.post(API_ENDPOINTS.USERS.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/users/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.USERS.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/users/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.USERS.BY_ID(entity.id));
       }
       
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
@@ -66,7 +67,7 @@ export class UserRepository extends BaseRepository<User> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/users');
+      const response = await apiClient.get(API_ENDPOINTS.USERS.BASE);
       const items: User[] = response.data;
 
       for (const item of items) {

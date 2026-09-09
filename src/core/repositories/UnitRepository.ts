@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { Unit } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class UnitRepository extends BaseRepository<Unit> {
   protected tableName = 'units';
@@ -42,11 +43,11 @@ export class UnitRepository extends BaseRepository<Unit> {
   protected async syncWithApi(entity: Unit, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/units', entity);
+        await apiClient.post(API_ENDPOINTS.UNITS.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/units/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.UNITS.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/units/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.UNITS.BY_ID(entity.id));
       }
       
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
@@ -60,7 +61,7 @@ export class UnitRepository extends BaseRepository<Unit> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/units');
+      const response = await apiClient.get(API_ENDPOINTS.UNITS.BASE);
       const items: Unit[] = response.data;
 
       for (const item of items) {

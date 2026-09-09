@@ -1,6 +1,7 @@
 import { BaseRepository } from './BaseRepository';
 import { Category } from '../../types/models';
 import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class CategoryRepository extends BaseRepository<Category> {
   protected tableName = 'categories';
@@ -44,11 +45,11 @@ export class CategoryRepository extends BaseRepository<Category> {
   protected async syncWithApi(entity: Category, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       if (operation === 'insert') {
-        await apiClient.post('/categories', entity);
+        await apiClient.post(API_ENDPOINTS.CATEGORIES.BASE, entity);
       } else if (operation === 'update') {
-        await apiClient.put(`/categories/${entity.id}`, entity);
+        await apiClient.put(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id), entity);
       } else if (operation === 'delete') {
-        await apiClient.delete(`/categories/${entity.id}`);
+        await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id));
       }
       
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
@@ -62,7 +63,7 @@ export class CategoryRepository extends BaseRepository<Category> {
 
   public async fetchFromApi(): Promise<void> {
     try {
-      const response = await apiClient.get('/categories');
+      const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
       const items: Category[] = response.data;
 
       for (const item of items) {
