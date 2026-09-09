@@ -1,6 +1,6 @@
 import React from 'react';
-import { InvoiceSettingsScreen } from './screens/InvoiceSettingsScreen';
+import { SettingsLayout } from './screens/SettingsLayout';
 
 export const SettingsModule = () => {
-  return <InvoiceSettingsScreen />;
+  return <SettingsLayout />;
 };
