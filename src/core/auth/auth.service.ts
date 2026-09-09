@@ -11,9 +11,9 @@ export const AuthService = {
       const { data } = await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, { username, password, deviceId });
       
       console.log('Login API Response:', data);
-      const user = data?.user || { id: '1', name: username, email: '', role: 'user' };
-      const accessToken = data?.accessToken || 'dummy_access';
-      const refreshToken = data?.refreshToken || 'dummy_refresh';
+      const user = data?.user || data?.data?.user || { id: '1', name: username, email: '', role: 'user' };
+      const accessToken = data?.accessToken || data?.token || data?.data?.token || data?.data?.accessToken || 'dummy_access';
+      const refreshToken = data?.refreshToken || data?.data?.refreshToken || 'dummy_refresh';
 
       await Promise.all([
         AsyncStorage.setItem('accessToken', accessToken),

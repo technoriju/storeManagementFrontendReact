@@ -15,8 +15,13 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
   apiClient.interceptors.request.use(
     async (config) => {
       const token = await AsyncStorage.getItem('accessToken');
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
+      if (token) {
+        config.headers = config.headers || {};
+        if (typeof config.headers.set === 'function') {
+          config.headers.set('Authorization', `Bearer ${token}`);
+        } else {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
       }
       return config;
     },
@@ -50,7 +55,11 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
 
           // Retry the original request
           if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+            if (typeof originalRequest.headers.set === 'function') {
+              originalRequest.headers.set('Authorization', `Bearer ${data.accessToken}`);
+            } else {
+              originalRequest.headers['Authorization'] = `Bearer ${data.accessToken}`;
+            }
           }
           return apiClient(originalRequest);
         } catch (refreshError) {

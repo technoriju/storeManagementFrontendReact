@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { Product, Category, Brand, Unit, UnitConversion } from '../types';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 
 interface ProductState {
   products: Product[];
@@ -26,6 +28,8 @@ interface ProductState {
 
   setUnitConversions: (conversions: UnitConversion[]) => void;
   addUnitConversion: (conversion: UnitConversion) => void;
+
+  fetchProducts: () => Promise<void>;
 }
 
 export const useProductStore = create<ProductState>((set) => ({
@@ -57,4 +61,16 @@ export const useProductStore = create<ProductState>((set) => ({
 
   setUnitConversions: (unitConversions) => set({ unitConversions }),
   addUnitConversion: (conversion) => set((state) => ({ unitConversions: [...state.unitConversions, conversion] })),
+
+  fetchProducts: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE);
+      // Assuming response.data contains the products array, or response.data.data
+      const data = response.data?.data || response.data;
+      set({ products: data, isLoading: false });
+    } catch (error: any) {
+      set({ error: error.message || 'Failed to fetch products', isLoading: false });
+    }
+  },
 }));
