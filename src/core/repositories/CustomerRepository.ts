@@ -7,15 +7,15 @@ export class CustomerRepository extends BaseRepository<Customer> {
   protected tableName = 'customers';
 
   protected getInsertColumns(): string {
-    return 'id, name, email, phone, address, taxId, createdAt, updatedAt, syncStatus';
+    return 'id, name, email, phone, address, taxId, outstandingBalance, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'name = ?, email = ?, phone = ?, address = ?, taxId = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'name = ?, email = ?, phone = ?, address = ?, taxId = ?, outstandingBalance = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Customer): any[] {
@@ -26,6 +26,7 @@ export class CustomerRepository extends BaseRepository<Customer> {
       entity.phone || null,
       entity.address || null,
       entity.taxId || null,
+      entity.outstandingBalance || 0,
       entity.createdAt,
       entity.updatedAt,
       entity.syncStatus || 'synced'
@@ -40,6 +41,7 @@ export class CustomerRepository extends BaseRepository<Customer> {
       phone: row.phone,
       address: row.address,
       taxId: row.taxId,
+      outstandingBalance: row.outstandingBalance,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       syncStatus: row.syncStatus,

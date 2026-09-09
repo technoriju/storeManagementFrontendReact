@@ -13,6 +13,8 @@ import { ProductsModule } from '../features/products';
 import { PurchasesModule } from '../features/purchases/PurchasesModule';
 import { InventoryModule } from '../features/inventory/InventoryModule';
 import { POSModule } from '../features/pos/POSModule';
+import { CustomersModule } from '../features/customers/CustomersModule';
+import { SuppliersModule } from '../features/suppliers/SuppliersModule';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
@@ -49,6 +51,12 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'pos') {
       return <POSModule />;
+    }
+    if (activeTab === 'customers') {
+      return <CustomersModule />;
+    }
+    if (activeTab === 'suppliers') {
+      return <SuppliersModule />;
     }
     
     return (

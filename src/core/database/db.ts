@@ -111,6 +111,7 @@ export const initializeDatabase = () => {
         phone TEXT,
         address TEXT,
         taxId TEXT,
+        outstandingBalance REAL DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
@@ -126,6 +127,24 @@ export const initializeDatabase = () => {
         email TEXT,
         phone TEXT,
         address TEXT,
+        outstandingBalance REAL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Payments Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id TEXT PRIMARY KEY,
+        amount REAL NOT NULL,
+        method TEXT NOT NULL,
+        type TEXT NOT NULL,
+        reference TEXT,
+        notes TEXT,
+        customerId TEXT,
+        supplierId TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'

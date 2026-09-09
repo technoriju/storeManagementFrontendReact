@@ -12,6 +12,8 @@ const TABS = [
   { id: 'dashboard', label: 'Home', icon: 'home' },
   { id: 'pos', label: 'POS', icon: 'cart' },
   { id: 'products', label: 'Products', icon: 'cube' },
+  { id: 'customers', label: 'Customers', icon: 'people' },
+  { id: 'suppliers', label: 'Suppliers', icon: 'business' },
   { id: 'inventory', label: 'Inventory', icon: 'list' },
   { id: 'more', label: 'More', icon: 'menu' },
 ];

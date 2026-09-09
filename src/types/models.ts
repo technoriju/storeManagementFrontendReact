@@ -43,6 +43,7 @@ export interface Customer extends BaseEntity {
   phone?: string;
   address?: string;
   taxId?: string;
+  outstandingBalance?: number;
 }
 
 export interface Supplier extends BaseEntity {
@@ -51,6 +52,20 @@ export interface Supplier extends BaseEntity {
   email?: string;
   phone?: string;
   address?: string;
+  outstandingBalance?: number;
+}
+
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'other' | 'split';
+export type PaymentType = 'receive' | 'pay';
+
+export interface Payment extends BaseEntity {
+  amount: number;
+  method: PaymentMethod;
+  type: PaymentType;
+  reference?: string;
+  notes?: string;
+  customerId?: string;
+  supplierId?: string;
 }
 
 export interface Setting {

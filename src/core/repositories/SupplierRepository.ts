@@ -7,15 +7,15 @@ export class SupplierRepository extends BaseRepository<Supplier> {
   protected tableName = 'suppliers';
 
   protected getInsertColumns(): string {
-    return 'id, name, contactName, email, phone, address, createdAt, updatedAt, syncStatus';
+    return 'id, name, contactName, email, phone, address, outstandingBalance, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'name = ?, contactName = ?, email = ?, phone = ?, address = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'name = ?, contactName = ?, email = ?, phone = ?, address = ?, outstandingBalance = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Supplier): any[] {
@@ -26,6 +26,7 @@ export class SupplierRepository extends BaseRepository<Supplier> {
       entity.email || null,
       entity.phone || null,
       entity.address || null,
+      entity.outstandingBalance || 0,
       entity.createdAt,
       entity.updatedAt,
       entity.syncStatus || 'synced'
@@ -40,6 +41,7 @@ export class SupplierRepository extends BaseRepository<Supplier> {
       email: row.email,
       phone: row.phone,
       address: row.address,
+      outstandingBalance: row.outstandingBalance,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       syncStatus: row.syncStatus,
