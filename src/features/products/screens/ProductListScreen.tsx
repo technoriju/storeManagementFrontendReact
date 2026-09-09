@@ -37,6 +37,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'name', 
       title: 'Product Name', 
       flex: 2,
+      minWidth: 200,
       render: (value: string, item: any) => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           {item.imageUrl ? (
@@ -54,12 +55,14 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'categoryId', 
       title: 'Category', 
       flex: 1,
+      minWidth: 120,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value || 'N/A'}</Text>
     },
     { 
       key: 'brandId', 
       title: 'Brand', 
       flex: 1,
+      minWidth: 120,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value || 'N/A'}</Text>
     },
     { 
@@ -79,6 +82,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'createdBy', 
       title: 'Created By', 
       flex: 1.5,
+      minWidth: 150,
       render: (value: string, item: any) => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.colors.primaryLight, justifyContent: 'center', alignItems: 'center' }}>

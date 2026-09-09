@@ -7,6 +7,7 @@ export interface AdvancedTableColumn<T> {
   key: string;
   title: string;
   width?: number;
+  minWidth?: number;
   flex?: number;
   render?: (value: any, item: T) => React.ReactNode;
 }
@@ -80,8 +81,8 @@ export const AdvancedTable = <T extends Record<string, any>>({
         </View>
 
         {/* Table Content */}
-        <ScrollView horizontal style={styles.tableScroll}>
-          <View>
+        <ScrollView horizontal style={styles.tableScroll} contentContainerStyle={{ minWidth: '100%' }}>
+          <View style={{ minWidth: '100%', flex: 1 }}>
             {/* Header Row */}
             <View style={[styles.headerRow, { borderBottomColor: theme.colors.divider }]}>
               {hasCheckbox && (
@@ -92,7 +93,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
               {columns.map((col, index) => (
                 <View 
                   key={col.key || index.toString()} 
-                  style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }]}
+                  style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
                 >
                   <Text style={[styles.headerText, { color: theme.colors.textSecondary }]}>{col.title}</Text>
                 </View>
@@ -129,7 +130,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
                   {columns.map((col, colIndex) => (
                     <View 
                       key={col.key || colIndex.toString()} 
-                      style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }]}
+                      style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
                     >
                       {col.render ? (
                         col.render(item[col.key], item)
