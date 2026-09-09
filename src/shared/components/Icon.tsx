@@ -1,7 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-// In a real project, this would import from react-native-vector-icons or similar
-// import Ionicons from 'react-native-vector-icons/Ionicons';
+import { View, StyleProp, ViewStyle } from 'react-native';
+import * as LucideIcons from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
 
 export type IconName = 
@@ -10,7 +9,28 @@ export type IconName =
   | 'user'
   | 'search'
   | 'chevron-right'
-  | 'chevron-left';
+  | 'chevron-left'
+  | 'chevron-down'
+  | 'chevron-up'
+  | 'layers'
+  | 'git-merge'
+  | 'send'
+  | 'grid'
+  | 'file-text'
+  | 'corner-down-left'
+  | 'file'
+  | 'monitor'
+  | 'tag'
+  | 'gift'
+  | 'percent'
+  | 'log-out'
+  | 'cube'
+  | 'people'
+  | 'business'
+  | 'list'
+  | 'cart'
+  | 'menu'
+  | 'dot';
 
 interface IconProps {
   name: IconName;
@@ -18,6 +38,17 @@ interface IconProps {
   color?: string;
   style?: StyleProp<ViewStyle>;
 }
+
+const getIconComponent = (name: string) => {
+  if (name === 'dot') return LucideIcons.Circle;
+  
+  const pascalName = name
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+    
+  return (LucideIcons as any)[pascalName] || LucideIcons.HelpCircle;
+};
 
 export const Icon: React.FC<IconProps> = ({ 
   name, 
@@ -27,20 +58,11 @@ export const Icon: React.FC<IconProps> = ({
 }) => {
   const theme = useTheme();
   const iconColor = color || theme.colors.text;
+  const LucideIcon = getIconComponent(name);
 
-  // Placeholder for actual icon implementation
   return (
-    <View style={[
-      styles.placeholder, 
-      { width: size, height: size, backgroundColor: iconColor },
-      style
-    ]} />
+    <View style={style}>
+      <LucideIcon size={size} color={iconColor} />
+    </View>
   );
 };
-
-const styles = StyleSheet.create({
-  placeholder: {
-    borderRadius: 4,
-    opacity: 0.5,
-  }
-});

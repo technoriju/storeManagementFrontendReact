@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       'react-native': 'react-native-web',
+      'lucide-react-native': 'lucide-react',
       '@op-engineering/op-sqlite': path.resolve(__dirname, '__mocks__/op-sqlite.js'),
       'react-native-fs': path.resolve(__dirname, '__mocks__/react-native-fs.js'),
       '@env': path.resolve(__dirname, '__mocks__/@env.js'),
