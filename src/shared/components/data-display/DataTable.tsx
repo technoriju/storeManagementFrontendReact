@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, FlatList } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { useResponsive } from '../../hooks/useResponsive';
 
@@ -10,9 +10,16 @@ export const DataTable = ({ columns, data }: any) => {
   if (isMobile) {
     // Render as cards on mobile
     return (
-      <ScrollView style={styles.mobileContainer}>
-        {data.map((row: any, i: number) => (
-          <View key={i} style={[styles.card, { backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.md, ...theme.shadows.sm, borderColor: theme.colors.border }]}>
+      <FlatList
+        data={data}
+        style={styles.mobileContainer}
+        keyExtractor={(item, index) => item.id || index.toString()}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
+        renderItem={({ item: row, index: i }) => (
+          <View style={[styles.card, { backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.md, ...theme.shadows.sm, borderColor: theme.colors.border }]}>
             {columns.map((col: any) => (
               <View key={col.key} style={styles.cardRow}>
                 <Text style={[styles.cardLabel, { color: theme.colors.textSecondary }]}>{col.title}</Text>
@@ -22,8 +29,8 @@ export const DataTable = ({ columns, data }: any) => {
               </View>
             ))}
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
     );
   }
 
@@ -39,17 +46,23 @@ export const DataTable = ({ columns, data }: any) => {
               </Text>
             ))}
           </View>
-          <ScrollView>
-            {data.map((row: any, i: number) => (
-              <View key={i} style={[styles.row, { borderBottomColor: theme.colors.divider, borderBottomWidth: i === data.length - 1 ? 0 : 1 }]}>
+          <FlatList
+            data={data}
+            keyExtractor={(item, index) => item.id || index.toString()}
+            initialNumToRender={20}
+            maxToRenderPerBatch={20}
+            windowSize={5}
+            removeClippedSubviews={true}
+            renderItem={({ item: row, index: i }) => (
+              <View style={[styles.row, { borderBottomColor: theme.colors.divider, borderBottomWidth: i === data.length - 1 ? 0 : 1 }]}>
                 {columns.map((col: any) => (
                   <View key={col.key} style={[styles.cell, { width: col.width || 120 }]}>
                     {col.render ? col.render(row[col.key], row) : <Text style={{ color: theme.colors.text }}>{row[col.key]}</Text>}
                   </View>
                 ))}
               </View>
-            ))}
-          </ScrollView>
+            )}
+          />
         </View>
       </ScrollView>
     </View>

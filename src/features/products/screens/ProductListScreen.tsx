@@ -40,6 +40,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         <FlatList
           data={products}
           keyExtractor={(item) => item.id}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <View style={styles.cardHeader}>
