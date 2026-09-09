@@ -16,10 +16,12 @@ import { POSModule } from '../features/pos/POSModule';
 import { CustomersModule } from '../features/customers/CustomersModule';
 import { SuppliersModule } from '../features/suppliers/SuppliersModule';
 import { SettingsModule } from '../features/settings/SettingsModule';
+import { DashboardModule } from '../features/dashboard/DashboardModule';
+import { ReportsModule } from '../features/reports/ReportsModule';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState('products');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [loadingPermissions, setLoadingPermissions] = useState(true);
 
   useEffect(() => {
@@ -41,6 +43,12 @@ const AuthenticatedApp = () => {
   }
 
   const renderContent = () => {
+    if (activeTab === 'dashboard') {
+      return <DashboardModule />;
+    }
+    if (activeTab === 'reports') {
+      return <ReportsModule />;
+    }
     if (activeTab === 'products') {
       return <ProductsModule />;
     }

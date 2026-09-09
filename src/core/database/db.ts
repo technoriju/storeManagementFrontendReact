@@ -151,6 +151,89 @@ export const initializeDatabase = () => {
       );
     `);
 
+    // Sales Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sales (
+        id TEXT PRIMARY KEY,
+        invoiceNumber TEXT NOT NULL,
+        customerId TEXT,
+        subtotal REAL NOT NULL,
+        discount REAL NOT NULL,
+        gst REAL NOT NULL,
+        total REAL NOT NULL,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Sale Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sale_items (
+        id TEXT PRIMARY KEY,
+        saleId TEXT NOT NULL,
+        productId TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL NOT NULL,
+        gst REAL NOT NULL,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchases Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id TEXT PRIMARY KEY,
+        invoiceNumber TEXT NOT NULL,
+        supplierId TEXT,
+        subtotal REAL NOT NULL,
+        discount REAL NOT NULL,
+        gst REAL NOT NULL,
+        total REAL NOT NULL,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchase Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchase_items (
+        id TEXT PRIMARY KEY,
+        purchaseId TEXT NOT NULL,
+        productId TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL NOT NULL,
+        gst REAL NOT NULL,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Expenses Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        description TEXT,
+        reference TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
     // Settings Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS settings (
