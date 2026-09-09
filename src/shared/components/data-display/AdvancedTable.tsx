@@ -53,7 +53,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
         <View style={styles.pageHeader}>
           <View>
             {title && <Text style={[styles.pageTitle, { color: theme.colors.text }]}>{title}</Text>}
-            {subtitle && <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>}
+            {/* {subtitle && <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>} */}
           </View>
           <View style={styles.pageActions}>
             {headerActions}
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   pageTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 4,
   },
