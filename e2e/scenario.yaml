@@ -1,0 +1,44 @@
+appId: com.mobile
+---
+- launchApp
+- tapOn: "Login"
+- assertVisible: "Dashboard"
+- tapOn: "Sync Data"
+- assertVisible: "Sync Complete"
+
+# Go offline
+- runScript: "adb shell svc wifi disable"
+
+- tapOn: "Products"
+- tapOn: "Add Product"
+- inputText: "Test Product Offline"
+- tapOn: "Save"
+- assertVisible: "Test Product Offline"
+
+- tapOn: "Inventory"
+- tapOn: "Add Stock"
+- inputText: "100"
+- tapOn: "Confirm"
+
+- tapOn: "Customers"
+- tapOn: "Add Customer"
+- inputText: "Test Customer"
+- tapOn: "Save"
+
+- tapOn: "POS"
+- tapOn: "Test Product Offline"
+- tapOn: "Checkout"
+- tapOn: "Generate Invoice"
+- tapOn: "Pay"
+
+- stopApp
+- launchApp
+
+- tapOn: "Products"
+- assertVisible: "Test Product Offline"
+
+# Internet returns
+- runScript: "adb shell svc wifi enable"
+
+- tapOn: "Sync Data"
+- assertVisible: "Sync Complete"
