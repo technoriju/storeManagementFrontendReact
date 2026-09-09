@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const userStr = await AsyncStorage.getItem('user');
       const accessToken = await AsyncStorage.getItem('accessToken');
       
-      if (userStr && accessToken) {
+      if (userStr && userStr !== 'undefined' && accessToken) {
         set({ 
           user: JSON.parse(userStr), 
           isAuthenticated: true,

@@ -8,18 +8,18 @@ import { useAuthStore } from '../../../core/auth/auth.store';
 
 export const LoginScreen = () => {
   const theme = useTheme();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { isLoading } = useAuthStore();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter both username and password');
       return;
     }
 
     try {
-      await AuthService.login(email, password);
+      await AuthService.login(username, password, "string");
     } catch (e: any) {
       const msg = e.response?.data?.message || 'Login failed. Please try again.';
       Alert.alert('Login Failed', msg);
@@ -38,12 +38,11 @@ export const LoginScreen = () => {
         </Text>
 
         <AppInput
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Enter your email"
+          label="Username"
+          value={username}
+          onChangeText={setUsername}
+          placeholder="Enter your username"
           autoCapitalize="none"
-          keyboardType="email-address"
         />
 
         <View style={styles.spacing} />

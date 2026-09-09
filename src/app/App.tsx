@@ -12,10 +12,11 @@ import { LoginScreen } from '../features/auth/screens/LoginScreen';
 import { ProductsModule } from '../features/products';
 import { PurchasesModule } from '../features/purchases/PurchasesModule';
 import { InventoryModule } from '../features/inventory/InventoryModule';
+import { POSModule } from '../features/pos/POSModule';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('products');
   const [loadingPermissions, setLoadingPermissions] = useState(true);
 
   useEffect(() => {
@@ -45,6 +46,9 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'inventory') {
       return <InventoryModule />;
+    }
+    if (activeTab === 'pos') {
+      return <POSModule />;
     }
     
     return (
