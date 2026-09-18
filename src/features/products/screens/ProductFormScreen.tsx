@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, ScrollView, TextInput, TouchableOpacity, Pressable, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 import { v4 as uuidv4 } from 'uuid';
 import { Product } from '../types';
+import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AddCategoryModal } from '../components/AddCategoryModal';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
+import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { AppRadio } from '../../../shared/components/forms/AppRadio';
+import { AppCheckbox } from '../../../shared/components/forms/AppCheckbox';
 import { Info, ChevronDown, Image as ImageIcon, Plus, Trash2, Edit, Eye, Minus, Check, Settings, LayoutGrid, ArrowLeft } from 'lucide-react-native';
 
 interface Props {
@@ -33,37 +39,15 @@ const Card = ({ title, icon, children }: any) => (
   </View>
 );
 
-const FormGroup = ({ label, required, children, actionRight, width }: any) => (
+const FormGroup = ({ label, children, actionRight, width }: any) => (
   <View style={[styles.formGroup, width ? { width } : null]}>
     <View style={styles.labelRow}>
       <Text style={styles.label}>
-        {label} {required && <Text style={styles.required}>*</Text>}
+        {label} 
       </Text>
       {actionRight}
     </View>
     {children}
-  </View>
-);
-
-const SelectField = ({ placeholder }: { placeholder: string }) => (
-  <TouchableOpacity style={styles.inputContainer} activeOpacity={0.8}>
-    <Text style={styles.inputText}>{placeholder}</Text>
-    <ChevronDown size={16} color={TEXT_MAIN} />
-  </TouchableOpacity>
-);
-
-const InputField = ({ placeholder, actionBtn }: { placeholder?: string, actionBtn?: string }) => (
-  <View style={styles.inputContainerWithBtn}>
-    <TextInput 
-      style={styles.textInput} 
-      placeholder={placeholder}
-      placeholderTextColor="#ccc"
-    />
-    {actionBtn && (
-      <TouchableOpacity style={styles.actionBtn}>
-        <Text style={styles.actionBtnText}>{actionBtn}</Text>
-      </TouchableOpacity>
-    )}
   </View>
 );
 
@@ -76,27 +60,40 @@ const EditorField = () => (
       <Text style={[styles.toolbarIcon, {fontStyle: 'italic'}]}>I</Text>
       <Text style={[styles.toolbarIcon, {textDecorationLine: 'underline'}]}>U</Text>
       {/* Simulate link and list icons with text for now */}
-      <Text style={styles.toolbarIcon}>🔗</Text>
-      <Text style={styles.toolbarIcon}>≣</Text>
-      <Text style={styles.toolbarIcon}>≡</Text>
-      <Text style={styles.toolbarIcon}>Tₓ</Text>
+      <Text style={styles.toolbarIcon}>ðŸ”—</Text>
+      <Text style={styles.toolbarIcon}>â‰£</Text>
+      <Text style={styles.toolbarIcon}>â‰¡</Text>
+      <Text style={styles.toolbarIcon}>Tâ‚“</Text>
     </View>
-    <TextInput 
-      style={styles.editorInput}
-      multiline
-    />
+    <AppInput style={styles.editorInput} multiline={true} containerStyle={{ marginBottom: 0 }} />
   </View>
 );
 
 export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) => {
   const [productType, setProductType] = useState('single');
+  const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [variants, setVariants] = useState([
+    { id: uuidv4(), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
+  ]);
+
+  const handleAddVariant = () => {
+    setVariants([...variants, { id: uuidv4(), variation: '', value: '', sku: '', qty: 1, price: '' }]);
+  };
+
+  const handleRemoveVariant = (id: string) => {
+    setVariants(variants.filter(v => v.id !== id));
+  };
+
+  const handleUpdateVariant = (id: string, field: string, val: any) => {
+    setVariants(variants.map(v => v.id === id ? { ...v, [field]: val } : v));
+  };
 
   return (
     <View style={styles.container}>
       {/* Floating Settings Icon (from screenshot) */}
-      <View style={styles.floatingSettings}>
+      {/* <View style={styles.floatingSettings}>
         <Settings color="white" size={24} />
-      </View>
+      </View> */}
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
         
@@ -108,56 +105,55 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         {/* PRODUCT INFORMATION CARD */}
         <Card title="Product Information" icon={<Info size={18} color={ORANGE} />}>
           <View style={styles.grid2}>
-            <FormGroup width="50%" label="Store" required>
-              <SelectField placeholder="Volt Vault" />
+            <FormGroup width="50%" label="Store">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Volt Vault" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
-            <FormGroup width="50%" label="Warehouse" required>
-              <SelectField placeholder="Select" />
-            </FormGroup>
-
-            <FormGroup width="50%" label="Product Name" required>
-              <InputField />
-            </FormGroup>
-            <FormGroup width="50%" label="Slug" required>
-              <InputField />
+            <FormGroup width="50%" label="Warehouse">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
 
-            <FormGroup width="50%" label="SKU" required>
-              <InputField actionBtn="Generate" />
+            <FormGroup width="50%" label="Product Name">
+              <AppInput containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
-            <FormGroup width="50%" label="Selling Type" required>
-              <SelectField placeholder="Select" />
+            <FormGroup width="50%" label="Slug">
+              <AppInput containerStyle={{ marginBottom: 0 }} />
+            </FormGroup>
+
+            <FormGroup width="50%" label="SKU">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{flex: 1}}><AppInput containerStyle={{ marginBottom: 0 }} /></View><AppButton title="Generate" style={{ borderRadius: 6, height: 48 }} /></View>
+            </FormGroup>
+            <FormGroup width="50%" label="Selling Type">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
 
             <FormGroup 
               width="50%"
               label="Category" 
-              required 
               actionRight={
-                <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}}>
+                <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}} onPress={() => setCategoryModalVisible(true)}>
                   <Plus size={14} color={ORANGE} />
                   <Text style={{color: ORANGE, fontSize: 13, marginLeft: 4}}>Add New</Text>
                 </TouchableOpacity>
               }
             >
-              <SelectField placeholder="Select" />
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
-            <FormGroup width="50%" label="Sub Category" required>
-              <SelectField placeholder="Select" />
-            </FormGroup>
-
-            <FormGroup width="50%" label="Brand" required>
-              <SelectField placeholder="Select" />
-            </FormGroup>
-            <FormGroup width="50%" label="Unit" required>
-              <SelectField placeholder="Select" />
+            <FormGroup width="50%" label="Sub Category">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
 
-            <FormGroup width="50%" label="Barcode Symbology" required>
-              <SelectField placeholder="Select" />
+            <FormGroup width="50%" label="Brand">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
-            <FormGroup width="50%" label="Item Barcode" required>
-              <InputField actionBtn="Generate" />
+            <FormGroup width="50%" label="Unit">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+            </FormGroup>
+
+            <FormGroup width="50%" label="Barcode Symbology">
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+            </FormGroup>
+            <FormGroup width="50%" label="Item Barcode">
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{flex: 1}}><AppInput containerStyle={{ marginBottom: 0 }} /></View><AppButton title="Generate" style={{ borderRadius: 6, height: 48 }} /></View>
             </FormGroup>
           </View>
 
@@ -169,44 +165,33 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
         {/* PRICING & STOCKS CARD */}
         <Card title="Pricing & Stocks" icon={<LayoutGrid size={18} color={ORANGE} />}>
-          <FormGroup label="Product Type" required>
+          <FormGroup label="Product Type">
             <View style={styles.radioGroup}>
-              <TouchableOpacity style={styles.radioBtn} onPress={() => setProductType('single')}>
-                <View style={[styles.radioCircle, productType === 'single' && styles.radioCircleActive]}>
-                  {productType === 'single' && <View style={styles.radioInner} />}
-                </View>
-                <Text style={[styles.radioLabel, productType === 'single' && styles.radioLabelActive]}>Single Product</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.radioBtn} onPress={() => setProductType('variable')}>
-                <View style={[styles.radioCircle, productType === 'variable' && styles.radioCircleActive]}>
-                  {productType === 'variable' && <View style={styles.radioInner} />}
-                </View>
-                <Text style={[styles.radioLabel, productType === 'variable' && styles.radioLabelActive]}>Variable Product</Text>
-              </TouchableOpacity>
-            </View>
-          </FormGroup>
+  <AppRadio label="Single Product" selected={productType === 'single'} onPress={() => setProductType('single')} />
+  <AppRadio label="Variable Product" selected={productType === 'variable'} onPress={() => setProductType('variable')} />
+</View>
+</FormGroup>
 
           {productType === 'single' ? (
             <View style={styles.grid3}>
-              <FormGroup width="33.33%" label="Quantity" required><InputField /></FormGroup>
-              <FormGroup width="33.33%" label="Price" required><InputField /></FormGroup>
-              <FormGroup width="33.33%" label="Tax Type" required><SelectField placeholder="Select" /></FormGroup>
+              <FormGroup width="33.33%" label="Quantity"><AppInput containerStyle={{ marginBottom: 0 }} /></FormGroup>
+              <FormGroup width="33.33%" label="Price"><AppInput containerStyle={{ marginBottom: 0 }} /></FormGroup>
+              <FormGroup width="33.33%" label="Tax Type"><AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} /></FormGroup>
               
-              <FormGroup width="33.33%" label="Tax" required><SelectField placeholder="Select" /></FormGroup>
-              <FormGroup width="33.33%" label="Discount Type" required><SelectField placeholder="Select" /></FormGroup>
-              <FormGroup width="33.33%" label="Discount Value" required><InputField /></FormGroup>
+              <FormGroup width="33.33%" label="Tax"><AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} /></FormGroup>
+              <FormGroup width="33.33%" label="Discount Type"><AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} /></FormGroup>
+              <FormGroup width="33.33%" label="Discount Value"><AppInput containerStyle={{ marginBottom: 0 }} /></FormGroup>
               
-              <FormGroup width="33.33%" label="Quantity Alert" required><InputField /></FormGroup>
+              <FormGroup width="33.33%" label="Quantity Alert"><AppInput containerStyle={{ marginBottom: 0 }} /></FormGroup>
             </View>
           ) : (
             <View>
-              <FormGroup label="Variant Attribute" required>
+              <FormGroup label="Variant Attribute">
                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
                   <View style={{flex: 1}}>
-                    <SelectField placeholder="Choose" />
+                    <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Choose" containerStyle={{ marginBottom: 0 }} />
                   </View>
-                  <TouchableOpacity style={styles.addVariantBtn}>
+                  <TouchableOpacity style={styles.addVariantBtn} onPress={handleAddVariant}>
                     <Plus size={16} color="white" />
                   </TouchableOpacity>
                 </View>
@@ -223,29 +208,29 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   <Text style={[styles.tableCell, {flex: 0.8}]}></Text>
                 </View>
                 
-                {[
-                  { variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' },
-                  { variation: 'color', value: 'black', sku: '2345', qty: 3, price: '50000' }
-                ].map((item, idx) => (
-                  <View style={styles.tableRow} key={idx}>
-                    <View style={[styles.tableCell, {flex: 1.5}]}><TextInput style={styles.tableInput} value={item.variation} /></View>
-                    <View style={[styles.tableCell, {flex: 1.5}]}><TextInput style={styles.tableInput} value={item.value} /></View>
-                    <View style={[styles.tableCell, {flex: 1}]}><TextInput style={styles.tableInput} value={item.sku} /></View>
+                {variants.map((item) => (
+                  <View style={styles.tableRow} key={item.id}>
+                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.variation} onChangeText={(val: string) => handleUpdateVariant(item.id, 'variation', val)} /></View>
+                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.value} onChangeText={(val: string) => handleUpdateVariant(item.id, 'value', val)} /></View>
+                    <View style={[styles.tableCell, {flex: 1}]}><AppInput containerStyle={{marginBottom: 0}} value={item.sku} onChangeText={(val: string) => handleUpdateVariant(item.id, 'sku', val)} /></View>
                     
                     <View style={[styles.tableCell, {flex: 1.2}]}>
                       <View style={styles.qtyControl}>
-                        <Minus size={14} color={TEXT_MAIN} />
+                        <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', Math.max(0, item.qty - 1))}>
+                          <Minus size={14} color={TEXT_MAIN} />
+                        </TouchableOpacity>
                         <Text style={{marginHorizontal: 8}}>{item.qty}</Text>
-                        <Plus size={14} color={TEXT_MAIN} />
+                        <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', item.qty + 1)}>
+                          <Plus size={14} color={TEXT_MAIN} />
+                        </TouchableOpacity>
                       </View>
                     </View>
                     
-                    <View style={[styles.tableCell, {flex: 1.5}]}><TextInput style={styles.tableInput} value={item.price} /></View>
+                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.price} onChangeText={(val: string) => handleUpdateVariant(item.id, 'price', val)} /></View>
                     
                     <View style={[styles.tableCell, {flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 8}]}>
-                      <View style={styles.iconBoxPrimary}><Check size={14} color="white" /></View>
-                      <View style={styles.iconBoxOutline}><Plus size={14} color={TEXT_MAIN} /></View>
-                      <View style={styles.iconBoxOutline}><Trash2 size={14} color={TEXT_MAIN} /></View>
+                      <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddVariant}><Plus size={14} color={TEXT_MAIN} /></TouchableOpacity>
+                      <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveVariant(item.id)}><Trash2 size={14} color={TEXT_MAIN} /></TouchableOpacity>
                     </View>
                   </View>
                 ))}
@@ -276,6 +261,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         </Card>
 
         <View style={{height: 100}} />
+      <AddCategoryModal visible={isCategoryModalVisible} onClose={() => setCategoryModalVisible(false)} onSubmit={(name) => console.log('New Category:', name)} />
       </ScrollView>
     </View>
   );
@@ -623,4 +609,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   }
 });
+
+
+
+
 

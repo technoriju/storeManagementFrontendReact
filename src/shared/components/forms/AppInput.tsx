@@ -2,10 +2,10 @@ import React from 'react';
 import { View, StyleSheet, TextInput, Text } from 'react-native';
 import { useTheme } from '../../theme/theme';
 
-export const AppInput = ({ label, error, ...props }: any) => {
+export const AppInput = ({ label, error, containerStyle, style, ...props }: any) => {
   const theme = useTheme();
   return (
-    <View style={[styles.container, { marginBottom: theme.spacing.md }]}>
+    <View style={[styles.container, { marginBottom: theme.spacing.md }, containerStyle]}>
       {label && <Text style={{ color: theme.colors.text, marginBottom: theme.spacing.xs, fontWeight: theme.typography.weights.medium as any }}>{label}</Text>}
       <TextInput
         style={[
@@ -15,7 +15,8 @@ export const AppInput = ({ label, error, ...props }: any) => {
             borderColor: error ? theme.colors.error : theme.colors.border, 
             borderRadius: theme.borderRadius.md,
             color: theme.colors.text
-          }
+          },
+          style
         ]}
         placeholderTextColor={theme.colors.textSecondary}
         {...props}

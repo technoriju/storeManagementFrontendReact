@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { View, StyleSheet, Text, Alert, FlatList } from 'react-native';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import RNFS from 'react-native-fs';
@@ -72,18 +72,9 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
         const sku = item.SKU || item['Product Code'];
         const price = item['Retail Price'] || item.MRP || item.Price;
 
-        if (!name) {
-          errors.push('Name is required');
-          isValid = false;
-        }
-        if (!sku) {
-          errors.push('SKU / Product Code is required');
-          isValid = false;
-        }
-        if (price === undefined || isNaN(Number(price))) {
-          errors.push('Valid Price is required');
-          isValid = false;
-        }
+        
+        
+        
 
         if (sku) {
           const exists = products.find(p => p.sku === String(sku));
@@ -226,7 +217,7 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
                         {!item.isValid && (
                           <View style={styles.errorList}>
                             {item.errors.map((err, i) => (
-                              <Text key={i} style={{ color: theme.colors.error, fontSize: 12 }}>• {err}</Text>
+                              <Text key={i} style={{ color: theme.colors.error, fontSize: 12 }}>â€¢ {err}</Text>
                             ))}
                           </View>
                         )}
@@ -285,3 +276,4 @@ const styles = StyleSheet.create({
   resultContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   resultText: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 }
 });
+
