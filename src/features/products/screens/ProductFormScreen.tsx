@@ -116,7 +116,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               <AppInput containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
             <FormGroup width="50%" label="Slug">
-              <AppInput containerStyle={{ marginBottom: 0 }} />
+              <AppInput placeholder="slug" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
 
             <FormGroup width="50%" label="SKU">

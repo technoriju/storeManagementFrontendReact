@@ -28,5 +28,5 @@ export const AppInput = ({ label, error, containerStyle, style, ...props }: any)
 
 const styles = StyleSheet.create({
   container: { width: '100%' },
-  input: { borderWidth: 1, height: 48, paddingHorizontal: 16 },
+  input: { borderWidth: 1, height: 40, paddingHorizontal: 16 },
 });

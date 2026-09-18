@@ -12,11 +12,11 @@ export const AppSelect = ({ label, value, placeholder, onSelect, options = [], e
   const theme = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
   const [internalValue, setInternalValue] = useState(value);
-  const selectRef = useRef<View>(null);
+  const selectRef = useRef<any>(null);
   const [dropdownLayout, setDropdownLayout] = useState<any>({ left: 0, width: 0 });
 
   const openModal = () => {
-    selectRef.current?.measureInWindow((x, y, width, height) => {
+    selectRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
       const screenHeight = Dimensions.get('window').height;
       const spaceBelow = screenHeight - y - height;
       const maxDropdownHeight = 250;
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   container: { width: '100%' },
   input: { 
     borderWidth: 1, 
-    height: 48, 
+    height: 40, 
     paddingHorizontal: 16, 
     flexDirection: 'row',
     justifyContent: 'space-between',
