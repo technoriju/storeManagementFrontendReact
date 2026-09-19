@@ -15,6 +15,7 @@ type MenuItem = {
   label: string;
   icon: IconName;
   subItems?: SubItem[];
+  hasChevron?: boolean;
 };
 
 type MenuSection = {
@@ -25,52 +26,116 @@ type MenuSection = {
 // Data based on the screenshot
 const menuSections: MenuSection[] = [
   {
+    title: 'Main',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: 'grid', hasChevron: true },
+      { id: 'super_admin', label: 'Super Admin', icon: 'user', hasChevron: true },
+      { id: 'application', label: 'Application', icon: 'layers', hasChevron: true },
+      { id: 'layouts', label: 'Layouts', icon: 'layout', hasChevron: true },
+    ]
+  },
+  {
+    title: 'Inventory',
+    items: [
+      { id: 'products', label: 'Products', icon: 'box' },
+      { id: 'create_product', label: 'Create Product', icon: 'plus-square' },
+      { id: 'expired_products', label: 'Expired Products', icon: 'alert-circle' },
+      { id: 'low_stocks', label: 'Low Stocks', icon: 'trending-down' },
+      { id: 'category', label: 'Category', icon: 'list' },
+      { id: 'sub_category', label: 'Sub Category', icon: 'columns' },
+      { id: 'brands', label: 'Brands', icon: 'triangle' },
+      { id: 'units', label: 'Units', icon: 'box' },
+      { id: 'variant_attributes', label: 'Variant Attributes', icon: 'file-text' },
+      { id: 'warranties', label: 'Warranties', icon: 'award' },
+      { id: 'print_barcode', label: 'Print Barcode', icon: 'maximize' },
+      { id: 'print_qr_code', label: 'Print QR Code', icon: 'grid' },
+    ]
+  },
+  {
     title: 'Stock',
     items: [
-      { id: 'inventory', label: 'Manage Stock', icon: 'layers' },
-      { id: 'stock_adj', label: 'Stock Adjustment', icon: 'git-merge' },
-      { id: 'stock_trans', label: 'Stock Transfer', icon: 'send' },
+      { id: 'manage_stock', label: 'Manage Stock', icon: 'layers' },
+      { id: 'stock_adjustment', label: 'Stock Adjustment', icon: 'git-merge' },
+      { id: 'stock_transfer', label: 'Stock Transfer', icon: 'upload' },
     ]
   },
   {
     title: 'Sales',
     items: [
-      { 
-        id: 'sales_group', 
-        label: 'Sales', 
-        icon: 'grid', 
-        subItems: [
-          { id: 'online_orders', label: 'Online Orders' },
-          { id: 'pos_orders', label: 'POS Orders' },
-        ]
-      },
+      { id: 'sales', label: 'Sales', icon: 'grid', hasChevron: true },
       { id: 'invoices', label: 'Invoices', icon: 'file-text' },
       { id: 'sales_return', label: 'Sales Return', icon: 'corner-down-left' },
       { id: 'quotation', label: 'Quotation', icon: 'file' },
-      { id: 'pos', label: 'POS', icon: 'monitor' },
-    ]
-  },
-  {
-    title: 'Promo',
-    items: [
-      { id: 'coupons', label: 'Coupons', icon: 'tag' },
-      { id: 'gift_cards', label: 'Gift Cards', icon: 'gift' },
-      { id: 'discount', label: 'Discount', icon: 'percent' },
+      { id: 'pos', label: 'POS', icon: 'monitor', hasChevron: true },
     ]
   },
   {
     title: 'Purchases',
     items: [
-      { id: 'purchases', label: 'Purchases', icon: 'cart' },
+      { id: 'purchases', label: 'Purchases', icon: 'shopping-bag' },
+      { id: 'purchase_order', label: 'Purchase Order', icon: 'file-text' },
+      { id: 'purchase_return', label: 'Purchase Return', icon: 'corner-up-left' },
     ]
   },
   {
-    title: 'Other',
+    title: 'Finance & Accounts',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: 'home' },
-      { id: 'products', label: 'Products', icon: 'cube' },
-      { id: 'reports', label: 'Reports', icon: 'file-text' },
-      { id: 'settings', label: 'Settings', icon: 'settings' },
+      { id: 'expenses', label: 'Expenses', icon: 'file-minus', hasChevron: true },
+      { id: 'income', label: 'Income', icon: 'file-plus', hasChevron: true },
+      { id: 'bank_accounts', label: 'Bank Accounts', icon: 'briefcase' },
+      { id: 'money_transfer', label: 'Money Transfer', icon: 'refresh-cw' },
+      { id: 'balance_sheet', label: 'Balance Sheet', icon: 'file-text' },
+      { id: 'trial_balance', label: 'Trial Balance', icon: 'alert-circle' },
+      { id: 'cash_flow', label: 'Cash Flow', icon: 'dollar-sign' },
+      { id: 'account_statement', label: 'Account Statement', icon: 'file' },
+    ]
+  },
+  {
+    title: 'Peoples',
+    items: [
+      { id: 'customers', label: 'Customers', icon: 'users' },
+      { id: 'billers', label: 'Billers', icon: 'user-plus' },
+      { id: 'suppliers', label: 'Suppliers', icon: 'user' },
+      { id: 'stores', label: 'Stores', icon: 'home' },
+      { id: 'warehouses', label: 'Warehouses', icon: 'archive' },
+    ]
+  },
+  {
+    title: 'HRM',
+    items: [
+      { id: 'employees', label: 'Employees', icon: 'user' },
+      { id: 'departments', label: 'Departments', icon: 'pie-chart' },
+      { id: 'designation', label: 'Designation', icon: 'share-2' },
+      { id: 'shifts', label: 'Shifts', icon: 'shuffle' },
+      { id: 'attendance', label: 'Attendance', icon: 'user-check', hasChevron: true },
+      { id: 'leaves', label: 'Leaves', icon: 'calendar', hasChevron: true },
+      { id: 'holidays', label: 'Holidays', icon: 'calendar' },
+      { id: 'payroll', label: 'Payroll', icon: 'dollar-sign', hasChevron: true },
+    ]
+  },
+  {
+    title: 'Reports',
+    items: [
+      { id: 'sales_report', label: 'Sales Report', icon: 'bar-chart-2', hasChevron: true },
+      { id: 'purchase_report', label: 'Purchase report', icon: 'clock' },
+      { id: 'inventory_report', label: 'Inventory Report', icon: 'filter', hasChevron: true },
+      { id: 'invoice_report', label: 'Invoice Report', icon: 'dollar-sign' },
+      { id: 'supplier_report', label: 'Supplier Report', icon: 'users', hasChevron: true },
+      { id: 'customer_report', label: 'Customer Report', icon: 'clipboard', hasChevron: true },
+      { id: 'product_report', label: 'Product Report', icon: 'box', hasChevron: true },
+      { id: 'expense_report', label: 'Expense Report', icon: 'file-text' },
+      { id: 'income_report', label: 'Income Report', icon: 'file' },
+      { id: 'tax_report', label: 'Tax Report', icon: 'activity' },
+      { id: 'profit_loss', label: 'Profit & Loss', icon: 'pie-chart' },
+      { id: 'annual_report', label: 'Annual Report', icon: 'calendar' },
+    ]
+  },
+  {
+    title: 'User Management',
+    items: [
+      { id: 'users', label: 'Users', icon: 'shield' },
+      { id: 'roles_permissions', label: 'Roles & Permissions', icon: 'key' },
+      { id: 'delete_account_request', label: 'Delete Account Request', icon: 'trash-2' },
     ]
   }
 ];
@@ -84,6 +149,7 @@ const CUSTOM_COLORS = {
 
 const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: MenuItem, activeItem: string, onItemPress: (id: string) => void, theme: any }) => {
   const hasSubItems = item.subItems && item.subItems.length > 0;
+  const hasChevron = item.hasChevron || hasSubItems;
   // Check if this item is active, or if any of its subitems is active
   const isDirectActive = activeItem === item.id;
   const isSubActive = hasSubItems && item.subItems!.some(sub => sub.id === activeItem);
@@ -159,7 +225,7 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
         <View style={styles.itemLeft}>
           <Icon 
             name={item.icon} 
-            size={16} 
+            size={18} 
             color={isActiveGroup ? CUSTOM_COLORS.activeText : CUSTOM_COLORS.iconInactive}
             style={{ marginRight: 12 }}
           />
@@ -172,13 +238,15 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
           </Text>
         </View>
         
-        {hasSubItems && (
-          <Animated.View style={{ transform: [{ rotate: spin }] }}>
-            <Icon 
-              name="chevron-right" 
-              size={14} 
-              color={isActiveGroup ? CUSTOM_COLORS.activeText : '#CBD5E1'} 
-            />
+        {hasChevron && (
+          <Animated.View style={{ transform: [{ rotate: hasSubItems ? spin : '0deg' }] }}>
+            <View style={styles.chevronContainer}>
+              <Icon 
+                name="chevron-right" 
+                size={12} 
+                color="#64748B" 
+              />
+            </View>
           </Animated.View>
         )}
       </TouchableOpacity>
@@ -295,7 +363,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 20,
     marginBottom: 12,
-    marginTop: 8,
+    marginTop: 4,
   },
   menuItemContainer: {
     marginBottom: 4,
@@ -305,8 +373,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
     borderRadius: 8,
   },
   itemActive: {
@@ -322,6 +390,14 @@ const styles = StyleSheet.create({
   },
   itemTextActive: {
     fontWeight: '600',
+  },
+  chevronContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   subItem: {
     flexDirection: 'row',
@@ -347,8 +423,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 2,
     marginHorizontal: 20,
   },
   footer: {

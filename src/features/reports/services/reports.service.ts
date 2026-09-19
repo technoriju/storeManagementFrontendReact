@@ -36,8 +36,8 @@ export class ReportsService {
     }
     
     query += ' ORDER BY s.createdAt DESC';
-    const res = db.execute(query);
-    return res.rows?._array || [];
+    const res = await db.execute(query);
+    return res.rows || [];
   }
 
   static async getPurchasesReport(filters: ReportFilters) {
@@ -53,8 +53,8 @@ export class ReportsService {
     }
     
     query += ' ORDER BY p.createdAt DESC';
-    const res = db.execute(query);
-    return res.rows?._array || [];
+    const res = await db.execute(query);
+    return res.rows || [];
   }
 
   static async getInventoryReport(filters: ReportFilters) {
@@ -69,8 +69,8 @@ export class ReportsService {
     }
     
     query += ' ORDER BY name ASC';
-    const res = db.execute(query);
-    return res.rows?._array || [];
+    const res = await db.execute(query);
+    return res.rows || [];
   }
 
   static async getGSTReport(filters: ReportFilters) {
@@ -84,8 +84,8 @@ export class ReportsService {
       WHERE ${this.buildDateCondition('p.createdAt', filters)}
       ORDER BY createdAt DESC
     `;
-    const res = db.execute(query);
-    return res.rows?._array || [];
+    const res = await db.execute(query);
+    return res.rows || [];
   }
   
   static async getExpensesReport(filters: ReportFilters) {
@@ -95,7 +95,7 @@ export class ReportsService {
       WHERE ${this.buildDateCondition('date', filters)}
       ORDER BY date DESC
     `;
-    const res = db.execute(query);
-    return res.rows?._array || [];
+    const res = await db.execute(query);
+    return res.rows || [];
   }
 }

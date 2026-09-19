@@ -21,7 +21,7 @@ export const ReportsScreen = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      let result = [];
+      let result: any[] = [];
       switch (activeReport) {
         case 'sales':
           result = await ReportsService.getSalesReport(filters);

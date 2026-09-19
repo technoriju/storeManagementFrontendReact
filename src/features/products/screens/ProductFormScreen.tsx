@@ -123,7 +123,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{flex: 1}}><AppInput containerStyle={{ marginBottom: 0 }} /></View><AppButton title="Generate" style={{ borderRadius: 6, height: 48 }} /></View>
             </FormGroup>
             <FormGroup width="50%" label="Selling Type">
-              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}, {label: 'test', value: '3'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} isMulti={true} />
             </FormGroup>
 
             <FormGroup 
