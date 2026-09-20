@@ -3,6 +3,8 @@ import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { AddPurchaseModal } from '../components/AddPurchaseModal';
+import { ImportPurchaseModal } from '../components/ImportPurchaseModal';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -23,6 +25,8 @@ interface Props {
 export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Mock data based on the screenshot
   const purchases = [
@@ -140,13 +144,14 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => onNavigate('form')}
+        onPress={() => setShowAddModal(true)}
       >
         <PlusCircle size={16} color="white" />
         <Text style={styles.primaryActionText}>Add Purchase</Text>
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#1E3A8A' }]} 
+        onPress={() => setShowImportModal(true)}
       >
         <Download size={16} color="white" />
         <Text style={styles.primaryActionText}>Import Purchase</Text>
@@ -190,6 +195,8 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         renderRowActions={renderRowActions}
         isLoading={false}
       />
+      <AddPurchaseModal visible={showAddModal} onClose={() => setShowAddModal(false)} />
+      <ImportPurchaseModal visible={showImportModal} onClose={() => setShowImportModal(false)} />
     </View>
   );
 };

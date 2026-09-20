@@ -62,11 +62,11 @@ const menuSections: MenuSection[] = [
   {
     title: 'Sales',
     items: [
-      { id: 'sales', label: 'Sales', icon: 'grid', hasChevron: true },
+      { id: 'sales', label: 'Sales', icon: 'grid', hasChevron: false },
       { id: 'invoices', label: 'Invoices', icon: 'file-text' },
       { id: 'sales_return', label: 'Sales Return', icon: 'corner-down-left' },
       { id: 'quotation', label: 'Quotation', icon: 'file' },
-      { id: 'pos', label: 'POS', icon: 'monitor', hasChevron: true },
+      { id: 'pos', label: 'POS', icon: 'monitor' },
     ]
   },
   {

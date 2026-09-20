@@ -1,40 +1,38 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { PurchaseScreenType } from '../PurchasesModule';
+import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
-import { AddPurchaseReturnModal } from '../components/AddPurchaseReturnModal';
 import { 
-  FileText, 
-  FileSpreadsheet, 
-  RefreshCw, 
-  ChevronUp, 
-  PlusCircle, 
+  ChevronDown,
   Edit,
   Trash2,
-  ChevronDown
+  FileText,
+  FileSpreadsheet,
+  RefreshCw,
+  ChevronUp,
+  PlusCircle
 } from 'lucide-react-native';
 
 interface Props {
-  onNavigate: (screen: PurchaseScreenType, id?: string) => void;
+  onNavigate: (screen: PosScreenType, id?: string) => void;
 }
 
-export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
+export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalVisible, setIsModalVisible] = useState(false);
 
-  // Mock data based on the screenshot
-  const returns = [
-    { id: '1', img: 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&q=80&w=100', date: '24 Dec 2024', supplierName: 'Electro Mart', reference: 'PT001', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
-    { id: '2', img: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&q=80&w=100', date: '10 Dec 2024', supplierName: 'Quantum Gadgets', reference: 'PT002', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: '3', img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=100', date: '27 Nov 2024', supplierName: 'Prime Bazaar', reference: 'PT003', status: 'Received', total: 1500, paid: 1800, due: 0, paymentStatus: 'Paid' },
-    { id: '4', img: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&q=80&w=100', date: '18 Nov 2024', supplierName: 'Gadget World', reference: 'PT004', status: 'Received', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
-    { id: '5', img: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100', date: '06 Nov 2024', supplierName: 'Volt Vault', reference: 'PT005', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
-    { id: '6', img: 'https://images.unsplash.com/photo-1505843490538-5133c6c7d0e1?auto=format&fit=crop&q=80&w=100', date: '25 Oct 2024', supplierName: 'Elite Retail', reference: 'PT006', status: 'Pending', total: 750, paid: 0, due: 750, paymentStatus: 'Unpaid' },
-    { id: '7', img: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=100', date: '14 Oct 2024', supplierName: 'Prime Mart', reference: 'PT007', status: 'Received', total: 1300, paid: 1300, due: 0, paymentStatus: 'Paid' },
-    { id: '8', img: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=100', date: '14 Oct 2024', supplierName: 'NeoTech Store', reference: 'PT008', status: 'Received', total: 1100, paid: 1100, due: 0, paymentStatus: 'Paid' },
-    { id: '9', img: 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&q=80&w=100', date: '20 Sep 2024', supplierName: 'Urban Mart', reference: 'PT009', status: 'Pending', total: 2300, paid: 2300, due: 0, paymentStatus: 'Paid' },
+  const salesReturns = [
+    { id: '1', productName: 'Lenovo IdeaPad 3', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Carl Evans', avatar: 'https://i.pravatar.cc/150?u=1', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
+    { id: '2', productName: 'Apple tablet', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Minerva Rameriz', avatar: 'https://i.pravatar.cc/150?u=2', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
+    { id: '3', productName: 'Headphone', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Robert Lamon', avatar: 'https://i.pravatar.cc/150?u=3', status: 'Received', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
+    { id: '4', productName: 'Nike Jordan', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', status: 'Received', total: 1500, paid: 1500, due: 0, paymentStatus: 'Paid' },
+    { id: '5', productName: 'Macbook Pro', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Patricia Lewis', avatar: 'https://i.pravatar.cc/150?u=4', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
+    { id: '6', productName: 'Red Premium Satchel', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Marsha Betts', avatar: 'https://i.pravatar.cc/150?u=6', status: 'Pending', total: 750, paid: 0, due: 750, paymentStatus: 'Unpaid' },
+    { id: '7', productName: 'Apple Earpods', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Daniel Jude', avatar: 'https://i.pravatar.cc/150?u=7', status: 'Received', total: 1300, paid: 1300, due: 0, paymentStatus: 'Paid' },
+    { id: '8', productName: 'Iphone 14 Pro', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Emma Bates', avatar: 'https://i.pravatar.cc/150?u=8', status: 'Received', total: 1100, paid: 1100, due: 0, paymentStatus: 'Paid' },
+    { id: '9', productName: 'Gaming Chair', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Richard Fralick', avatar: 'https://i.pravatar.cc/150?u=9', status: 'Pending', total: 2300, paid: 2300, due: 0, paymentStatus: 'Paid' },
+    { id: '10', productName: 'Borealis Backpack', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Michelle Robison', avatar: 'https://i.pravatar.cc/150?u=10', status: 'Pending', total: 1700, paid: 1700, due: 0, paymentStatus: 'Paid' },
   ];
 
   const getStatusColor = (status: string) => {
@@ -56,18 +54,14 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const columns = [
     { 
-      key: 'img', 
-      title: 'Product Image', 
-      width: 120,
-      render: (value: string) => (
-        <View style={{ alignItems: 'flex-start' }}>
-          {value ? (
-            <Image source={{ uri: value }} style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background }} />
-          ) : (
-            <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
-            </View>
-          )}
+      key: 'product', 
+      title: 'Product', 
+      flex: 1.5,
+      minWidth: 150,
+      render: (_: any, item: any) => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Image source={{ uri: item.productImg }} style={{ width: 24, height: 24, borderRadius: 4 }} />
+          <Text style={{ color: theme.colors.textSecondary }}>{item.productName}</Text>
         </View>
       )
     },
@@ -75,22 +69,20 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'date', 
       title: 'Date', 
       flex: 1,
-      minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
-    },
-    { 
-      key: 'supplierName', 
-      title: 'Supplier Name', 
-      flex: 1.5,
-      minWidth: 150,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
-    },
-    { 
-      key: 'reference', 
-      title: 'Reference', 
-      flex: 1,
       minWidth: 100,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+    },
+    { 
+      key: 'customer', 
+      title: 'Customer', 
+      flex: 1.5,
+      minWidth: 150,
+      render: (_: any, item: any) => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Image source={{ uri: item.avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+          <Text style={{ color: theme.colors.textSecondary }}>{item.customerName}</Text>
+        </View>
+      )
     },
     { 
       key: 'status', 
@@ -109,19 +101,19 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'total', 
       title: 'Total', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'paid', 
       title: 'Paid', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'due', 
       title: 'Due', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'paymentStatus', 
@@ -153,12 +145,9 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <ChevronUp size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => setIsModalVisible(true)}
-      >
+      <Pressable style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]}>
         <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Purchase Return</Text>
+        <Text style={styles.primaryActionText}>Add Sales Return</Text>
       </Pressable>
     </>
   );
@@ -166,7 +155,15 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
   const filters = (
     <>
       <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
+        <Text style={{ color: theme.colors.text }}>Customer</Text>
+        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
+      </View>
+      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
         <Text style={{ color: theme.colors.text }}>Status</Text>
+        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
+      </View>
+      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
+        <Text style={{ color: theme.colors.text }}>Payment Status</Text>
         <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
       </View>
       <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
@@ -177,32 +174,28 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const renderRowActions = (item: any) => (
-    <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Pressable style={styles.actionIcon}>
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+      <Pressable style={styles.actionIcon}>
         <Trash2 size={16} color={theme.colors.textSecondary} />
       </Pressable>
-    </>
+    </View>
   );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <AdvancedTable
-        title="Purchase Returns"
-        subtitle="Manage your purchase return"
+        title="Sales Return"
+        subtitle="Manage your returns"
         headerActions={headerActions}
         columns={columns}
-        data={returns}
+        data={salesReturns}
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
         isLoading={false}
-      />
-      <AddPurchaseReturnModal 
-        visible={isModalVisible} 
-        onClose={() => setIsModalVisible(false)} 
       />
     </View>
   );
@@ -240,14 +233,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 40,
     backgroundColor: 'white',
+    marginRight: 8,
   },
-  rowActionBtn: {
-    width: 32,
-    height: 32,
+  actionIcon: {
+    padding: 4,
     borderWidth: 1,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
+    borderColor: '#E2E8F0',
+    borderRadius: 4,
   }
 });
