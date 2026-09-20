@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SupplierListScreen } from './screens/SupplierListScreen';
 import { SupplierDetailsScreen } from './screens/SupplierDetailsScreen';
-import { SupplierFormScreen } from './screens/SupplierFormScreen';
+import { SupplierFormScreen } from './components/SupplierFormScreen';
 import { PaymentHistoryScreen } from '../customers/screens/PaymentHistoryScreen';
 import { PaymentFormScreen } from '../customers/screens/PaymentFormScreen';
 
@@ -19,15 +19,23 @@ export const SuppliersModule = () => {
 
   const renderScreen = () => {
     switch (currentScreen) {
-      case 'list': return <SupplierListScreen onNavigate={navigateTo} />;
+      case 'list': 
+      case 'form':
+        return <SupplierListScreen onNavigate={navigateTo} />;
       case 'details': return <SupplierDetailsScreen supplierId={selectedId!} onNavigate={navigateTo} />;
-      case 'form': return <SupplierFormScreen supplierId={selectedId} onNavigate={navigateTo} />;
       case 'payment_history': return <PaymentHistoryScreen entityId={selectedId!} entityType='supplier' onNavigate={navigateTo} />;
       case 'payment_form': return <PaymentFormScreen entityId={selectedId!} entityType='supplier' onNavigate={navigateTo} />;
       default: return <SupplierListScreen onNavigate={navigateTo} />;
     }
   };
 
-  return <View style={styles.container}>{renderScreen()}</View>;
+  return (
+    <View style={styles.container}>
+      {renderScreen()}
+      {currentScreen === 'form' && (
+        <SupplierFormScreen supplierId={selectedId} onNavigate={navigateTo} />
+      )}
+    </View>
+  );
 };
 const styles = StyleSheet.create({ container: { flex: 1 } });

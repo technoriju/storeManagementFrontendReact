@@ -104,51 +104,53 @@ export const AdvancedTable = <T extends Record<string, any>>({
             </View>
 
             {/* Body Rows */}
-            {isLoading ? (
-              <View style={styles.emptyState}>
-                <Text style={{ color: theme.colors.textSecondary }}>Loading data...</Text>
-              </View>
-            ) : currentData.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Text style={{ color: theme.colors.textSecondary }}>No data found</Text>
-              </View>
-            ) : (
-              currentData.map((item, rowIndex) => (
-                <View 
-                  key={item.id || rowIndex.toString()} 
-                  style={[
-                    styles.row, 
-                    { borderBottomColor: theme.colors.divider },
-                    rowIndex === currentData.length - 1 && { borderBottomWidth: 0 }
-                  ]}
-                >
-                  {hasCheckbox && (
-                    <View style={styles.checkboxCell}>
-                      <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
-                    </View>
-                  )}
-                  {columns.map((col, colIndex) => (
-                    <View 
-                      key={col.key || colIndex.toString()} 
-                      style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
-                    >
-                      {col.render ? (
-                        col.render(item[col.key], item)
-                      ) : (
-                        <Text style={[styles.cellText, { color: theme.colors.textSecondary }]}>
-                          {item[col.key]}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                  {renderRowActions && (
-                    <View style={[styles.cell, { width: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, paddingRight: 24 }]}>
-                      {renderRowActions(item)}
-                    </View>
-                  )}
+            <ScrollView style={{ flex: 1 }}>
+              {isLoading ? (
+                <View style={styles.emptyState}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Loading data...</Text>
                 </View>
-              ))
-            )}
+              ) : currentData.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={{ color: theme.colors.textSecondary }}>No data found</Text>
+                </View>
+              ) : (
+                currentData.map((item, rowIndex) => (
+                  <View 
+                    key={item.id || rowIndex.toString()} 
+                    style={[
+                      styles.row, 
+                      { borderBottomColor: theme.colors.divider },
+                      rowIndex === currentData.length - 1 && { borderBottomWidth: 0 }
+                    ]}
+                  >
+                    {hasCheckbox && (
+                      <View style={styles.checkboxCell}>
+                        <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
+                      </View>
+                    )}
+                    {columns.map((col, colIndex) => (
+                      <View 
+                        key={col.key || colIndex.toString()} 
+                        style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
+                      >
+                        {col.render ? (
+                          col.render(item[col.key], item)
+                        ) : (
+                          <Text style={[styles.cellText, { color: theme.colors.textSecondary }]}>
+                            {item[col.key]}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                    {renderRowActions && (
+                      <View style={[styles.cell, { width: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, paddingRight: 24 }]}>
+                        {renderRowActions(item)}
+                      </View>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
           </View>
         </ScrollView>
 

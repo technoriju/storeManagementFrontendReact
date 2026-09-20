@@ -62,11 +62,10 @@ const menuSections: MenuSection[] = [
   {
     title: 'Sales',
     items: [
-      { id: 'sales', label: 'Sales', icon: 'grid', hasChevron: false },
+      { id: 'pos', label: 'Sales', icon: 'monitor' },     
       { id: 'invoices', label: 'Invoices', icon: 'file-text' },
       { id: 'sales_return', label: 'Sales Return', icon: 'corner-down-left' },
-      { id: 'quotation', label: 'Quotation', icon: 'file' },
-      { id: 'pos', label: 'POS', icon: 'monitor' },
+      { id: 'quotation', label: 'Quotation', icon: 'file' }      
     ]
   },
   {
@@ -112,7 +111,6 @@ const menuSections: MenuSection[] = [
     title: 'Peoples',
     items: [
       { id: 'customers', label: 'Customers', icon: 'users' },
-      { id: 'billers', label: 'Billers', icon: 'user-plus' },
       { id: 'suppliers', label: 'Suppliers', icon: 'user' },
       { id: 'stores', label: 'Stores', icon: 'home' },
       { id: 'warehouses', label: 'Warehouses', icon: 'archive' },

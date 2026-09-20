@@ -16,9 +16,9 @@ export const POSModule: React.FC<Props> = ({ initialScreen }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   React.useEffect(() => {
-    if (initialScreen === 'pos') setCurrentScreen('orders');
+    if (initialScreen === 'pos' || initialScreen === 'sales') setCurrentScreen('orders');
     else if (initialScreen === 'invoices') setCurrentScreen('invoices');
-    else if (initialScreen === 'sales-return') setCurrentScreen('sales-return');
+    else if (initialScreen === 'sales-return' || initialScreen === 'sales_return') setCurrentScreen('sales-return');
     else if (initialScreen === 'quotation') setCurrentScreen('quotation');
   }, [initialScreen]);
 

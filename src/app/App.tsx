@@ -58,8 +58,8 @@ const AuthenticatedApp = () => {
     if (activeTab === 'inventory') {
       return <InventoryModule />;
     }
-    if (activeTab === 'pos') {
-      return <POSModule />;
+    if (activeTab === 'pos' || activeTab === 'sales' || activeTab === 'invoices' || activeTab === 'sales_return' || activeTab === 'quotation') {
+      return <POSModule initialScreen={activeTab} />;
     }
     if (activeTab === 'customers') {
       return <CustomersModule />;
