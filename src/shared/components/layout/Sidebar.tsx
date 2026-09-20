@@ -28,10 +28,10 @@ const menuSections: MenuSection[] = [
   {
     title: 'Main',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: 'grid', hasChevron: true },
-      { id: 'super_admin', label: 'Super Admin', icon: 'user', hasChevron: true },
-      { id: 'application', label: 'Application', icon: 'layers', hasChevron: true },
-      { id: 'layouts', label: 'Layouts', icon: 'layout', hasChevron: true },
+      { id: 'dashboard', label: 'Dashboard', icon: 'grid', hasChevron: false },
+      // { id: 'super_admin', label: 'Super Admin', icon: 'user', hasChevron: true },
+      // { id: 'application', label: 'Application', icon: 'layers', hasChevron: true },
+      // { id: 'layouts', label: 'Layouts', icon: 'layout', hasChevron: true },
     ]
   },
   {
@@ -80,8 +80,26 @@ const menuSections: MenuSection[] = [
   {
     title: 'Finance & Accounts',
     items: [
-      { id: 'expenses', label: 'Expenses', icon: 'file-minus', hasChevron: true },
-      { id: 'income', label: 'Income', icon: 'file-plus', hasChevron: true },
+      { 
+        id: 'expenses', 
+        label: 'Expenses', 
+        icon: 'file-minus', 
+        hasChevron: true,
+        subItems: [
+          { id: 'expense_list', label: 'Expenses' },
+          { id: 'expense_category', label: 'Expense Category' }
+        ]
+      },
+      { 
+        id: 'income', 
+        label: 'Income', 
+        icon: 'file-plus', 
+        hasChevron: true,
+        subItems: [
+          { id: 'income_list', label: 'Income' },
+          { id: 'income_category', label: 'Income Category' }
+        ]
+      },
       { id: 'bank_accounts', label: 'Bank Accounts', icon: 'briefcase' },
       { id: 'money_transfer', label: 'Money Transfer', icon: 'refresh-cw' },
       { id: 'balance_sheet', label: 'Balance Sheet', icon: 'file-text' },
@@ -240,11 +258,14 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
         
         {hasChevron && (
           <Animated.View style={{ transform: [{ rotate: hasSubItems ? spin : '0deg' }] }}>
-            <View style={styles.chevronContainer}>
+            <View style={[
+              styles.chevronContainer,
+              isActiveGroup && { backgroundColor: '#FFE4CC' }
+            ]}>
               <Icon 
                 name="chevron-right" 
                 size={12} 
-                color="#64748B" 
+                color={isActiveGroup ? CUSTOM_COLORS.activeText : "#64748B"} 
               />
             </View>
           </Animated.View>

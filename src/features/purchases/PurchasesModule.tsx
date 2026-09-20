@@ -6,12 +6,23 @@ import { PurchaseFormScreen } from './screens/PurchaseFormScreen';
 import { PurchaseReturnScreen } from './screens/PurchaseReturnScreen';
 import { SuppliersScreen } from './screens/SuppliersScreen';
 import { PaymentsScreen } from './screens/PaymentsScreen';
+import { PurchaseOrderScreen } from './screens/PurchaseOrderScreen';
 
-export type PurchaseScreenType = 'list' | 'details' | 'form' | 'return' | 'suppliers' | 'payments';
+export type PurchaseScreenType = 'list' | 'details' | 'form' | 'return' | 'suppliers' | 'payments' | 'orders';
 
-export const PurchasesModule = () => {
+interface Props {
+  initialScreen?: string;
+}
+
+export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
   const [currentScreen, setCurrentScreen] = useState<PurchaseScreenType>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialScreen === 'purchases') setCurrentScreen('list');
+    else if (initialScreen === 'purchase_order') setCurrentScreen('orders');
+    else if (initialScreen === 'purchase_return') setCurrentScreen('return');
+  }, [initialScreen]);
 
   const navigateTo = (screen: PurchaseScreenType, id?: string) => {
     setSelectedId(id || null);
@@ -26,6 +37,7 @@ export const PurchasesModule = () => {
       case 'return': return <PurchaseReturnScreen onNavigate={navigateTo} />;
       case 'suppliers': return <SuppliersScreen onNavigate={navigateTo} />;
       case 'payments': return <PaymentsScreen onNavigate={navigateTo} />;
+      case 'orders': return <PurchaseOrderScreen onNavigate={navigateTo} />;
       default: return <PurchaseListScreen onNavigate={navigateTo} />;
     }
   };

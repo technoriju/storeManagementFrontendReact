@@ -52,7 +52,13 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
 
   const handleMenuPress = () => setDrawerOpen(true);
 
-  const currentTabLabel = TABS.find(t => t.id === activeTab)?.label || 'Dashboard';
+  const formatTabTitle = (tab: string) => {
+    const found = TABS.find(t => t.id === tab);
+    if (found) return found.label;
+    return tab.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const currentTabLabel = formatTabTitle(activeTab);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>

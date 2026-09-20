@@ -52,8 +52,8 @@ const AuthenticatedApp = () => {
     if (activeTab === 'products') {
       return <ProductsModule />;
     }
-    if (activeTab === 'purchases') {
-      return <PurchasesModule />;
+    if (activeTab === 'purchases' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
+      return <PurchasesModule initialScreen={activeTab} />;
     }
     if (activeTab === 'inventory') {
       return <InventoryModule />;
