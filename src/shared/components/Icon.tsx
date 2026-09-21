@@ -63,7 +63,8 @@ export type IconName =
   | 'activity'
   | 'shield'
   | 'key'
-  | 'trash-2';
+  | 'trash-2'
+  | 'copy';
 
 interface IconProps {
   name: IconName;

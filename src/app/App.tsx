@@ -14,6 +14,9 @@ import { PurchasesModule } from '../features/purchases/PurchasesModule';
 import { InventoryModule } from '../features/inventory/InventoryModule';
 import { CategoryModule } from '../features/category/CategoryModule';
 import { SubCategoryModule } from '../features/sub_category/SubCategoryModule';
+import { BrandsModule } from '../features/brands/BrandsModule';
+import { UnitsModule } from '../features/units/UnitsModule';
+import { SubUnitsModule } from '../features/sub_units/SubUnitsModule';
 import { POSModule } from '../features/pos/POSModule';
 import { CustomersModule } from '../features/customers/CustomersModule';
 import { SuppliersModule } from '../features/suppliers/SuppliersModule';
@@ -65,6 +68,15 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'sub_category') {
       return <SubCategoryModule />;
+    }
+    if (activeTab === 'brands') {
+      return <BrandsModule />;
+    }
+    if (activeTab === 'units') {
+      return <UnitsModule />;
+    }
+    if (activeTab === 'sub_units') {
+      return <SubUnitsModule />;
     }
     if (activeTab === 'pos' || activeTab === 'sales' || activeTab === 'invoices' || activeTab === 'sales_return' || activeTab === 'quotation') {
       return <POSModule initialScreen={activeTab} />;

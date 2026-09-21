@@ -1,12 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { DashboardService, DashboardMetrics } from '../services/dashboard.service';
+import { DashboardCard } from '../components/DashboardCard';
+import { DashboardBarChart, DashboardDoughnutChart } from '../components/DashboardChart';
+import { Calendar, FileText, RefreshCcw, Gift, Shield, Layers, Clock, Target, Hash, Users, UserPlus, ShoppingCart } from 'lucide-react-native';
 
 export const DashboardScreen = () => {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const isMobile = width < 768;
 
   const loadMetrics = async () => {
     try {
@@ -37,73 +43,140 @@ export const DashboardScreen = () => {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={loadMetrics} />}
     >
-      <View style={styles.header}>
-        <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </Text>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Today's Pulse</Text>
-      </View>
-
-      {/* Hero Section: The most important numbers with a stark, ledger-like design */}
-      <View style={[styles.heroGrid, { borderTopColor: theme.colors.text, borderBottomColor: theme.colors.text }]}>
-        <View style={[styles.heroCell, { borderRightColor: theme.colors.text }]}>
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Sales</Text>
-          <Text style={[styles.heroValue, { color: theme.colors.text }]}>
-            ₹{metrics.todaySales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'flex-start' }]}>
+        <View>
+          <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>Welcome, Admin</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+            You have <Text style={{ color: '#F89B29', fontWeight: '600' }}>200+</Text> Orders, Today
           </Text>
         </View>
-        <View style={styles.heroCell}>
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Profit</Text>
-          <Text style={[styles.heroValue, { color: metrics.profit >= 0 ? theme.colors.success : theme.colors.error }]}>
-            ₹{metrics.profit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </Text>
-        </View>
+        <TouchableOpacity style={[styles.datePicker, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, marginTop: isMobile ? 16 : 0 }]}>
+          <Calendar size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
+          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>15/09/2026 - 21/09/2026</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Secondary Metrics: Structured list rather than floating cards */}
-      <View style={styles.secondarySection}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Business Overview</Text>
+      <View style={styles.cardRow}>
+        <DashboardCard
+          variant="primary"
+          title="Total Sales"
+          value={`$48,988,078`}
+          icon={<FileText size={20} color="#F89B29" />}
+          trend="+22%"
+          trendUp={true}
+          color="#F89B29"
+        />
+        <DashboardCard
+          variant="primary"
+          title="Total Sales Return"
+          value={`$16,478,145`}
+          icon={<RefreshCcw size={20} color="#1C2E46" />}
+          trend="-22%"
+          trendUp={false}
+          color="#1C2E46"
+        />
+        <DashboardCard
+          variant="primary"
+          title="Total Purchase"
+          value={`$24,145,789`}
+          icon={<Gift size={20} color="#1E9B85" />}
+          trend="+22%"
+          trendUp={true}
+          color="#1E9B85"
+        />
+        <DashboardCard
+          variant="primary"
+          title="Total Purchase Return"
+          value={`$18,458,747`}
+          icon={<Shield size={20} color="#2664FF" />}
+          trend="+22%"
+          trendUp={true}
+          color="#2664FF"
+        />
+      </View>
+
+      <View style={styles.cardRow}>
+        <DashboardCard
+          variant="secondary"
+          title="Profit"
+          value={`$8,458,798`}
+          icon={<Layers size={16} color="#00C49F" />}
+          trend="35%"
+          trendUp={true}
+          color="#00C49F"
+          onViewAll={() => {}}
+        />
+        <DashboardCard
+          variant="secondary"
+          title="Invoice Due"
+          value={`$48,988,78`}
+          icon={<Clock size={16} color="#00C49F" />}
+          trend="35%"
+          trendUp={true}
+          color="#00C49F"
+          onViewAll={() => {}}
+        />
+        <DashboardCard
+          variant="secondary"
+          title="Total Expenses"
+          value={`$8,980,097`}
+          icon={<Target size={16} color="#FF4560" />}
+          trend="41%"
+          trendUp={true}
+          color="#FF4560"
+          onViewAll={() => {}}
+        />
+        <DashboardCard
+          variant="secondary"
+          title="Total Payment Returns"
+          value={`$78,458,798`}
+          icon={<Hash size={16} color="#8A2BE2" />}
+          trend="20%"
+          trendUp={false}
+          color="#8A2BE2"
+          onViewAll={() => {}}
+        />
+      </View>
+
+      <View style={[styles.bottomSection, isMobile && { flexDirection: 'column' }]}>
+        <View style={[styles.chartContainer, isMobile && { marginRight: 0, marginBottom: 16 }]}>
+          <DashboardBarChart />
+        </View>
         
-        <View style={styles.metricsList}>
-          <MetricRow 
-            label="Purchases" 
-            value={metrics.todayPurchases} 
-            theme={theme}
-          />
-          <MetricRow 
-            label="Expenses" 
-            value={metrics.expenses} 
-            theme={theme}
-          />
-          <MetricRow 
-            label="Current Stock Value" 
-            value={metrics.currentStockValue} 
-            theme={theme} 
-          />
-          <MetricRow 
-            label="Outstanding Balance" 
-            value={metrics.outstanding} 
-            theme={theme} 
-            isLast
-          />
+        <View style={styles.rightPanel}>
+          <View style={[styles.overallInfoContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.overallHeader}>
+              <View style={[styles.infoIcon, { backgroundColor: theme.colors.background }]}>
+                <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>i</Text>
+              </View>
+              <Text style={[styles.overallTitle, { color: theme.colors.text }]}>Overall Information</Text>
+            </View>
+            
+            <View style={styles.infoCardsRow}>
+              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+                <UserPlus size={24} color="#2664FF" />
+                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Suppliers</Text>
+                <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>6987</Text>
+              </View>
+              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+                <Users size={24} color="#FF4560" />
+                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Customer</Text>
+                <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>4896</Text>
+              </View>
+              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+                <ShoppingCart size={24} color="#00C49F" />
+                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Orders</Text>
+                <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>487</Text>
+              </View>
+            </View>
+          </View>
+
+          <DashboardDoughnutChart />
         </View>
       </View>
     </ScrollView>
   );
 };
-
-const MetricRow = ({ label, value, theme, isLast = false }: any) => (
-  <View style={[
-    styles.metricRow, 
-    { borderBottomColor: theme.colors.border },
-    isLast && { borderBottomWidth: 0 }
-  ]}>
-    <Text style={[styles.metricLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
-    <Text style={[styles.metricValue, { color: theme.colors.text }]}>
-      ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-    </Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   center: {
@@ -116,76 +189,95 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingTop: 48,
-    maxWidth: 800,
+    maxWidth: 1400,
     alignSelf: 'center',
     width: '100%',
   },
   header: {
-    marginBottom: 32,
-  },
-  date: {
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: -1,
-  },
-  heroGrid: {
-    flexDirection: 'row',
-    borderTopWidth: 2,
-    borderBottomWidth: 2,
-    paddingVertical: 24,
-    marginBottom: 48,
-  },
-  heroCell: {
-    flex: 1,
-    paddingHorizontal: 16,
-    borderRightWidth: 1,
-  },
-  label: {
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  heroValue: {
-    fontSize: 42,
-    fontWeight: '300',
-    letterSpacing: -1.5,
-  },
-  secondarySection: {
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 24,
-    letterSpacing: -0.5,
-  },
-  metricsList: {
-    borderWidth: 1,
-    borderColor: 'transparent', // Inherits from theme in row
-  },
-  metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
+    marginBottom: 20,
   },
-  metricLabel: {
-    fontSize: 16,
+  welcomeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 10,
+  },
+  datePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  dateText: {
+    fontSize: 12,
     fontWeight: '500',
   },
-  metricValue: {
-    fontSize: 18,
+  cardRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  bottomSection: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  chartContainer: {
+    flex: 2,
+    marginRight: 16,
+  },
+  rightPanel: {
+    flex: 1,
+    minWidth: 300,
+  },
+  overallInfoContainer: {
+    borderRadius: 8,
+    padding: 20,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  overallHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  infoIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  overallTitle: {
+    fontSize: 14,
     fontWeight: '600',
+  },
+  infoCardsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  infoCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  infoCardTitle: {
+    fontSize: 10,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  infoCardValue: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

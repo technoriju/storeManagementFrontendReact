@@ -45,6 +45,7 @@ const menuSections: MenuSection[] = [
       { id: 'sub_category', label: 'Sub Category', icon: 'columns' },
       { id: 'brands', label: 'Brands', icon: 'triangle' },
       { id: 'units', label: 'Units', icon: 'box' },
+      { id: 'sub_units', label: 'Sub Units', icon: 'copy' },
       { id: 'variant_attributes', label: 'Variant Attributes', icon: 'file-text' },
       { id: 'warranties', label: 'Warranties', icon: 'award' },
       { id: 'print_barcode', label: 'Print Barcode', icon: 'maximize' },
