@@ -9,7 +9,7 @@ export interface AppSelectOption {
 }
 
 export interface AppSelectProps {
-  label?: string;
+  label?: string | React.ReactNode;
   value?: any;
   placeholder?: string;
   onSelect?: (value: any) => void;
