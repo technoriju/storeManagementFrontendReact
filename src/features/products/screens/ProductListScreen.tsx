@@ -5,6 +5,7 @@ import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { ImportProductModal } from '../components/ImportProductModal';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -26,6 +27,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const { products, isLoading, error, fetchProducts } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImportModalVisible, setIsImportModalVisible] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -119,7 +121,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#1E3A8A' }]} 
-        onPress={() => onNavigate('import')}
+        onPress={() => setIsImportModalVisible(true)}
       >
         <Download size={16} color="white" />
         <Text style={styles.primaryActionText}>Import Product</Text>
@@ -166,6 +168,15 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         filters={filters}
         renderRowActions={renderRowActions}
         isLoading={isLoading}
+      />
+      
+      <ImportProductModal 
+        visible={isImportModalVisible} 
+        onClose={() => setIsImportModalVisible(false)} 
+        onSubmit={() => {
+          // TODO: Implement actual import logic when modal API is ready
+          setIsImportModalVisible(false);
+        }} 
       />
     </View>
   );
