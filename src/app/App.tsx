@@ -12,6 +12,7 @@ import { LoginScreen } from '../features/auth/screens/LoginScreen';
 import { ProductsModule } from '../features/products';
 import { PurchasesModule } from '../features/purchases/PurchasesModule';
 import { InventoryModule } from '../features/inventory/InventoryModule';
+import { CategoryModule } from '../features/category/CategoryModule';
 import { POSModule } from '../features/pos/POSModule';
 import { CustomersModule } from '../features/customers/CustomersModule';
 import { SuppliersModule } from '../features/suppliers/SuppliersModule';
@@ -57,6 +58,9 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'inventory') {
       return <InventoryModule />;
+    }
+    if (activeTab === 'category') {
+      return <CategoryModule />;
     }
     if (activeTab === 'pos' || activeTab === 'sales' || activeTab === 'invoices' || activeTab === 'sales_return' || activeTab === 'quotation') {
       return <POSModule initialScreen={activeTab} />;

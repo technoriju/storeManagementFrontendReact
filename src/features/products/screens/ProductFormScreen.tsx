@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, ScrollView, TextInput, TouchableOpacity, Pressable, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useProductStore } from '../store/productStore';
@@ -75,6 +75,22 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [variants, setVariants] = useState([
     { id: uuidv4(), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
   ]);
+  const [hasMultipleUnits, setHasMultipleUnits] = useState(false);
+  const [subUnits, setSubUnits] = useState([
+    { id: uuidv4(), unit: '', value: '' }
+  ]);
+
+  const handleAddSubUnit = () => {
+    setSubUnits([...subUnits, { id: uuidv4(), unit: '', value: '' }]);
+  };
+
+  const handleRemoveSubUnit = (id: string) => {
+    setSubUnits(subUnits.filter(u => u.id !== id));
+  };
+
+  const handleUpdateSubUnit = (id: string, field: string, val: any) => {
+    setSubUnits(subUnits.map(u => u.id === id ? { ...u, [field]: val } : u));
+  };
 
   const handleAddVariant = () => {
     setVariants([...variants, { id: uuidv4(), variation: '', value: '', sku: '', qty: 1, price: '' }]);
@@ -145,9 +161,45 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             <FormGroup width="50%" label="Brand">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
-            <FormGroup width="50%" label="Unit">
+            <FormGroup width="50%" label="Base Unit">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
+            
+            <FormGroup width="50%" label="Multiple Units">
+              <View style={{height: 40, justifyContent: 'center'}}>
+                <AppCheckbox label="Enable sub units" checked={hasMultipleUnits} onPress={() => setHasMultipleUnits(!hasMultipleUnits)} />
+              </View>
+            </FormGroup>
+
+            {hasMultipleUnits && (
+              <View style={{width: '100%', paddingHorizontal: 10, marginBottom: 20}}>
+                 <View style={styles.variantTable}>
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.tableCell, {flex: 2}]}>Sub Unit</Text>
+                      <Text style={[styles.tableCell, {flex: 2}]}>Equal To (Base Unit)</Text>
+                      <Text style={[styles.tableCell, {flex: 0.8}]}></Text>
+                    </View>
+                    
+                    {subUnits.map((item) => (
+                      <View style={styles.tableRow} key={item.id}>
+                        <View style={[styles.tableCell, {flex: 2}]}>
+                          <AppSelect options={[{label: 'Box', value: 'box'}, {label: 'Dozen', value: 'dozen'}]} placeholder="Select" containerStyle={{marginBottom: 0}} />
+                        </View>
+                        <View style={[styles.tableCell, {flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8}]}>
+                          <Text style={{color: '#888888'}}>=</Text>
+                          <View style={{flex: 1}}>
+                            <AppInput containerStyle={{marginBottom: 0}} placeholder="e.g. 10" value={item.value} onChangeText={(val: string) => handleUpdateSubUnit(item.id, 'value', val)} />
+                          </View>
+                        </View>
+                        <View style={[styles.tableCell, {flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 8}]}>
+                           <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddSubUnit}><Plus size={14} color="#333333" /></TouchableOpacity>
+                           <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveSubUnit(item.id)}><Trash2 size={14} color="#333333" /></TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                 </View>
+              </View>
+            )}
 
             <FormGroup width="50%" label="Barcode Symbology">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
