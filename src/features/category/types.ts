@@ -1,7 +1,7 @@
 export interface Category {
-  id: string;
+  id: number;
   name: string;
-  slug: string;
-  createdAt: string;
-  status: 'Active' | 'Inactive';
+  description?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   gridLines: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
     paddingBottom: 24,
   },

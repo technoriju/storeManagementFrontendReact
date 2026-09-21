@@ -156,11 +156,17 @@ const RootNavigator = () => {
   return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />;
 };
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
 export const App = () => {
   return (
-    <ErrorBoundary>
-      <RootNavigator />
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <RootNavigator />
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 };
 
