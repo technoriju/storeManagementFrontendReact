@@ -2,6 +2,7 @@ export interface BaseEntity {
   id: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
   syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
 }
 

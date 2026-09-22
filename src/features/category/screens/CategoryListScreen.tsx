@@ -5,7 +5,7 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
-import { Category } from '../types';
+import { Category } from '../../../types/models';
 import { 
   RefreshCw, 
   PlusCircle, 
@@ -52,6 +52,41 @@ export const CategoryListScreen = () => {
           {value || '-'}
         </Text>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Status', 
+      flex: 1.5,
+      minWidth: 100,
+      render: (value: string | undefined) => {
+        const isOnline = value === 'synced';
+        return (
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            backgroundColor: isOnline ? '#DCFCE7' : '#FEF3C7',
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 12,
+            alignSelf: 'flex-start'
+          }}>
+            <View style={{ 
+              width: 6, 
+              height: 6, 
+              borderRadius: 3, 
+              backgroundColor: isOnline ? '#16A34A' : '#D97706',
+              marginRight: 6 
+            }} />
+            <Text style={{ 
+              color: isOnline ? '#16A34A' : '#D97706',
+              fontSize: 12,
+              fontWeight: '500'
+            }}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+          </View>
+        );
+      }
     },
     { 
       key: 'createdAt', 

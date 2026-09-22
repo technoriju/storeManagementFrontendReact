@@ -31,9 +31,17 @@ export const initializeDatabase = () => {
         parentId TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
         syncStatus TEXT DEFAULT 'synced'
       );
     `);
+    
+    // Attempt to add deletedAt if missing (for existing local DBs)
+    try {
+      db.execute('ALTER TABLE categories ADD COLUMN deletedAt TEXT;');
+    } catch (e) {
+      // Column might already exist, ignore
+    }
 
     // Units Table
     db.execute(`

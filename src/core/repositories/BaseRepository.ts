@@ -20,8 +20,20 @@ export abstract class BaseRepository<T extends BaseEntity> {
       `SELECT * FROM ${this.tableName} WHERE id = ?`,
       [id]
     );
-    if (res.rows?.length) {
-      return this.fromRow(res.rows[0]);
+    
+    let rawRow: any = null;
+    if (Array.isArray(res.rows) && res.rows.length > 0) {
+      rawRow = res.rows[0];
+    } else if (res.rows && typeof res.rows === 'object') {
+      if ('_array' in res.rows && Array.isArray((res.rows as any)._array) && (res.rows as any)._array.length > 0) {
+        rawRow = (res.rows as any)._array[0];
+      } else if ('item' in res.rows && typeof (res.rows as any).length === 'number' && (res.rows as any).length > 0) {
+        rawRow = (res.rows as any).item(0);
+      }
+    }
+
+    if (rawRow) {
+      return this.fromRow(rawRow);
     }
     return null;
   }
@@ -29,39 +41,58 @@ export abstract class BaseRepository<T extends BaseEntity> {
   async getAll(): Promise<T[]> {
     const res = await db.execute(`SELECT * FROM ${this.tableName}`);
     const items: T[] = [];
-    if (res.rows) {
-      for (let i = 0; i < res.rows.length; i++) {
-        items.push(this.fromRow(res.rows[i]));
+    
+    // op-sqlite can return rows as an array, or an object with _array or item()
+    let rawRows: any[] = [];
+    if (Array.isArray(res.rows)) {
+      rawRows = res.rows;
+    } else if (res.rows && typeof res.rows === 'object') {
+      if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+        rawRows = (res.rows as any)._array;
+      } else if ('item' in res.rows && typeof (res.rows as any).length === 'number') {
+        const len = (res.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((res.rows as any).item(i));
+        }
+      } else {
+        // Just in case res.rows behaves like an array but fails Array.isArray
+        rawRows = Array.from(res.rows as any);
       }
     }
+
+    for (const row of rawRows) {
+      if (row) items.push(this.fromRow(row));
+    }
+    
     return items;
   }
 
-  async insert(entity: T): Promise<void> {
+  async insert(entity: T, shouldSync = true): Promise<void> {
     const query = `INSERT INTO ${this.tableName} (${this.getInsertColumns()}) VALUES (${this.getInsertPlaceholders()})`;
     await db.execute(query, this.toRow(entity));
-    // Optional: After successful local insert, trigger background API sync
-    this.syncWithApi(entity, 'insert').catch(console.error);
+    if (shouldSync) {
+      this.syncWithApi(entity, 'insert').catch(console.error);
+    }
   }
 
-  async update(entity: T): Promise<void> {
+  async update(entity: T, shouldSync = true): Promise<void> {
     const query = `UPDATE ${this.tableName} SET ${this.getUpdateSet()} WHERE id = ?`;
-    const params = [...this.toRow(entity), entity.id];
+    const params = [...this.toRow(entity).slice(1), entity.id];
     await db.execute(query, params);
-    // Optional: Trigger background API sync
-    this.syncWithApi(entity, 'update').catch(console.error);
+    if (shouldSync) {
+      this.syncWithApi(entity, 'update').catch(console.error);
+    }
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, shouldSync = true): Promise<void> {
     const entity = await this.getById(id);
     if (!entity) return;
 
-    // For offline-first, we might want to soft-delete and set syncStatus = 'pending_delete'
-    // But for a simple implementation, we just hard delete locally.
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     
-    // Optional: Trigger background API sync
-    this.syncWithApi(entity, 'delete').catch(console.error);
+    if (shouldSync) {
+      this.syncWithApi(entity, 'delete').catch(console.error);
+    }
   }
 
   // Abstract method to be implemented by specific repositories for API interaction
