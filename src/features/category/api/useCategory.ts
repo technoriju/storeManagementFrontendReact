@@ -83,11 +83,12 @@ export const useUpdateCategory = () => {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Category> }) => {
       const existing = await categoryRepository.getById(id);
-      if (!existing) throw new Error("Category not found");
       
       const updated = {
-        ...existing,
+        ...(existing || {}),
+        id,
         ...data,
+        createdAt: existing?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending_update'
       } as Category;

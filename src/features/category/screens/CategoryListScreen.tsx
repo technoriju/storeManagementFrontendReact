@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, StyleSheet, Text, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
@@ -128,6 +128,21 @@ export const CategoryListScreen = () => {
   };
 
   const handleDelete = (category: Category) => {
+    const deleteCategory = () => {
+      deleteCategoryMutation.mutate(category.id, {
+        onError: (e: any) => {
+          Alert.alert('Error', e.message || 'Failed to delete category');
+        }
+      });
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete ${category.name}?`)) {
+        deleteCategory();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Category',
       `Are you sure you want to delete ${category.name}?`,
@@ -136,13 +151,7 @@ export const CategoryListScreen = () => {
         { 
           text: 'Delete', 
           style: 'destructive',
-          onPress: () => {
-            deleteCategoryMutation.mutate(category.id, {
-              onError: (e: any) => {
-                Alert.alert('Error', e.message || 'Failed to delete category');
-              }
-            });
-          }
+          onPress: deleteCategory
         }
       ]
     );

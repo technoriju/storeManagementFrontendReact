@@ -7,6 +7,25 @@ import { db } from '../database/db';
 export class CategoryRepository extends BaseRepository<Category> {
   protected tableName = 'categories';
 
+  async update(entity: Category, shouldSync = true): Promise<void> {
+    if (shouldSync) {
+      await this.syncWithApi(entity, 'update');
+      await super.update({ ...entity, syncStatus: 'synced' }, false);
+      return;
+    }
+
+    await super.update(entity, false);
+  }
+
+  async delete(id: string, shouldSync = true): Promise<void> {
+    if (shouldSync) {
+      await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(String(id)));
+    }
+
+    const entity = await this.getById(id);
+    if (entity) await super.delete(id, false);
+  }
+
   protected getInsertColumns(): string {
     return 'id, name, description, parentId, createdAt, updatedAt, deletedAt, syncStatus';
   }
@@ -81,6 +100,7 @@ export class CategoryRepository extends BaseRepository<Category> {
       }
     } catch (error) {
       console.error(`Failed to sync category ${entity.id} with API:`, error);
+      throw error;
     }
   }
 
