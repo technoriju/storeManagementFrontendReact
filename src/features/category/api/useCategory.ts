@@ -4,19 +4,7 @@ import { Category } from '../../../types/models';
 
 export const CATEGORY_QUERY_KEY = ['categories'];
 
-import { useEffect } from 'react';
-import { DeviceEventEmitter } from 'react-native';
-
 export const useCategories = () => {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener('CategorySyncComplete', () => {
-      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY });
-    });
-    return () => subscription.remove();
-  }, [queryClient]);
-
   return useQuery({
     queryKey: CATEGORY_QUERY_KEY,
     queryFn: async () => {

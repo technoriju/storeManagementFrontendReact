@@ -3,7 +3,6 @@ import { Category } from '../../types/models';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { db } from '../database/db';
-import { DeviceEventEmitter } from 'react-native';
 
 export class CategoryRepository extends BaseRepository<Category> {
   protected tableName = 'categories';
@@ -95,9 +94,6 @@ export class CategoryRepository extends BaseRepository<Category> {
         await this.update(entity, false);
       }
       
-      if (syncSuccess) {
-        DeviceEventEmitter.emit('CategorySyncComplete');
-      }
     } catch (error) {
       console.error(`Failed to sync category ${entity.id} with API:`, error);
       throw error;
