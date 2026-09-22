@@ -47,7 +47,8 @@ export class CategoryRepository extends BaseRepository<Category> {
 
   protected async syncWithApi(entity: Category, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
-      const { syncStatus, id, version, ...apiPayload } = entity as any;
+      // API generates timestamps; keep local timestamps out of request payload.
+      const { syncStatus, id, version, createdAt, updatedAt, ...apiPayload } = entity as any;
       
       if (operation === 'insert') {
         const response = await apiClient.post(API_ENDPOINTS.CATEGORIES.BASE, apiPayload);
@@ -72,7 +73,7 @@ export class CategoryRepository extends BaseRepository<Category> {
     }
   }
 
-  public async fetchFromApi(): Promise<void> {
+  public async fetchFromApi(): Promise<Category[]> {
     try {
       const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
       
@@ -97,8 +98,8 @@ export class CategoryRepository extends BaseRepository<Category> {
         try {
           const item: any = { ...rawItem };
           item.id = String(item.id || item._id || item.categoryId || Math.random().toString(36).substring(7));
-          item.name = item.name || item.categoryName || item.title || 'Unnamed Category';
-          item.description = item.description || item.categoryDescription || null;
+          item.name = item.name || item.categoryName || item.category_name || item.title || 'Unnamed Category';
+          item.description = item.description || item.categoryDescription || item.category_description || null;
           item.syncStatus = 'synced';
           item.createdAt = item.createdAt || new Date().toISOString();
           item.updatedAt = item.updatedAt || new Date().toISOString();
@@ -113,8 +114,10 @@ export class CategoryRepository extends BaseRepository<Category> {
           console.error("DB Insert/Update Error for item:", rawItem, err);
         }
       }
+      return items as Category[];
     } catch (error) {
       console.error('Failed to fetch categories from API:', error);
+      return [];
     }
   }
 }

@@ -99,5 +99,5 @@ export abstract class BaseRepository<T extends BaseEntity> {
   protected abstract syncWithApi(entity: T, operation: 'insert' | 'update' | 'delete'): Promise<void>;
   
   // Pull from API to Local Database
-  public abstract fetchFromApi(): Promise<void>;
+  public abstract fetchFromApi(): Promise<unknown>;
 }

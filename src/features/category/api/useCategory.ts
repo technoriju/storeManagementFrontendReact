@@ -9,7 +9,8 @@ export const useCategories = () => {
     queryKey: CATEGORY_QUERY_KEY,
     queryFn: async () => {
       try {
-        await categoryRepository.fetchFromApi();
+        const apiCategories = await categoryRepository.fetchFromApi();
+        if (apiCategories.length > 0) return apiCategories;
       } catch (error) {
         console.error("Fetch from API failed, returning local data", error);
       }
