@@ -97,9 +97,10 @@ export const useUpdateCategory = () => {
       return updated;
     },
     onSuccess: (updatedCategory) => {
+      const syncedCategory = { ...updatedCategory, syncStatus: 'synced' as const };
       queryClient.setQueryData(CATEGORY_QUERY_KEY, (oldData: Category[] | undefined) => {
-        if (!oldData) return [updatedCategory];
-        return oldData.map(c => c.id === updatedCategory.id ? updatedCategory : c);
+        if (!oldData) return [syncedCategory];
+        return oldData.map(c => String(c.id) === String(syncedCategory.id) ? syncedCategory : c);
       });
       queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY });
     },

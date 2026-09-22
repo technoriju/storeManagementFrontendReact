@@ -3,6 +3,7 @@ import { Category } from '../../types/models';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { db } from '../database/db';
+import { DeviceEventEmitter } from 'react-native';
 
 export class CategoryRepository extends BaseRepository<Category> {
   protected tableName = 'categories';
@@ -95,7 +96,6 @@ export class CategoryRepository extends BaseRepository<Category> {
       }
       
       if (syncSuccess) {
-        const { DeviceEventEmitter } = require('react-native');
         DeviceEventEmitter.emit('CategorySyncComplete');
       }
     } catch (error) {
@@ -125,6 +125,8 @@ export class CategoryRepository extends BaseRepository<Category> {
       
       console.log(`Parsed ${items.length} items from API response.`);
 
+      const normalizedItems: Category[] = [];
+
       for (const rawItem of items) {
         try {
           const item: any = { ...rawItem };
@@ -141,11 +143,13 @@ export class CategoryRepository extends BaseRepository<Category> {
           } else {
             await this.insert(item, false);
           }
+
+          normalizedItems.push(item as Category);
         } catch (err) {
           console.error("DB Insert/Update Error for item:", rawItem, err);
         }
       }
-      return items as Category[];
+      return normalizedItems;
     } catch (error) {
       console.error('Failed to fetch categories from API:', error);
       return [];
