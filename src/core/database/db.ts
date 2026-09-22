@@ -1,4 +1,13 @@
-import { open } from '@op-engineering/op-sqlite';
+import { Platform } from 'react-native';
+
+let open: any;
+if (Platform.OS !== 'web') {
+  open = require('@op-engineering/op-sqlite').open;
+} else {
+  open = () => ({
+    execute: async () => ({ rows: [] }),
+  });
+}
 
 export const db = open({
   name: 'billing_app.sqlite',

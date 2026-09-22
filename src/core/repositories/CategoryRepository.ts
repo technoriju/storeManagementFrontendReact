@@ -50,23 +50,34 @@ export class CategoryRepository extends BaseRepository<Category> {
       // API generates timestamps; keep local timestamps out of request payload.
       const { syncStatus, id, version, createdAt, updatedAt, ...apiPayload } = entity as any;
       
+      let syncSuccess = false;
+
       if (operation === 'insert') {
         const response = await apiClient.post(API_ENDPOINTS.CATEGORIES.BASE, apiPayload);
         const serverId = response.data?.id || (response.data?.data && response.data.data.id);
         if (serverId && serverId.toString() !== entity.id.toString()) {
            // Update local DB to use server ID instead of temporary local ID
            await db.execute(`UPDATE categories SET id = ?, syncStatus = 'synced' WHERE id = ?`, [serverId.toString(), entity.id]);
-           return;
+           syncSuccess = true;
+        } else if (response.status >= 200 && response.status < 300) {
+           syncSuccess = true;
         }
       } else if (operation === 'update') {
-        await apiClient.patch(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id), apiPayload);
+        const response = await apiClient.patch(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id), apiPayload);
+        if (response.status >= 200 && response.status < 300) syncSuccess = true;
       } else if (operation === 'delete') {
-        await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id));
+        const response = await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id));
+        if (response.status >= 200 && response.status < 300) syncSuccess = true;
       }
       
-      if (operation !== 'delete' && entity.syncStatus !== 'synced') {
+      if (operation !== 'delete' && syncSuccess && entity.syncStatus !== 'synced') {
         entity.syncStatus = 'synced';
-        await this.update(entity);
+        await this.update(entity, false);
+      }
+      
+      if (syncSuccess) {
+        const { DeviceEventEmitter } = require('react-native');
+        DeviceEventEmitter.emit('CategorySyncComplete');
       }
     } catch (error) {
       console.error(`Failed to sync category ${entity.id} with API:`, error);

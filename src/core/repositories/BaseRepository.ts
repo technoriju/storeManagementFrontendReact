@@ -44,7 +44,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     
     // op-sqlite can return rows as an array, or an object with _array or item()
     let rawRows: any[] = [];
-    if (Array.isArray(res.rows)) {
+    if (res.rows && Array.isArray(res.rows)) {
       rawRows = res.rows;
     } else if (res.rows && typeof res.rows === 'object') {
       if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
@@ -55,9 +55,12 @@ export abstract class BaseRepository<T extends BaseEntity> {
           rawRows.push((res.rows as any).item(i));
         }
       } else {
-        // Just in case res.rows behaves like an array but fails Array.isArray
-        rawRows = Array.from(res.rows as any);
+        try { rawRows = Array.from(res.rows as any); } catch(e) {}
       }
+    } else if (Array.isArray(res)) {
+      rawRows = res;
+    } else if (res && '_array' in res && Array.isArray((res as any)._array)) {
+      rawRows = (res as any)._array;
     }
 
     for (const row of rawRows) {
