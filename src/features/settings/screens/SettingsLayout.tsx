@@ -34,11 +34,11 @@ const SETTING_ROUTES: SettingRoute[] = [
   { id: 'printers', label: 'Printers', group: 'Store Operations', permission: SETTINGS_PERMISSIONS.VIEW_PRINTERS, component: <PrinterSettingsScreen /> },
 
   { id: 'invoice', label: 'Invoice Format', group: 'Billing & Sync', permission: SETTINGS_PERMISSIONS.VIEW_INVOICE, component: <InvoiceSettingsScreen /> },
-  { id: 'sync', label: 'Sync Status', group: 'Billing & Sync', permission: SETTINGS_PERMISSIONS.VIEW_SYNC, component: <SyncSettingsScreen /> },
+  { id: 'sync', label: 'Sync Queue', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_SYNC, component: <SyncSettingsScreen /> },
 
-  { id: 'users', label: 'Users', group: 'Access Control', permission: SETTINGS_PERMISSIONS.VIEW_USERS, component: <UsersScreen /> },
-  { id: 'roles', label: 'Roles', group: 'Access Control', permission: SETTINGS_PERMISSIONS.VIEW_ROLES, component: <RolesScreen /> },
-  { id: 'permissions', label: 'Permissions', group: 'Access Control', permission: SETTINGS_PERMISSIONS.VIEW_PERMISSIONS, component: <PermissionsScreen /> },
+  { id: 'users', label: 'Users', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_USERS, component: <UsersScreen /> },
+  { id: 'roles', label: 'Roles', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_ROLES, component: <RolesScreen /> },
+  { id: 'permissions', label: 'Permissions', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_PERMISSIONS, component: <PermissionsScreen /> },
 ];
 
 export const SettingsLayout = () => {

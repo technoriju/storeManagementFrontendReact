@@ -61,6 +61,10 @@ class SyncEngine {
     this.updateSyncStatus();
   }
 
+  async refreshPendingCount() {
+    await this.updatePendingCount();
+  }
+
   private async updateSyncStatus() {
     const store = useSyncStore.getState();
     if (!this.isOnline) {
@@ -99,6 +103,8 @@ class SyncEngine {
   }
 
   private async processOutbox() {
+    // Clear stale jobs for deleted local records with non-server IDs.
+    await outboxRepo.removeDeletedInvalidIds('categories');
     const pendingItems = await outboxRepo.getPendingItems();
     if (pendingItems.length === 0) return;
 

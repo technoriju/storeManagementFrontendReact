@@ -60,6 +60,11 @@ export const outboxRepo = {
     return (res.rows as unknown as OutboxItem[]) || [];
   },
 
+  getAll: async (): Promise<OutboxItem[]> => {
+    const res = await db.execute(`SELECT * FROM outbox ORDER BY createdAt ASC`);
+    return (res.rows as unknown as OutboxItem[]) || [];
+  },
+
   updateStatus: async (id: string, status: OutboxStatus, lastError?: string) => {
     await db.execute(
       `UPDATE outbox SET status = ?, lastError = ? WHERE id = ?`,
@@ -76,6 +81,26 @@ export const outboxRepo = {
 
   remove: async (id: string) => {
     await db.execute(`DELETE FROM outbox WHERE id = ?`, [id]);
+  },
+
+  removeForEntity: async (entityType: string, entityId: string) => {
+    await db.execute(
+      `DELETE FROM outbox WHERE entityType = ? AND entityId = ?`,
+      [entityType, entityId]
+    );
+  },
+
+  removeDeletedInvalidIds: async (entityType: string) => {
+    await db.execute(
+      `DELETE FROM outbox
+       WHERE entityType = ?
+         AND entityId GLOB '*[^0-9]*'
+         AND NOT EXISTS (
+           SELECT 1 FROM categories c
+           WHERE c.id = outbox.entityId
+         )`,
+      [entityType]
+    );
   },
   
   getPendingCount: async (): Promise<number> => {

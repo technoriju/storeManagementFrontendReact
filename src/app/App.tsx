@@ -23,6 +23,7 @@ import { SuppliersModule } from '../features/suppliers/SuppliersModule';
 import { SettingsModule } from '../features/settings/SettingsModule';
 import { DashboardModule } from '../features/dashboard/DashboardModule';
 import { ReportsModule } from '../features/reports/ReportsModule';
+import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
 import { initializeDatabase } from '../core/database/db';
 
 const AuthenticatedApp = () => {
@@ -90,6 +91,9 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'settings') {
       return <SettingsModule />;
+    }
+    if (activeTab === 'sync_queue') {
+      return <SyncSettingsScreen />;
     }
     
     return (

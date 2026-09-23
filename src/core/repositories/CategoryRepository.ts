@@ -44,6 +44,9 @@ export class CategoryRepository extends BaseRepository<Category> {
     await db.execute(`DELETE FROM categories WHERE id = ?`, [id]);
     if (shouldSync) {
       await tombstoneRepo.add('categories', id);
+      // Cancel older CREATE/UPDATE jobs for deleted local records.
+      await outboxRepo.removeForEntity('categories', id);
+      if (!/^\d+$/.test(String(id))) return;
       await outboxRepo.add('categories', id, 'DELETE', entity);
       this.requestSync();
     }
@@ -134,15 +137,30 @@ export class CategoryRepository extends BaseRepository<Category> {
         await this.update(entity, false);
       }
       
-    } catch (error) {
+    } catch (error: any) {
+      // DELETE is idempotent. Missing server record means already synced.
+      const responseStatus =
+        error?.response?.status ??
+        error?.response?.data?.statusCode ??
+        error?.statusCode ??
+        error?.status;
+      if (operation === 'delete' && responseStatus >= 400 && responseStatus < 500) {
+        return;
+      }
       console.error(`Failed to sync category ${entity.id} with API:`, error);
       throw error;
     }
   }
 
   async syncOutboxItem(item: OutboxItem): Promise<void> {
+    // Tombstone means local record was deleted. Older jobs are stale.
+    if (item.operation !== 'DELETE' && await tombstoneRepo.isDeleted('categories', item.entityId)) {
+      return;
+    }
     const entity = item.payload ? JSON.parse(item.payload) as Category : await this.getById(item.entityId);
     if (item.operation === 'DELETE') {
+      // Temporary offline IDs are not server IDs. Remove their delete job locally.
+      if (!/^\d+$/.test(String(item.entityId))) return;
       await this.syncWithApi(entity || ({ id: item.entityId } as Category), 'delete');
       return;
     }
@@ -189,11 +207,9 @@ export class CategoryRepository extends BaseRepository<Category> {
           item.createdAt = item.createdAt || new Date().toISOString();
           item.updatedAt = item.updatedAt || new Date().toISOString();
           
+          // API item is server-confirmed. Never keep stale local pending status
+          // when same category exists in API response.
           const existing = await super.getById(item.id);
-          if (existing && existing.syncStatus !== 'synced') {
-            normalizedItems.push(existing);
-            continue;
-          }
           if (existing) {
             await super.update(item, false);
           } else {
