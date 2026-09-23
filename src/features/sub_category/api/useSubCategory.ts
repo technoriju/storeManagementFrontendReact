@@ -3,20 +3,18 @@ import { subCategoryRepository } from '../../../core/repositories/SubCategoryRep
 import { SubCategory } from '../../../types/models';
 
 export const useSubCategories = () => {
-  const queryClient = useQueryClient();
-
   return useQuery({
     queryKey: ['subcategories'],
     queryFn: async () => {
-      const items = await subCategoryRepository.getAll();
-      const hasPending = items.some(item => item.syncStatus !== 'synced');
-      
-      if (hasPending) {
-        subCategoryRepository.fetchFromApi().then(() => {
-          queryClient.invalidateQueries({ queryKey: ['subcategories'] });
-        });
-      }
-      return items;
+      // fetchFromApi already normalizes the API response. Use that result for
+      // the query instead of relying on a second SQLite read to populate UI.
+      // This matters on web, where SQLite writes can finish after the read.
+      const apiItems = await subCategoryRepository.fetchFromApi();
+      if (apiItems.length > 0) return apiItems;
+
+      // Keep locally-created offline records visible when API returns no rows
+      // or is temporarily unavailable.
+      return subCategoryRepository.getAll();
     },
   });
 };

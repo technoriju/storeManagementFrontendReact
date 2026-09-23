@@ -16,7 +16,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     const items = await super.getAll();
     return items
       .filter((item) => !item.deletedAt)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   }
 
   async insert(entity: SubCategory, shouldSync = true): Promise<void> {
@@ -68,7 +68,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       entity.backendId || null,
       entity.name || 'Unnamed SubCategory',
       entity.description || null,
-      entity.categoryId || null,
+      entity.categoryId || '',
       entity.status || 'active',
       entity.createdAt || new Date().toISOString(),
       entity.updatedAt || new Date().toISOString(),
@@ -172,7 +172,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       const findItems = (payload: any): any[] => {
         if (Array.isArray(payload)) return payload;
         if (!payload || typeof payload !== 'object') return [];
-        for (const key of ['data', 'subcategories', 'items', 'results', 'rows']) {
+        for (const key of ['data', 'subcategories', 'subCategories', 'sub_categories', 'items', 'results', 'rows', 'payload', 'response', 'body', 'list']) {
           const found = findItems(payload[key]);
           if (found.length > 0) return found;
         }
@@ -180,6 +180,8 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       };
 
       items = findItems(response.data);
+      console.log('SubCategory API response:', JSON.stringify(response.data).substring(0, 200));
+      console.log('SubCategory items found:', items?.length);
       
       const normalizedItems: SubCategory[] = [];
 
@@ -190,11 +192,11 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       for (const rawItem of latestItems) {
         try {
           const item: any = { ...rawItem };
-          item.backendId = String(item.backendId || item.serverId || item.subcategoryId || item._id || item.id || '');
+          item.backendId = String(item.backendId || item.serverId || item.subcategoryId || item.subcategory_id || item.sub_category_id || item._id || item.id || '');
           item.id = String(item.id || item.backendId || Math.random().toString(36).substring(7));
-          item.name = item.name || item.title || 'Unnamed SubCategory';
+          item.name = item.name || item.subCategoryName || item.sub_category_name || item.subCategory || item.subcategory || item.sub_category || item.title || 'Unnamed SubCategory';
           item.description = item.description || null;
-          item.categoryId = String(item.categoryId || '');
+          item.categoryId = String(item.categoryId || item.category_id || item.category?._id || item.category?.id || (typeof item.category === 'string' ? item.category : ''));
           item.status = item.status || 'active';
           item.syncStatus = 'synced';
           item.createdAt = item.createdAt || new Date().toISOString();

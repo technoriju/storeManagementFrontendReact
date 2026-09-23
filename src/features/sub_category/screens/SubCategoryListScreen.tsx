@@ -13,7 +13,7 @@ import { RefreshCw, PlusCircle, Edit, Trash2, FileText, FileSpreadsheet } from '
 export const SubCategoryListScreen = () => {
   const theme = useTheme();
   
-  const { data: subCategories = [], refetch } = useSubCategories();
+  const { data: subCategories = [], refetch, isLoading } = useSubCategories();
   const { data: categories = [] } = useCategories();
   
   const addMutation = useAddSubCategory();
@@ -172,8 +172,8 @@ export const SubCategoryListScreen = () => {
   };
 
   const filteredSubCategories = subCategories.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.description && c.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    (c.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+    (c.description?.toLowerCase() || '').includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -184,6 +184,7 @@ export const SubCategoryListScreen = () => {
         headerActions={headerActions}
         columns={columns}
         data={filteredSubCategories}
+        isLoading={isLoading}
         onSearch={setSearchQuery}
         renderRowActions={renderRowActions}
       />
