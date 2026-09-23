@@ -102,7 +102,7 @@ export const CategoryListScreen = () => {
 
   const headerActions = (
     <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => { import('../../../core/sync/SyncEngine').then(m => m.syncEngine.syncNow().then(() => refetch())); }}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 

@@ -10,9 +10,13 @@ export const useCategories = () => {
     queryKey: CATEGORY_QUERY_KEY,
     queryFn: async () => {
       const localCategories = await categoryRepository.getAll();
-      void categoryRepository.fetchFromApi().then(async () => {
-        queryClient.setQueryData(CATEGORY_QUERY_KEY, await categoryRepository.getAll());
-      });
+      const hasOfflineData = localCategories.some(c => c.syncStatus !== 'synced');
+      
+      if (hasOfflineData) {
+        void categoryRepository.fetchFromApi().then(async () => {
+          queryClient.setQueryData(CATEGORY_QUERY_KEY, await categoryRepository.getAll());
+        });
+      }
       return localCategories;
     },
   });

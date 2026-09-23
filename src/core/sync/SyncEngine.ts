@@ -20,9 +20,10 @@ class SyncEngine {
     this.netInfoSubscription = NetInfo.addEventListener(this.handleConnectivityChange.bind(this));
     this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange.bind(this));
 
-    this.syncInterval = setInterval(() => {
+    this.syncInterval = setInterval(async () => {
       if (this.isOnline) {
-        this.syncNow();
+        const count = await outboxRepo.getPendingCount();
+        if (count > 0) this.syncNow();
       }
     }, 30000);
     
