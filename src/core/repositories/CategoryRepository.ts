@@ -16,8 +16,7 @@ export class CategoryRepository extends BaseRepository<Category> {
     const items = await super.getAll();
     return items
       .filter((item) => !item.deletedAt)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, 10);
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   async insert(entity: Category, shouldSync = true): Promise<void> {
@@ -193,8 +192,7 @@ export class CategoryRepository extends BaseRepository<Category> {
 
       const latestItems = items
         .slice()
-        .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
-        .slice(0, 10);
+        .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
 
       for (const rawItem of latestItems) {
         try {
@@ -221,7 +219,13 @@ export class CategoryRepository extends BaseRepository<Category> {
           console.error("DB Insert/Update Error for item:", rawItem, err);
         }
       }
-      await db.execute(`DELETE FROM categories WHERE syncStatus = 'synced' AND id NOT IN (SELECT id FROM categories ORDER BY updatedAt DESC LIMIT 10)`);
+      const incomingIds = normalizedItems.map(item => item.id);
+      if (incomingIds.length > 0) {
+        const placeholders = incomingIds.map(() => '?').join(',');
+        await db.execute(`DELETE FROM categories WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`, incomingIds);
+      } else {
+        await db.execute(`DELETE FROM categories WHERE syncStatus = 'synced'`);
+      }
       return normalizedItems;
     } catch (error) {
       console.error('Failed to fetch categories from API:', error);

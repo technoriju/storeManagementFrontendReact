@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, Platform } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { Search, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
@@ -41,10 +41,20 @@ export const AdvancedTable = <T extends Record<string, any>>({
 }: AdvancedTableProps<T>) => {
   const theme = useTheme();
   const [page, setPage] = useState(1);
-  const rowsPerPage = 10;
-  
-  const totalPages = Math.ceil((data?.length || 0) / rowsPerPage);
-  const currentData = data?.slice((page - 1) * rowsPerPage, page * rowsPerPage) || [];
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const tableData = Array.isArray(data) ? data : [];
+  const totalItems = tableData.length;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+
+  // Keep page valid when data changes, such as after search, delete, or refresh.
+  useEffect(() => {
+    const nextPage = Math.max(1, Math.ceil(totalItems / rowsPerPage));
+    setPage(currentPage => Math.min(currentPage, nextPage));
+  }, [totalItems, rowsPerPage]);
+
+  const currentData = tableData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  const pageOptions = Array.from(new Set([10, 20, 50, 100, totalItems].filter(value => value > 0)));
 
   return (
     <View style={styles.container}>
@@ -81,7 +91,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
         </View>
 
         {/* Table Content */}
-        <ScrollView horizontal style={styles.tableScroll} contentContainerStyle={{ minWidth: '100%' }}>
+        <ScrollView horizontal style={styles.tableScroll} contentContainerStyle={{ minWidth: '100%', flexGrow: 1 }}>
           <View style={{ minWidth: '100%', flex: 1 }}>
             {/* Header Row */}
             <View style={[styles.headerRow, { borderBottomColor: theme.colors.divider }]}>
@@ -157,12 +167,36 @@ export const AdvancedTable = <T extends Record<string, any>>({
         {/* Footer / Pagination */}
         <View style={[styles.footer, { borderTopColor: theme.colors.divider }]}>
           <View style={styles.rowsPerPage}>
-            <Text style={{ color: theme.colors.textSecondary }}>Row Per Page</Text>
-            <View style={[styles.rowsDropdown, { borderColor: theme.colors.border }]}>
-              <Text style={{ color: theme.colors.textSecondary }}>{rowsPerPage}</Text>
-              <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
+            <Text style={{ color: theme.colors.textSecondary }}>Rows per page:</Text>
+            <View style={{ position: 'relative', zIndex: 50, elevation: 5 }}>
+              <Pressable 
+                style={[styles.rowsDropdown, { borderColor: theme.colors.border }]}
+                onPress={() => setShowDropdown(!showDropdown)}
+              >
+                <Text style={{ color: theme.colors.textSecondary }}>{rowsPerPage}</Text>
+                <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
+              </Pressable>
+              {showDropdown && (
+                <View style={[styles.dropdownMenu, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  {pageOptions.map(val => (
+                    <Pressable 
+                      key={val} 
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setRowsPerPage(val);
+                        setPage(1);
+                        setShowDropdown(false);
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.text, fontWeight: rowsPerPage === val ? 'bold' : 'normal' }}>{val}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </View>
-            <Text style={{ color: theme.colors.textSecondary }}>Entries</Text>
+            <Text style={{ color: theme.colors.textSecondary }}>
+              {totalItems > 0 ? `${(page - 1) * rowsPerPage + 1}-${Math.min(page * rowsPerPage, totalItems)} of ${totalItems}` : '0 of 0'}
+            </Text>
           </View>
           
           <View style={styles.pagination}>
@@ -174,7 +208,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
               <ChevronLeft size={16} color={page === 1 ? theme.colors.textDisabled : theme.colors.textSecondary} />
             </Pressable>
             
-            {Array.from({ length: totalPages || 1 }).map((_, i) => {
+            {Array.from({ length: totalPages }).map((_, i) => {
               const p = i + 1;
               const isActive = p === page;
               return (
@@ -329,6 +363,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 4,
+    marginBottom: 4,
+    zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   pagination: {
     flexDirection: 'row',
