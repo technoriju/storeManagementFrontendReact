@@ -54,7 +54,12 @@ export const AdvancedTable = <T extends Record<string, any>>({
   }, [totalItems, rowsPerPage]);
 
   const currentData = tableData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
-  const pageOptions = Array.from(new Set([10, 20, 50, 100, totalItems].filter(value => value > 0)));
+  const pageOptions = Array.from(new Set([10, 20, 50, 100].filter(value => value > 0 && value <= totalItems).concat(totalItems <= 100 ? [totalItems] : []))).sort((a, b) => a - b);
+  // Ensure we always have at least 10 in options even if totalItems is small
+  if (pageOptions.length === 0 || !pageOptions.includes(10)) {
+    pageOptions.unshift(10);
+  }
+  const uniquePageOptions = Array.from(new Set(pageOptions)).sort((a, b) => a - b);
 
   return (
     <View style={styles.container}>
@@ -178,7 +183,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
               </Pressable>
               {showDropdown && (
                 <View style={[styles.dropdownMenu, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  {pageOptions.map(val => (
+                  {uniquePageOptions.map(val => (
                     <Pressable 
                       key={val} 
                       style={styles.dropdownItem}
@@ -208,24 +213,44 @@ export const AdvancedTable = <T extends Record<string, any>>({
               <ChevronLeft size={16} color={page === 1 ? theme.colors.textDisabled : theme.colors.textSecondary} />
             </Pressable>
             
-            {Array.from({ length: totalPages }).map((_, i) => {
-              const p = i + 1;
-              const isActive = p === page;
-              return (
-                <Pressable 
-                  key={p} 
-                  style={[
-                    styles.pageButton, 
-                    isActive ? { backgroundColor: '#F97316' } : { backgroundColor: theme.colors.background }
-                  ]}
-                  onPress={() => setPage(p)}
-                >
-                  <Text style={[styles.pageText, { color: isActive ? '#FFFFFF' : theme.colors.textSecondary }]}>
-                    {p}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {(() => {
+              let visiblePages: (number | string)[] = [];
+              if (totalPages <= 5) {
+                visiblePages = Array.from({ length: totalPages }).map((_, i) => i + 1);
+              } else if (page <= 3) {
+                visiblePages = [1, 2, 3, 4, '...', totalPages];
+              } else if (page >= totalPages - 2) {
+                visiblePages = [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+              } else {
+                visiblePages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+              }
+
+              return visiblePages.map((p, i) => {
+                if (p === '...') {
+                  return (
+                    <View key={`ellipsis-${i}`} style={[styles.pageButton, { backgroundColor: 'transparent' }]}>
+                      <Text style={{ color: theme.colors.textSecondary }}>...</Text>
+                    </View>
+                  );
+                }
+                const pageNum = p as number;
+                const isActive = pageNum === page;
+                return (
+                  <Pressable 
+                    key={pageNum} 
+                    style={[
+                      styles.pageButton, 
+                      isActive ? { backgroundColor: '#F97316' } : { backgroundColor: theme.colors.background }
+                    ]}
+                    onPress={() => setPage(pageNum)}
+                  >
+                    <Text style={[styles.pageText, { color: isActive ? '#FFFFFF' : theme.colors.textSecondary }]}>
+                      {pageNum}
+                    </Text>
+                  </Pressable>
+                );
+              });
+            })()}
             
             <Pressable 
               style={[styles.pageButton, { backgroundColor: theme.colors.background }]}

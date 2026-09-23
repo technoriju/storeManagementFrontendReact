@@ -11,6 +11,23 @@ export const apiClient = axios.create({
   },
 });
 
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token as string);
+    }
+  });
+  failedQueue = [];
+};
+
 export const setupInterceptors = (onUnauthorized: () => void) => {
   apiClient.interceptors.request.use(
     async (config) => {
@@ -35,7 +52,28 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
 
       // Handle 401 Unauthorized
       if (error.response?.status === 401 && !originalRequest._retry) {
+        if (isRefreshing) {
+          return new Promise(function (resolve, reject) {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest._retry = true;
+              if (originalRequest.headers) {
+                if (typeof originalRequest.headers.set === 'function') {
+                  originalRequest.headers.set('Authorization', `Bearer ${token}`);
+                } else {
+                  originalRequest.headers['Authorization'] = `Bearer ${token}`;
+                }
+              }
+              return apiClient(originalRequest);
+            })
+            .catch((err) => {
+              return Promise.reject(err);
+            });
+        }
+
         originalRequest._retry = true;
+        isRefreshing = true;
 
         try {
           const refreshToken = await AsyncStorage.getItem('refreshToken');
@@ -48,21 +86,31 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
             refreshToken,
           });
 
-          await AsyncStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) {
-            await AsyncStorage.setItem('refreshToken', data.refreshToken);
+          const newAccessToken = data?.accessToken || data?.token || data?.data?.token || data?.data?.accessToken;
+          const newRefreshToken = data?.refreshToken || data?.data?.refreshToken;
+
+          if (!newAccessToken) {
+            throw new Error('Refresh failed, no access token in response');
           }
+
+          await AsyncStorage.setItem('accessToken', newAccessToken);
+          if (newRefreshToken) {
+            await AsyncStorage.setItem('refreshToken', newRefreshToken);
+          }
+
+          processQueue(null, newAccessToken);
 
           // Retry the original request
           if (originalRequest.headers) {
             if (typeof originalRequest.headers.set === 'function') {
-              originalRequest.headers.set('Authorization', `Bearer ${data.accessToken}`);
+              originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
             } else {
-              originalRequest.headers['Authorization'] = `Bearer ${data.accessToken}`;
+              originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
             }
           }
           return apiClient(originalRequest);
         } catch (refreshError) {
+          processQueue(refreshError, null);
           // Refresh token failed
           await Promise.all([
             AsyncStorage.removeItem('accessToken'),
@@ -71,6 +119,8 @@ export const setupInterceptors = (onUnauthorized: () => void) => {
           ]);
           onUnauthorized();
           return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
         }
       }
 
