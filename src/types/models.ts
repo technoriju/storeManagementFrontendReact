@@ -22,6 +22,14 @@ export interface Category extends BaseEntity {
   backendId?: string;
 }
 
+export interface SubCategory extends BaseEntity {
+  name: string;
+  description?: string;
+  categoryId: string;
+  status?: 'active' | 'inactive';
+  backendId?: string;
+}
+
 export interface Unit extends BaseEntity {
   name: string;
   abbreviation: string;

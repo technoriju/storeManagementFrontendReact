@@ -20,6 +20,10 @@ export const API_ENDPOINTS = {
     BASE: '/settings',
     BY_KEY: (key: string) => `/settings/${key}`,
   },
+  SUBCATEGORIES: {
+    BASE: '/subcategories',
+    BY_ID: (id: string | number) => `/subcategories/${id}`,
+  },
   SUPPLIERS: {
     BASE: '/suppliers',
     BY_ID: (id: string | number) => `/suppliers/${id}`,

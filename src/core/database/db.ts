@@ -67,6 +67,28 @@ export const initializeDatabase = () => {
       // Column might already exist, ignore
     }
 
+    // SubCategories Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sub_categories (
+        id TEXT PRIMARY KEY,
+        backendId TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        categoryId TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    try {
+      db.execute("ALTER TABLE sub_categories ADD COLUMN status TEXT DEFAULT 'active';");
+    } catch (e) {
+      // Column might already exist, ignore
+    }
+
     // Units Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS units (
@@ -315,3 +337,4 @@ export const initializeDatabase = () => {
     throw error;
   }
 };
+
