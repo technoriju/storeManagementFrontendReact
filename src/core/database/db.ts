@@ -1,17 +1,25 @@
 import { Platform } from 'react-native';
+import { open, openAsync } from '@op-engineering/op-sqlite';
 
-let open: any;
-if (Platform.OS !== 'web') {
-  open = require('@op-engineering/op-sqlite').open;
-} else {
-  open = () => ({
-    execute: async () => ({ rows: [] }),
-  });
-}
+// Web needs openAsync. Fake empty database loses every offline record.
+const rawDb: any = Platform.OS === 'web'
+  ? (() => {
+      const webDbPromise = openAsync({ name: 'billing_app.sqlite' });
+      return {
+        execute: (...args: any[]) => webDbPromise.then((webDb: any) => webDb.execute(...args)),
+      };
+    })()
+  : open({ name: 'billing_app.sqlite' });
 
-export const db = open({
-  name: 'billing_app.sqlite',
-});
+// Keep schema creation ahead of first read/write on web and native.
+let dbQueue = Promise.resolve();
+export const db: any = {
+  execute: (...args: any[]) => {
+    const result = dbQueue.then(() => rawDb.execute(...args));
+    dbQueue = result.then(() => undefined, () => undefined);
+    return result;
+  },
+};
 
 // Helper function to initialize database tables
 export const initializeDatabase = () => {

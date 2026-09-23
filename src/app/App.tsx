@@ -23,6 +23,7 @@ import { SuppliersModule } from '../features/suppliers/SuppliersModule';
 import { SettingsModule } from '../features/settings/SettingsModule';
 import { DashboardModule } from '../features/dashboard/DashboardModule';
 import { ReportsModule } from '../features/reports/ReportsModule';
+import { initializeDatabase } from '../core/database/db';
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
@@ -136,6 +137,7 @@ const RootNavigator = () => {
       logout();
     });
     initialize();
+    initializeDatabase();
     
     // Initialize SyncEngine
     syncEngine.init();

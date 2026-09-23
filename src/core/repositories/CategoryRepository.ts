@@ -3,27 +3,50 @@ import { Category } from '../../types/models';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { db } from '../database/db';
+import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
 
 export class CategoryRepository extends BaseRepository<Category> {
   protected tableName = 'categories';
 
-  async update(entity: Category, shouldSync = true): Promise<void> {
-    if (shouldSync) {
-      await this.syncWithApi(entity, 'update');
-      await super.update({ ...entity, syncStatus: 'synced' }, false);
-      return;
-    }
+  private requestSync(): void {
+    void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.syncNow());
+  }
 
-    await super.update(entity, false);
+  async getAll(): Promise<Category[]> {
+    const items = await super.getAll();
+    return items
+      .filter((item) => !item.deletedAt)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, 10);
+  }
+
+  async insert(entity: Category, shouldSync = true): Promise<void> {
+    const localEntity: Category = { ...entity, syncStatus: shouldSync ? 'pending_insert' : 'synced' };
+    await super.insert(localEntity, false);
+    if (shouldSync) {
+      await outboxRepo.add('categories', localEntity.id, 'CREATE', localEntity);
+      this.requestSync();
+    }
+  }
+
+  async update(entity: Category, shouldSync = true): Promise<void> {
+    const localEntity: Category = { ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' };
+    await super.update(localEntity, false);
+    if (shouldSync) {
+      await outboxRepo.add('categories', localEntity.id, 'UPDATE', localEntity);
+      this.requestSync();
+    }
   }
 
   async delete(id: string, shouldSync = true): Promise<void> {
-    if (shouldSync) {
-      await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(String(id)));
-    }
-
     const entity = await this.getById(id);
-    if (entity) await super.delete(id, false);
+    if (!entity) return;
+    await db.execute(`DELETE FROM categories WHERE id = ?`, [id]);
+    if (shouldSync) {
+      await tombstoneRepo.add('categories', id);
+      await outboxRepo.add('categories', id, 'DELETE', entity);
+      this.requestSync();
+    }
   }
 
   protected getInsertColumns(): string {
@@ -100,6 +123,16 @@ export class CategoryRepository extends BaseRepository<Category> {
     }
   }
 
+  async syncOutboxItem(item: OutboxItem): Promise<void> {
+    const entity = item.payload ? JSON.parse(item.payload) as Category : await this.getById(item.entityId);
+    if (item.operation === 'DELETE') {
+      await this.syncWithApi(entity || ({ id: item.entityId } as Category), 'delete');
+      return;
+    }
+    if (!entity) throw new Error(`Category ${item.entityId} not found`);
+    await this.syncWithApi(entity, item.operation === 'CREATE' ? 'insert' : 'update');
+  }
+
   public async fetchFromApi(): Promise<Category[]> {
     try {
       const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
@@ -123,7 +156,12 @@ export class CategoryRepository extends BaseRepository<Category> {
 
       const normalizedItems: Category[] = [];
 
-      for (const rawItem of items) {
+      const latestItems = items
+        .slice()
+        .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))
+        .slice(0, 10);
+
+      for (const rawItem of latestItems) {
         try {
           const item: any = { ...rawItem };
           item.id = String(item.id || item._id || item.categoryId || Math.random().toString(36).substring(7));
@@ -133,9 +171,13 @@ export class CategoryRepository extends BaseRepository<Category> {
           item.createdAt = item.createdAt || new Date().toISOString();
           item.updatedAt = item.updatedAt || new Date().toISOString();
           
-          const existing = await this.getById(item.id);
+          const existing = await super.getById(item.id);
+          if (existing && existing.syncStatus !== 'synced') {
+            normalizedItems.push(existing);
+            continue;
+          }
           if (existing) {
-            await this.update(item, false);
+            await super.update(item, false);
           } else {
             await this.insert(item, false);
           }
@@ -145,6 +187,7 @@ export class CategoryRepository extends BaseRepository<Category> {
           console.error("DB Insert/Update Error for item:", rawItem, err);
         }
       }
+      await db.execute(`DELETE FROM categories WHERE syncStatus = 'synced' AND id NOT IN (SELECT id FROM categories ORDER BY updatedAt DESC LIMIT 10)`);
       return normalizedItems;
     } catch (error) {
       console.error('Failed to fetch categories from API:', error);

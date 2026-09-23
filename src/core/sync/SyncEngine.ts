@@ -3,20 +3,7 @@ import { useSyncStore } from './useSyncStore';
 import { outboxRepo, syncMetadataRepo, tombstoneRepo, OutboxItem } from './outbox';
 import { db } from '../database/db';
 import { AppState, AppStateStatus } from 'react-native';
-
-// In a real app, this would be your API client
-const mockApiClient = {
-  push: async (item: OutboxItem): Promise<{ success: boolean; conflict?: boolean; serverVersion?: any }> => {
-    console.log('[Sync] Pushing item to server:', item.id, item.operation);
-    return new Promise((resolve) => setTimeout(() => resolve({ success: true }), 500));
-  },
-  pull: async (entityType: string, cursor: string | null): Promise<{ data: any[]; nextCursor: string }> => {
-    console.log('[Sync] Pulling items from server for:', entityType, 'cursor:', cursor);
-    return new Promise((resolve) => setTimeout(() => resolve({ data: [], nextCursor: new Date().toISOString() }), 500));
-  }
-};
-
-const SYNCABLE_ENTITIES = ['users', 'categories', 'units', 'products', 'customers', 'suppliers'];
+import { categoryRepository } from '../repositories/CategoryRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -98,7 +85,7 @@ class SyncEngine {
 
     try {
       await this.processOutbox();
-      await this.pullServerChanges();
+      await categoryRepository.fetchFromApi();
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -120,12 +107,10 @@ class SyncEngine {
 
       await outboxRepo.updateStatus(item.id, 'IN_FLIGHT');
       try {
-        const response = await mockApiClient.push(item);
-        
-        if (response.success) {
+        if (item.entityType === 'categories') {
+          await categoryRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
-        } else if (response.conflict) {
-          await this.applyServerChange(item.entityType, response.serverVersion);
+        } else {
           await outboxRepo.remove(item.id);
         }
       } catch {
@@ -136,24 +121,7 @@ class SyncEngine {
   }
 
   private async pullServerChanges() {
-    for (const entityType of SYNCABLE_ENTITIES) {
-      if (!this.isOnline) break;
-
-      const cursor = await syncMetadataRepo.getCursor(entityType);
-      try {
-        const { data, nextCursor } = await mockApiClient.pull(entityType, cursor);
-        
-        // Wait, @op-engineering/op-sqlite transaction with async inside is tricky.
-        // Let's just execute them directly sequentially, or use executeBatch.
-        for (const item of data) {
-          await this.applyServerChange(entityType, item);
-        }
-        await syncMetadataRepo.setCursor(entityType, nextCursor);
-      } catch (error) {
-        console.error(`[Sync] Failed to pull ${entityType}:`, error);
-        throw error;
-      }
-    }
+    if (this.isOnline) await categoryRepository.fetchFromApi();
   }
 
   private async applyServerChange(entityType: string, item: any) {
