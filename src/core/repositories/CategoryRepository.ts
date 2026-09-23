@@ -50,20 +50,21 @@ export class CategoryRepository extends BaseRepository<Category> {
   }
 
   protected getInsertColumns(): string {
-    return 'id, name, description, parentId, createdAt, updatedAt, deletedAt, syncStatus';
+    return 'id, backendId, name, description, parentId, createdAt, updatedAt, deletedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'name = ?, description = ?, parentId = ?, createdAt = ?, updatedAt = ?, deletedAt = ?, syncStatus = ?';
+    return 'backendId = ?, name = ?, description = ?, parentId = ?, createdAt = ?, updatedAt = ?, deletedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Category): any[] {
     return [
       entity.id || Math.random().toString(36).substring(7),
+      entity.backendId || null,
       entity.name || 'Unnamed Category',
       entity.description || null,
       entity.parentId || null,
@@ -77,6 +78,7 @@ export class CategoryRepository extends BaseRepository<Category> {
   protected fromRow(row: any): Category {
     return {
       id: row.id,
+      backendId: row.backendId || undefined,
       name: row.name,
       description: row.description,
       parentId: row.parentId,
@@ -90,7 +92,20 @@ export class CategoryRepository extends BaseRepository<Category> {
   protected async syncWithApi(entity: Category, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
       // API generates timestamps; keep local timestamps out of request payload.
-      const { syncStatus, id, version, createdAt, updatedAt, ...apiPayload } = entity as any;
+      const {
+        syncStatus,
+        id,
+        backendId,
+        version,
+        createdAt,
+        updatedAt,
+        parentId,
+        deletedAt,
+        ...baseApiPayload
+      } = entity as any;
+      const apiPayload = operation === 'update'
+        ? baseApiPayload
+        : { ...baseApiPayload, ...(parentId !== undefined && { parentId }) };
       
       let syncSuccess = false;
 
@@ -105,10 +120,12 @@ export class CategoryRepository extends BaseRepository<Category> {
            syncSuccess = true;
         }
       } else if (operation === 'update') {
-        const response = await apiClient.patch(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id), apiPayload);
+        const backendId = entity.backendId || entity.id;
+        const response = await apiClient.patch(API_ENDPOINTS.CATEGORIES.BY_ID(backendId), apiPayload);
         if (response.status >= 200 && response.status < 300) syncSuccess = true;
       } else if (operation === 'delete') {
-        const response = await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(entity.id));
+        const backendId = entity.backendId || entity.id;
+        const response = await apiClient.delete(API_ENDPOINTS.CATEGORIES.BY_ID(backendId));
         if (response.status >= 200 && response.status < 300) syncSuccess = true;
       }
       
@@ -164,7 +181,8 @@ export class CategoryRepository extends BaseRepository<Category> {
       for (const rawItem of latestItems) {
         try {
           const item: any = { ...rawItem };
-          item.id = String(item.id || item._id || item.categoryId || Math.random().toString(36).substring(7));
+          item.backendId = String(item.backendId || item.serverId || item.categoryId || item._id || item.id || '');
+          item.id = String(item.id || item.backendId || Math.random().toString(36).substring(7));
           item.name = item.name || item.categoryName || item.category_name || item.title || 'Unnamed Category';
           item.description = item.description || item.categoryDescription || item.category_description || null;
           item.syncStatus = 'synced';

@@ -43,6 +43,7 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
+        backendId TEXT,
         name TEXT NOT NULL,
         description TEXT,
         parentId TEXT,
@@ -52,6 +53,12 @@ export const initializeDatabase = () => {
         syncStatus TEXT DEFAULT 'synced'
       );
     `);
+
+    try {
+      db.execute('ALTER TABLE categories ADD COLUMN backendId TEXT;');
+    } catch (e) {
+      // Column might already exist, ignore
+    }
     
     // Attempt to add deletedAt if missing (for existing local DBs)
     try {

@@ -18,6 +18,8 @@ export interface Category extends BaseEntity {
   name: string;
   description?: string;
   parentId?: string;
+  /** Backend primary key. Local id can be temporary while offline. */
+  backendId?: string;
 }
 
 export interface Unit extends BaseEntity {
