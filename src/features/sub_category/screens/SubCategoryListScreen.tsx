@@ -77,20 +77,36 @@ export const SubCategoryListScreen = () => {
     { 
       key: 'syncStatus', 
       title: 'Sync', 
-      width: 90,
-      render: (value: string) => (
-        <View style={{ 
-          backgroundColor: value === 'synced' ? '#3B82F6' : '#F59E0B', 
-          paddingHorizontal: 8, 
-          paddingVertical: 4, 
-          borderRadius: 4, 
-          alignSelf: 'flex-start' 
-        }}>
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>
-            {value === 'synced' ? 'Synced' : 'Pending'}
-          </Text>
-        </View>
-      )
+      width: 100,
+      render: (value: string | undefined) => {
+        const isOnline = value === 'synced';
+        return (
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            backgroundColor: isOnline ? '#DCFCE7' : '#FEF3C7',
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 12,
+            alignSelf: 'flex-start'
+          }}>
+            <View style={{ 
+              width: 6, 
+              height: 6, 
+              borderRadius: 3, 
+              backgroundColor: isOnline ? '#16A34A' : '#D97706',
+              marginRight: 6 
+            }} />
+            <Text style={{ 
+              color: isOnline ? '#16A34A' : '#D97706',
+              fontSize: 12,
+              fontWeight: '500'
+            }}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+          </View>
+        );
+      }
     }
   ];
 
