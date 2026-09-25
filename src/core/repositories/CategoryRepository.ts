@@ -16,7 +16,7 @@ export class CategoryRepository extends BaseRepository<Category> {
     const items = await super.getAll();
     return items
       .filter((item) => !item.deletedAt)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   }
 
   async insert(entity: Category, shouldSync = true): Promise<void> {
