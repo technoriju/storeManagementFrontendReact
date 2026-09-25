@@ -4,6 +4,7 @@ import { outboxRepo, syncMetadataRepo, tombstoneRepo, OutboxItem } from './outbo
 import { db } from '../database/db';
 import { AppState, AppStateStatus } from 'react-native';
 import { categoryRepository } from '../repositories/CategoryRepository';
+import { subCategoryRepository } from '../repositories/SubCategoryRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -116,6 +117,9 @@ class SyncEngine {
       try {
         if (item.entityType === 'categories') {
           await categoryRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'sub_categories') {
+          await subCategoryRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);

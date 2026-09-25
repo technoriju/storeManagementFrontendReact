@@ -102,13 +102,15 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
         createdAt,
         updatedAt,
         deletedAt,
+        name,
+        description,
+        status,
         categoryId,
-        ...baseApiPayload
       } = entity as any;
       
-      const apiPayload = operation === 'update'
-        ? baseApiPayload
-        : { ...baseApiPayload, categoryId };
+      // Send only fields accepted by the subcategory API.
+      // Local/API records can contain deviceId and other read-only fields.
+      const apiPayload = { name, description, categoryId, status };
       
       let syncSuccess = false;
 
