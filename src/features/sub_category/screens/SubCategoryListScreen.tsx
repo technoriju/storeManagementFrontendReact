@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, TextInput, Switch } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
@@ -142,6 +142,26 @@ export const SubCategoryListScreen = () => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id, {
+      onError: (error: any) => Alert.alert('Error', error?.message || 'Failed to delete sub category'),
+    });
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete ${item.name}?`)) remove();
+      return;
+    }
+
+    Alert.alert(
+      'Delete Sub Category',
+      `Are you sure you want to delete ${item.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: remove },
+      ],
+    );
+  };
+
   const renderRowActions = (item: any) => (
     <>
       <Pressable 
@@ -158,7 +178,7 @@ export const SubCategoryListScreen = () => {
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
-        onPress={() => deleteMutation.mutate(item.id)}
+        onPress={() => handleDelete(item)}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
       >
         <Trash2 size={16} color={theme.colors.error} />
@@ -167,24 +187,31 @@ export const SubCategoryListScreen = () => {
   );
 
   const handleSave = () => {
-    if (!name || !categoryId) return;
+    if (!name.trim() || !categoryId) {
+      Alert.alert('Validation Error', 'Category and sub category name are required');
+      return;
+    }
     
     if (editingId) {
       const existing = subCategories.find(s => s.id === editingId);
       if (existing) {
-        updateMutation.mutate({
-          ...existing,
-          name,
-          categoryId,
-          description,
-          status
-        });
+        updateMutation.mutate(
+          { ...existing, name, categoryId, description, status },
+          {
+            onSuccess: () => setIsAddModalVisible(false),
+            onError: (error: any) => Alert.alert('Error', error?.message || 'Failed to update sub category'),
+          },
+        );
       }
     } else {
-      addMutation.mutate({ name, categoryId, description, status });
+      addMutation.mutate(
+        { name, categoryId, description, status },
+        {
+          onSuccess: () => setIsAddModalVisible(false),
+          onError: (error: any) => Alert.alert('Error', error?.message || 'Failed to add sub category'),
+        },
+      );
     }
-    
-    setIsAddModalVisible(false);
   };
 
   const filteredSubCategories = subCategories.filter(c => 
@@ -217,10 +244,11 @@ export const SubCategoryListScreen = () => {
               onPress={() => setIsAddModalVisible(false)} 
               style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
             />
-            <AppButton 
+            <AppButton
               title="Save" 
               onPress={handleSave} 
               style={{ backgroundColor: '#F97316', minWidth: 140 }} 
+              disabled={addMutation.isPending || updateMutation.isPending}
             />
           </>
         }

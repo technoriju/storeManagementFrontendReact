@@ -116,11 +116,15 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
 
       if (operation === 'insert') {
         const response = await apiClient.post(API_ENDPOINTS.SUBCATEGORIES.BASE, apiPayload);
-        const serverId = response.data?.id || (response.data?.data && response.data.data.id);
+        const responseData = response.data?.data || response.data;
+        const serverId = responseData?.id || responseData?._id || responseData?.subcategoryId || responseData?.sub_category_id;
         if (serverId && serverId.toString() !== entity.id.toString()) {
-           await db.execute(`UPDATE ${this.tableName} SET id = ?, syncStatus = 'synced' WHERE id = ?`, [serverId.toString(), entity.id]);
+           const newId = serverId.toString();
+           await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [newId, newId, entity.id]);
+           await outboxRepo.rebaseEntity(this.tableName, entity.id, newId, newId);
            syncSuccess = true;
         } else if (response.status >= 200 && response.status < 300) {
+           await db.execute(`UPDATE ${this.tableName} SET backendId = ?, syncStatus = 'synced' WHERE id = ?`, [serverId?.toString() || entity.backendId || entity.id, entity.id]);
            syncSuccess = true;
         }
       } else if (operation === 'update') {
@@ -158,8 +162,10 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     }
     const entity = item.payload ? JSON.parse(item.payload) as SubCategory : await this.getById(item.entityId);
     if (item.operation === 'DELETE') {
-      if (!/^\d+$/.test(String(item.entityId))) return;
-      await this.syncWithApi(entity || ({ id: item.entityId } as SubCategory), 'delete');
+      const deleteEntity = entity || ({ id: item.entityId } as SubCategory);
+      // Temporary local IDs have no backendId. Server IDs may be numeric or string.
+      if (!deleteEntity.backendId && !/^\d+$/.test(String(deleteEntity.id))) return;
+      await this.syncWithApi(deleteEntity, 'delete');
       return;
     }
     if (!entity) throw new Error(`SubCategory ${item.entityId} not found`);
@@ -171,19 +177,27 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       const response = await apiClient.get(API_ENDPOINTS.SUBCATEGORIES.BASE);
       
       let items: any[] = [];
-      const findItems = (payload: any): any[] => {
-        if (Array.isArray(payload)) return payload;
-        if (!payload || typeof payload !== 'object') return [];
-        for (const key of ['data', 'subcategories', 'subCategories', 'sub_categories', 'items', 'results', 'rows', 'payload', 'response', 'body', 'list']) {
-          const found = findItems(payload[key]);
-          if (found.length > 0) return found;
+      const findItems = (payload: any): { found: boolean; items: any[] } => {
+        if (Array.isArray(payload)) return { found: true, items: payload };
+        if (!payload || typeof payload !== 'object') return { found: false, items: [] };
+        for (const key of ['data', 'subcategories', 'subCategories', 'sub_category', 'subCategory', 'sub_categories', 'items', 'results', 'rows', 'docs', 'records', 'payload', 'response', 'body', 'list']) {
+          const result = findItems(payload[key]);
+          if (result.found) return result;
         }
-        return [];
+        // Accept unknown API envelope names when endpoint already identifies resource.
+        for (const value of Object.values(payload)) {
+          if (Array.isArray(value)) return { found: true, items: value };
+        }
+        return { found: false, items: [] };
       };
 
-      items = findItems(response.data);
+      const parsed = findItems(response.data);
+      items = parsed.items;
       console.log('SubCategory API response:', JSON.stringify(response.data).substring(0, 200));
       console.log('SubCategory items found:', items?.length);
+
+      // Do not erase local synced data when server response shape is unknown.
+      if (!parsed.found) return this.getAll();
       
       const normalizedItems: SubCategory[] = [];
 
@@ -199,14 +213,15 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
           item.name = item.name || item.subCategoryName || item.sub_category_name || item.subCategory || item.subcategory || item.sub_category || item.title || 'Unnamed SubCategory';
           item.description = item.description || null;
           item.categoryId = String(item.categoryId || item.category_id || item.category?._id || item.category?.id || (typeof item.category === 'string' ? item.category : ''));
-          item.status = item.status || 'active';
+          item.status = item.status || (item.isActive === false ? 'inactive' : 'active');
           item.syncStatus = 'synced';
           item.createdAt = item.createdAt || new Date().toISOString();
           item.updatedAt = item.updatedAt || new Date().toISOString();
           
           const existing = await super.getById(item.id);
           if (existing) {
-            await super.update(item, false);
+            // Never overwrite local pending changes during a background pull.
+            if (existing.syncStatus === 'synced') await super.update(item, false);
           } else {
             await this.insert(item, false);
           }
@@ -216,13 +231,8 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
           console.error("DB Insert/Update Error for item:", rawItem, err);
         }
       }
-      const incomingIds = normalizedItems.map(item => item.id);
-      if (incomingIds.length > 0) {
-        const placeholders = incomingIds.map(() => '?').join(',');
-        await db.execute(`DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`, incomingIds);
-      } else {
-        await db.execute(`DELETE FROM ${this.tableName} WHERE syncStatus = 'synced'`);
-      }
+      // Keep local rows not returned by this pull. Local-first data must not
+      // disappear because server list is stale, filtered, or eventually consistent.
       return normalizedItems;
     } catch (error) {
       console.error('Failed to fetch subcategories from API:', error);

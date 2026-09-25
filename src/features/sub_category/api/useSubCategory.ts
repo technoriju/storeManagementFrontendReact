@@ -2,19 +2,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { subCategoryRepository } from '../../../core/repositories/SubCategoryRepository';
 import { SubCategory } from '../../../types/models';
 
-export const useSubCategories = () => {
-  return useQuery({
-    queryKey: ['subcategories'],
-    queryFn: async () => {
-      // fetchFromApi already normalizes the API response. Use that result for
-      // the query instead of relying on a second SQLite read to populate UI.
-      // This matters on web, where SQLite writes can finish after the read.
-      const apiItems = await subCategoryRepository.fetchFromApi();
-      if (apiItems.length > 0) return apiItems;
+export const SUBCATEGORY_QUERY_KEY = ['subcategories'] as const;
 
-      // Keep locally-created offline records visible when API returns no rows
-      // or is temporarily unavailable.
-      return subCategoryRepository.getAll();
+export const useSubCategories = () => {
+  const queryClient = useQueryClient();
+
+  return useQuery({
+    queryKey: SUBCATEGORY_QUERY_KEY,
+    queryFn: async () => {
+      const localItems = await subCategoryRepository.getAll();
+
+      // Render local data first. Pull server data in background.
+      void subCategoryRepository.fetchFromApi().then(async (serverItems) => {
+        const latestLocalItems = await subCategoryRepository.getAll();
+        queryClient.setQueryData(
+          SUBCATEGORY_QUERY_KEY,
+          latestLocalItems.length > 0 ? latestLocalItems : serverItems,
+        );
+      });
+
+      return localItems;
     },
   });
 };
@@ -36,10 +43,10 @@ export const useAddSubCategory = () => {
       return newEntity;
     },
     onSuccess: (newItem) => {
-      queryClient.setQueryData(['subcategories'], (old: SubCategory[] | undefined) => {
+      queryClient.setQueryData(SUBCATEGORY_QUERY_KEY, (old: SubCategory[] | undefined) => {
         return old ? [...old, newItem] : [newItem];
       });
-      queryClient.invalidateQueries({ queryKey: ['subcategories'] });
+      queryClient.invalidateQueries({ queryKey: SUBCATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };
@@ -58,10 +65,10 @@ export const useUpdateSubCategory = () => {
       return updatedEntity;
     },
     onSuccess: (updatedItem) => {
-      queryClient.setQueryData(['subcategories'], (old: SubCategory[] | undefined) => {
+      queryClient.setQueryData(SUBCATEGORY_QUERY_KEY, (old: SubCategory[] | undefined) => {
         return old ? old.map(item => item.id === updatedItem.id ? updatedItem : item) : [updatedItem];
       });
-      queryClient.invalidateQueries({ queryKey: ['subcategories'] });
+      queryClient.invalidateQueries({ queryKey: SUBCATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };
@@ -75,10 +82,10 @@ export const useDeleteSubCategory = () => {
       return id;
     },
     onSuccess: (deletedId) => {
-      queryClient.setQueryData(['subcategories'], (old: SubCategory[] | undefined) => {
+      queryClient.setQueryData(SUBCATEGORY_QUERY_KEY, (old: SubCategory[] | undefined) => {
         return old ? old.filter(item => item.id !== deletedId) : [];
       });
-      queryClient.invalidateQueries({ queryKey: ['subcategories'] });
+      queryClient.invalidateQueries({ queryKey: SUBCATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };

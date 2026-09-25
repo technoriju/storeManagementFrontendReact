@@ -90,13 +90,38 @@ export const outboxRepo = {
     );
   },
 
+  rebaseEntity: async (entityType: string, oldId: string, newId: string, backendId: string) => {
+    const res = await db.execute(
+      `SELECT id, payload FROM outbox WHERE entityType = ? AND entityId = ?`,
+      [entityType, oldId],
+    );
+    const rows = (res.rows as any[]) || [];
+    for (const row of rows) {
+      let payload: string | null = row.payload || null;
+      if (payload) {
+        try {
+          const value = JSON.parse(payload);
+          value.id = newId;
+          value.backendId = backendId;
+          payload = JSON.stringify(value);
+        } catch {
+          // Keep invalid legacy payload unchanged.
+        }
+      }
+      await db.execute(
+        `UPDATE outbox SET entityId = ?, payload = ? WHERE id = ?`,
+        [newId, payload, row.id],
+      );
+    }
+  },
+
   removeDeletedInvalidIds: async (entityType: string) => {
     await db.execute(
       `DELETE FROM outbox
        WHERE entityType = ?
          AND entityId GLOB '*[^0-9]*'
          AND NOT EXISTS (
-           SELECT 1 FROM categories c
+           SELECT 1 FROM ${entityType} c
            WHERE c.id = outbox.entityId
          )`,
       [entityType]

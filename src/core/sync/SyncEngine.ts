@@ -92,6 +92,7 @@ class SyncEngine {
     try {
       await this.processOutbox();
       await categoryRepository.fetchFromApi();
+      await subCategoryRepository.fetchFromApi();
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -107,6 +108,7 @@ class SyncEngine {
   private async processOutbox() {
     // Clear stale jobs for deleted local records with non-server IDs.
     await outboxRepo.removeDeletedInvalidIds('categories');
+    await outboxRepo.removeDeletedInvalidIds('sub_categories');
     const pendingItems = await outboxRepo.getPendingItems();
     if (pendingItems.length === 0) return;
 
