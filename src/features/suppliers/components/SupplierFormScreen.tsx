@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
 import { useSupplierStore } from '../store/supplierStore';
 import { Supplier } from '../../../types/models';
-import { X, Plus } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 
 interface SupplierFormScreenProps {
@@ -110,20 +110,6 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
           </View>
 
           <ScrollView contentContainerStyle={styles.content}>
-            {/* Image Upload Area */}
-            <View style={styles.imageUploadSection}>
-              <View style={styles.imageBox}>
-                <Plus size={20} color="#888" />
-                <Text style={styles.imageBoxText}>Add Image</Text>
-              </View>
-              <View style={styles.imageUploadActions}>
-                <TouchableOpacity style={styles.uploadBtn}>
-                  <Text style={styles.uploadBtnText}>Upload Image</Text>
-                </TouchableOpacity>
-                <Text style={styles.uploadHint}>JPEG, PNG up to 2 MB</Text>
-              </View>
-            </View>
-
             {/* Form Fields */}
             <View style={styles.row}>
               <View style={styles.halfCol}>
@@ -239,47 +225,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-  },
-  imageUploadSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 16,
-  },
-  imageBox: {
-    width: 100,
-    height: 100,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageBoxText: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 8,
-  },
-  imageUploadActions: {
-    justifyContent: 'center',
-  },
-  uploadBtn: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-  },
-  uploadBtnText: {
-    color: 'white',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  uploadHint: {
-    fontSize: 12,
-    color: '#666',
   },
   row: {
     flexDirection: 'row',

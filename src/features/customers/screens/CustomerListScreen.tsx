@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { useCustomerStore } from '../store/customerStore';
 import { CustomerScreenType } from '../CustomersModule';
+import { useCustomers, useAddCustomer, useUpdateCustomer, useDeleteCustomer } from '../api/useCustomer';
+import { Customer } from '../../../types/models';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { 
   FileText, 
@@ -22,9 +23,11 @@ interface Props {
 
 export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { customers, setCustomers } = useCustomerStore();
+  const { data: customers = [], isLoading, refetch } = useCustomers();
+  const addMutation = useAddCustomer();
+  const updateMutation = useUpdateCustomer();
+  const deleteMutation = useDeleteCustomer();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
 
   const columns = [
     { 
@@ -41,17 +44,8 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       title: 'Customer', 
       flex: 2,
       minWidth: 200,
-      render: (value: string, item: any) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background }} />
-          ) : (
-            <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
-            </View>
-          )}
-          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
-        </View>
+      render: (value: string) => (
+        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
       )
     },
     { 
@@ -99,7 +93,7 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -124,6 +118,18 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id);
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
+      return;
+    }
+    Alert.alert('Delete Customer', `Delete ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  };
+
   const renderRowActions = (item: any) => (
     <>
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
@@ -132,8 +138,8 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('form', item.id)}>
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable onPress={() => handleDelete(item)} style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+        <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
     </>
   );

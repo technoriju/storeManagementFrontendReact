@@ -4,6 +4,10 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/refresh',
     PERMISSIONS: '/auth/permissions',
   },
+  BRANDS: {
+    BASE: '/brands',
+    BY_ID: (id: string | number) => `/brands/${id}`,
+  },
   CATEGORIES: {
     BASE: '/categories',
     BY_ID: (id: string | number) => `/categories/${id}`,
@@ -23,6 +27,10 @@ export const API_ENDPOINTS = {
   SUBCATEGORIES: {
     BASE: '/subcategories',
     BY_ID: (id: string | number) => `/subcategories/${id}`,
+  },
+  SUBUNITS: {
+    BASE: '/sub-units',
+    BY_ID: (id: string | number) => `/sub-units/${id}`,
   },
   SUPPLIERS: {
     BASE: '/suppliers',

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Switch, Image } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { useBrandStore } from '../store/brandStore';
+import { useBrands, useAddBrand, useUpdateBrand, useDeleteBrand, Brand } from '../api/useBrand';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
@@ -14,17 +14,20 @@ import {
   PlusCircle, 
   Edit,
   Trash2,
-  ChevronDown,
-  Plus
+  ChevronDown
 } from 'lucide-react-native';
 
 export const BrandListScreen = () => {
   const theme = useTheme();
-  const { brands, addBrand } = useBrandStore();
+  const { data: brands = [], isLoading, refetch } = useBrands();
+  const addMutation = useAddBrand();
+  const updateMutation = useUpdateBrand();
+  const deleteMutation = useDeleteBrand();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
   const [newBrandStatus, setNewBrandStatus] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const columns = [
     { 
@@ -33,12 +36,7 @@ export const BrandListScreen = () => {
       flex: 2,
       minWidth: 150,
       render: (value: string) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={styles.brandIconPlaceholder}>
-            <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
-          </View>
-          <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
-        </View>
+        <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
       )
     },
     { 
@@ -74,7 +72,7 @@ export const BrandListScreen = () => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -82,7 +80,12 @@ export const BrandListScreen = () => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => setIsAddModalVisible(true)}
+        onPress={() => {
+          setEditingId(null);
+          setNewBrandName('');
+          setNewBrandStatus(true);
+          setIsAddModalVisible(true);
+        }}
       >
         <PlusCircle size={16} color="white" />
         <Text style={styles.primaryActionText}>Add Brand</Text>
@@ -103,28 +106,67 @@ export const BrandListScreen = () => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id);
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
+      return;
+    }
+    Alert.alert('Delete Brand', `Delete ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  };
+
   const renderRowActions = (item: any) => (
     <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+      <Pressable
+        onPress={() => {
+          setEditingId(item.id);
+          setNewBrandName(item.name);
+          setNewBrandStatus(item.status === 'Active');
+          setIsAddModalVisible(true);
+        }}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable
+        onPress={() => handleDelete(item)}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
+        <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
     </>
   );
 
-  const handleAddBrand = () => {
+  const handleSave = () => {
     if (!newBrandName) return;
-    addBrand({
-      id: Math.random().toString(),
-      name: newBrandName,
-      createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      status: newBrandStatus ? 'Active' : 'Inactive',
-    });
-    setNewBrandName('');
-    setNewBrandStatus(true);
-    setIsAddModalVisible(false);
+    if (editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        name: newBrandName,
+        status: newBrandStatus ? 'Active' : 'Inactive',
+      } as Brand, {
+        onSuccess: () => {
+          setNewBrandName('');
+          setNewBrandStatus(true);
+          setEditingId(null);
+          setIsAddModalVisible(false);
+        },
+      });
+    } else {
+      addMutation.mutate({
+        name: newBrandName,
+        status: newBrandStatus ? 'Active' : 'Inactive',
+      }, {
+        onSuccess: () => {
+          setNewBrandName('');
+          setNewBrandStatus(true);
+          setIsAddModalVisible(false);
+        },
+      });
+    }
   };
 
   const filteredBrands = brands.filter(b => 
@@ -142,11 +184,12 @@ export const BrandListScreen = () => {
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
+        isLoading={isLoading}
       />
 
       <AppDialog
         visible={isAddModalVisible}
-        title="Add Brand"
+        title={editingId ? "Edit Brand" : "Add Brand"}
         onClose={() => setIsAddModalVisible(false)}
         actions={
           <>
@@ -157,28 +200,14 @@ export const BrandListScreen = () => {
               style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
             />
             <AppButton 
-              title="Add Brand" 
-              onPress={handleAddBrand} 
+              title={editingId ? "Save" : "Add Brand"} 
+              onPress={handleSave} 
               style={{ backgroundColor: '#F97316', minWidth: 120 }} 
+              disabled={addMutation.isPending || updateMutation.isPending}
             />
           </>
         }
       >
-        <View style={styles.imageUploadContainer}>
-          <Pressable style={[styles.imageBox, { borderColor: theme.colors.border }]}>
-            <Plus size={20} color={theme.colors.textSecondary} />
-            <Text style={{ color: theme.colors.textSecondary, marginTop: 8, fontSize: 12 }}>Add Image</Text>
-          </Pressable>
-          <View style={styles.imageUploadRight}>
-            <AppButton 
-              title="Upload Image" 
-              onPress={() => {}} 
-              style={{ backgroundColor: '#F97316', alignSelf: 'flex-start', marginBottom: 8 }} 
-            />
-            <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>JPEG, PNG up to 2 MB</Text>
-          </View>
-        </View>
-
         <AppInput
           label={
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -252,32 +281,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  brandIconPlaceholder: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageUploadContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 16,
-  },
-  imageBox: {
-    width: 100,
-    height: 100,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-  },
-  imageUploadRight: {
-    flex: 1,
-    justifyContent: 'center',
-  }
 });

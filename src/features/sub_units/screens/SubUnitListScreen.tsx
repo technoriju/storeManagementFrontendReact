@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Switch } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { useSubUnitStore } from '../store/subUnitStore';
-import { useUnitStore } from '../../units/store/unitStore';
+import { useSubUnits, useAddSubUnit, useUpdateSubUnit, useDeleteSubUnit, SubUnit } from '../api/useSubUnit';
+import { useUnits as useUnitList } from '../../units/api/useUnit';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
@@ -21,11 +21,15 @@ import {
 
 export const SubUnitListScreen = () => {
   const theme = useTheme();
-  const { subUnits, addSubUnit } = useSubUnitStore();
-  const { units } = useUnitStore();
+  const { data: subUnits = [], isLoading: isLoadingSubUnits, refetch } = useSubUnits();
+  const { data: units = [] } = useUnitList();
+  const addMutation = useAddSubUnit();
+  const updateMutation = useUpdateSubUnit();
+  const deleteMutation = useDeleteSubUnit();
   const [searchQuery, setSearchQuery] = useState('');
   
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newParentUnitId, setNewParentUnitId] = useState('');
   const [newSubUnitName, setNewSubUnitName] = useState('');
   const [newShortName, setNewShortName] = useState('');
@@ -91,7 +95,7 @@ export const SubUnitListScreen = () => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -99,7 +103,14 @@ export const SubUnitListScreen = () => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => setIsAddModalVisible(true)}
+        onPress={() => {
+          setEditingId(null);
+          setNewParentUnitId('');
+          setNewSubUnitName('');
+          setNewShortName('');
+          setNewSubUnitStatus(true);
+          setIsAddModalVisible(true);
+        }}
       >
         <PlusCircle size={16} color="white" />
         <Text style={styles.primaryActionText}>Add Sub Unit</Text>
@@ -120,37 +131,82 @@ export const SubUnitListScreen = () => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id);
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
+      return;
+    }
+    Alert.alert('Delete Sub Unit', `Delete ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  };
+
   const renderRowActions = (item: any) => (
     <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+      <Pressable
+        onPress={() => {
+          setEditingId(item.id);
+          setNewParentUnitId(item.parentUnitId || '');
+          setNewSubUnitName(item.name);
+          setNewShortName(item.shortName || '');
+          setNewSubUnitStatus(item.status === 'Active');
+          setIsAddModalVisible(true);
+        }}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable
+        onPress={() => handleDelete(item)}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
+        <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
     </>
   );
 
-  const handleAddSubUnit = () => {
+  const handleSave = () => {
     if (!newParentUnitId || !newSubUnitName || !newShortName) return;
-    addSubUnit({
-      id: Math.random().toString(),
-      parentUnitId: newParentUnitId,
-      name: newSubUnitName,
-      shortName: newShortName,
-      createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      status: newSubUnitStatus ? 'Active' : 'Inactive',
-    });
-    setNewParentUnitId('');
-    setNewSubUnitName('');
-    setNewShortName('');
-    setNewSubUnitStatus(true);
-    setIsAddModalVisible(false);
+    if (editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        parentUnitId: newParentUnitId,
+        name: newSubUnitName,
+        shortName: newShortName,
+        status: newSubUnitStatus ? 'Active' : 'Inactive',
+      } as SubUnit, {
+        onSuccess: () => {
+          setNewParentUnitId('');
+          setNewSubUnitName('');
+          setNewShortName('');
+          setNewSubUnitStatus(true);
+          setEditingId(null);
+          setIsAddModalVisible(false);
+        },
+      });
+    } else {
+      addMutation.mutate({
+        parentUnitId: newParentUnitId,
+        name: newSubUnitName,
+        shortName: newShortName,
+        status: newSubUnitStatus ? 'Active' : 'Inactive',
+      }, {
+        onSuccess: () => {
+          setNewParentUnitId('');
+          setNewSubUnitName('');
+          setNewShortName('');
+          setNewSubUnitStatus(true);
+          setIsAddModalVisible(false);
+        },
+      });
+    }
   };
 
   const filteredSubUnits = subUnits.filter(su => 
     su.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    su.shortName.toLowerCase().includes(searchQuery.toLowerCase())
+    (su.shortName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -161,6 +217,7 @@ export const SubUnitListScreen = () => {
         headerActions={headerActions}
         columns={columns}
         data={filteredSubUnits}
+        isLoading={isLoadingSubUnits}
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
@@ -168,20 +225,27 @@ export const SubUnitListScreen = () => {
 
       <AppDialog
         visible={isAddModalVisible}
-        title="Add Sub Unit"
-        onClose={() => setIsAddModalVisible(false)}
+        title={editingId ? "Edit Sub Unit" : "Add Sub Unit"}
+        onClose={() => {
+          setIsAddModalVisible(false);
+          setEditingId(null);
+        }}
         actions={
           <>
             <AppButton 
               title="Cancel" 
               variant="secondary" 
-              onPress={() => setIsAddModalVisible(false)} 
+              onPress={() => {
+                setIsAddModalVisible(false);
+                setEditingId(null);
+              }} 
               style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
             />
             <AppButton 
-              title="Add Sub Unit" 
-              onPress={handleAddSubUnit} 
-              style={{ backgroundColor: '#F97316', minWidth: 120 }} 
+              title={editingId ? "Save" : "Add Sub Unit"} 
+              onPress={handleSave} 
+              style={{ backgroundColor: '#F97316', minWidth: 120 }}
+              disabled={addMutation.isPending || updateMutation.isPending}
             />
           </>
         }

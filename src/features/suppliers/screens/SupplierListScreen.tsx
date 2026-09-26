@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { useSupplierStore } from '../store/supplierStore';
+import { useSuppliers, useDeleteSupplier } from '../api/useSupplier';
 import { SupplierScreenType } from '../SuppliersModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { 
@@ -22,9 +22,9 @@ interface Props {
 
 export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { suppliers, setSuppliers } = useSupplierStore();
+  const { data: suppliers = [], isLoading, refetch } = useSuppliers();
+  const deleteMutation = useDeleteSupplier();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
 
   // In a real app, you'd fetch here
   // Using dummy Code like SU001 for demonstration to match screenshot
@@ -45,17 +45,8 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
       title: 'Supplier', 
       flex: 2,
       minWidth: 200,
-      render: (value: string, item: any) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background }} />
-          ) : (
-            <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
-            </View>
-          )}
-          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
-        </View>
+      render: (value: string) => (
+        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
       )
     },
     { 
@@ -129,6 +120,18 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id);
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
+      return;
+    }
+    Alert.alert('Delete Supplier', `Delete ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  };
+
   const renderRowActions = (item: any) => (
     <>
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
@@ -137,8 +140,8 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('form', item.id)}>
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable onPress={() => handleDelete(item)} style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+        <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
     </>
   );

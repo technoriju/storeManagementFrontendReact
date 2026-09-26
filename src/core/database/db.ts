@@ -93,6 +93,7 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS units (
         id TEXT PRIMARY KEY,
+        backendId TEXT,
         name TEXT NOT NULL,
         abbreviation TEXT NOT NULL,
         createdAt TEXT NOT NULL,
@@ -105,13 +106,40 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS brands (
         id TEXT PRIMARY KEY,
+        backendId TEXT,
         name TEXT NOT NULL,
         description TEXT,
+        status TEXT DEFAULT 'Active',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
       );
     `);
+
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sub_units (
+        id TEXT PRIMARY KEY,
+        backendId TEXT,
+        name TEXT NOT NULL,
+        parentUnitId TEXT,
+        abbreviation TEXT,
+        multiplier REAL DEFAULT 1,
+        status TEXT DEFAULT 'Active',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    for (const statement of [
+      'ALTER TABLE units ADD COLUMN backendId TEXT',
+      'ALTER TABLE brands ADD COLUMN backendId TEXT',
+      'ALTER TABLE brands ADD COLUMN status TEXT DEFAULT \'Active\'',
+      'ALTER TABLE customers ADD COLUMN backendId TEXT',
+      'ALTER TABLE suppliers ADD COLUMN backendId TEXT',
+    ]) {
+      try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
+    }
 
     // Unit Conversions Table
     db.execute(`

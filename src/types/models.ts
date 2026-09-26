@@ -33,6 +33,23 @@ export interface SubCategory extends BaseEntity {
 export interface Unit extends BaseEntity {
   name: string;
   abbreviation: string;
+  backendId?: string;
+}
+
+export interface Brand extends BaseEntity {
+  name: string;
+  description?: string;
+  status?: string;
+  backendId?: string;
+}
+
+export interface SubUnit extends BaseEntity {
+  name: string;
+  parentUnitId?: string;
+  abbreviation?: string;
+  multiplier?: number;
+  status?: string;
+  backendId?: string;
 }
 
 export interface Product extends BaseEntity {
@@ -49,6 +66,7 @@ export interface Product extends BaseEntity {
 }
 
 export interface Customer extends BaseEntity {
+  backendId?: string;
   name: string;
   email?: string;
   phone?: string;
@@ -58,6 +76,7 @@ export interface Customer extends BaseEntity {
 }
 
 export interface Supplier extends BaseEntity {
+  backendId?: string;
   name: string;
   contactName?: string;
   email?: string;

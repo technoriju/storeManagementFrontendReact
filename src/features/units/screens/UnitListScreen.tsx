@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Switch } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { useUnitStore } from '../store/unitStore';
+import { useUnits, useAddUnit, useUpdateUnit, useDeleteUnit, Unit } from '../api/useUnit';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
@@ -19,12 +19,16 @@ import {
 
 export const UnitListScreen = () => {
   const theme = useTheme();
-  const { units, addUnit } = useUnitStore();
+  const { data: units = [], isLoading: isLoadingUnits, refetch } = useUnits();
+  const addMutation = useAddUnit();
+  const updateMutation = useUpdateUnit();
+  const deleteMutation = useDeleteUnit();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newUnitName, setNewUnitName] = useState('');
   const [newShortName, setNewShortName] = useState('');
   const [newUnitStatus, setNewUnitStatus] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const columns = [
     { 
@@ -67,7 +71,7 @@ export const UnitListScreen = () => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -75,7 +79,13 @@ export const UnitListScreen = () => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => setIsAddModalVisible(true)}
+        onPress={() => {
+          setEditingId(null);
+          setNewUnitName('');
+          setNewShortName('');
+          setNewUnitStatus(true);
+          setIsAddModalVisible(true);
+        }}
       >
         <PlusCircle size={16} color="white" />
         <Text style={styles.primaryActionText}>Add Unit</Text>
@@ -96,35 +106,77 @@ export const UnitListScreen = () => {
     </>
   );
 
+  const handleDelete = (item: any) => {
+    const remove = () => deleteMutation.mutate(item.id);
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
+      return;
+    }
+    Alert.alert('Delete Unit', `Delete ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  };
+
   const renderRowActions = (item: any) => (
     <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
+      <Pressable
+        onPress={() => {
+          setEditingId(item.id);
+          setNewUnitName(item.name);
+          setNewShortName(item.shortName || '');
+          setNewUnitStatus(item.status === 'Active');
+          setIsAddModalVisible(true);
+        }}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable
+        onPress={() => handleDelete(item)}
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+      >
+        <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
     </>
   );
 
-  const handleAddUnit = () => {
+  const handleSave = () => {
     if (!newUnitName || !newShortName) return;
-    addUnit({
-      id: Math.random().toString(),
-      name: newUnitName,
-      shortName: newShortName,
-      createdAt: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      status: newUnitStatus ? 'Active' : 'Inactive',
-    });
-    setNewUnitName('');
-    setNewShortName('');
-    setNewUnitStatus(true);
-    setIsAddModalVisible(false);
+    if (editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        name: newUnitName,
+        shortName: newShortName,
+        status: newUnitStatus ? 'Active' : 'Inactive',
+      } as Unit, {
+        onSuccess: () => {
+          setNewUnitName('');
+          setNewShortName('');
+          setNewUnitStatus(true);
+          setEditingId(null);
+          setIsAddModalVisible(false);
+        },
+      });
+    } else {
+      addMutation.mutate({
+        name: newUnitName,
+        shortName: newShortName,
+        status: newUnitStatus ? 'Active' : 'Inactive',
+      }, {
+        onSuccess: () => {
+          setNewUnitName('');
+          setNewShortName('');
+          setNewUnitStatus(true);
+          setIsAddModalVisible(false);
+        },
+      });
+    }
   };
 
   const filteredUnits = units.filter(u => 
     u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    u.shortName.toLowerCase().includes(searchQuery.toLowerCase())
+    (u.shortName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -138,11 +190,12 @@ export const UnitListScreen = () => {
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
+        isLoading={isLoadingUnits}
       />
 
       <AppDialog
         visible={isAddModalVisible}
-        title="Add Unit"
+        title={editingId ? "Edit Unit" : "Add Unit"}
         onClose={() => setIsAddModalVisible(false)}
         actions={
           <>
@@ -153,9 +206,10 @@ export const UnitListScreen = () => {
               style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
             />
             <AppButton 
-              title="Add Unit" 
-              onPress={handleAddUnit} 
-              style={{ backgroundColor: '#F97316', minWidth: 120 }} 
+              title={editingId ? "Save" : "Add Unit"} 
+              onPress={handleSave} 
+              style={{ backgroundColor: '#F97316', minWidth: 120 }}
+              disabled={addMutation.isPending || updateMutation.isPending}
             />
           </>
         }

@@ -5,6 +5,11 @@ import { db } from '../database/db';
 import { AppState, AppStateStatus } from 'react-native';
 import { categoryRepository } from '../repositories/CategoryRepository';
 import { subCategoryRepository } from '../repositories/SubCategoryRepository';
+import { brandRepository } from '../repositories/BrandRepository';
+import { unitRepository } from '../repositories/UnitRepository';
+import { subUnitRepository } from '../repositories/SubUnitRepository';
+import { customerRepository } from '../repositories/CustomerRepository';
+import { supplierRepository } from '../repositories/SupplierRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -93,6 +98,11 @@ class SyncEngine {
       await this.processOutbox();
       await categoryRepository.fetchFromApi();
       await subCategoryRepository.fetchFromApi();
+      await brandRepository.fetchFromApi();
+      await unitRepository.fetchFromApi();
+      await subUnitRepository.fetchFromApi();
+      await customerRepository.fetchFromApi();
+      await supplierRepository.fetchFromApi();
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -109,6 +119,9 @@ class SyncEngine {
     // Clear stale jobs for deleted local records with non-server IDs.
     await outboxRepo.removeDeletedInvalidIds('categories');
     await outboxRepo.removeDeletedInvalidIds('sub_categories');
+    for (const entityType of ['brands', 'units', 'sub_units', 'customers', 'suppliers']) {
+      await outboxRepo.removeDeletedInvalidIds(entityType);
+    }
     const pendingItems = await outboxRepo.getPendingItems();
     if (pendingItems.length === 0) return;
 
@@ -122,6 +135,21 @@ class SyncEngine {
           await outboxRepo.remove(item.id);
         } else if (item.entityType === 'sub_categories') {
           await subCategoryRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'brands') {
+          await brandRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'units') {
+          await unitRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'sub_units') {
+          await subUnitRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'customers') {
+          await customerRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'suppliers') {
+          await supplierRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);
