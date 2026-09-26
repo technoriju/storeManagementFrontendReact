@@ -32,7 +32,7 @@ export const SubUnitListScreen = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [newParentUnitId, setNewParentUnitId] = useState<number | ''>('');
   const [newSubUnitName, setNewSubUnitName] = useState('');
-  const [newShortName, setNewShortName] = useState('');
+  const [newMultiplier, setNewMultiplier] = useState('');
   const [newSubUnitStatus, setNewSubUnitStatus] = useState(true);
 
   const unitOptions = units.map(u => ({ label: u.name, value: u.id }));
@@ -46,11 +46,15 @@ export const SubUnitListScreen = () => {
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
     },
     { 
-      key: 'shortName', 
-      title: 'Short name', 
-      flex: 1,
-      minWidth: 100,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+      key: 'multiplier', 
+      title: 'Conversion', 
+      flex: 1.5,
+      minWidth: 150,
+      render: (value: number, item: any) => {
+        const parent = units.find(u => u.id === item.parentUnitId);
+        if (!parent) return <Text style={{ color: theme.colors.textSecondary }}>-</Text>;
+        return <Text style={{ color: theme.colors.textSecondary, fontWeight: '500' }}>1 {parent.name} = {value || 1} {item.name}</Text>;
+      }
     },
     { 
       key: 'parentUnitId', 
@@ -107,7 +111,7 @@ export const SubUnitListScreen = () => {
           setEditingId(null);
           setNewParentUnitId('');
           setNewSubUnitName('');
-          setNewShortName('');
+          setNewMultiplier('');
           setNewSubUnitStatus(true);
           setIsAddModalVisible(true);
         }}
@@ -150,7 +154,7 @@ export const SubUnitListScreen = () => {
           setEditingId(item.id);
           setNewParentUnitId(item.parentUnitId ? Number(item.parentUnitId) : '');
           setNewSubUnitName(item.name);
-          setNewShortName(item.shortName || '');
+          setNewMultiplier(item.multiplier ? String(item.multiplier) : '1');
           setNewSubUnitStatus(item.status === 'Active');
           setIsAddModalVisible(true);
         }}
@@ -168,19 +172,19 @@ export const SubUnitListScreen = () => {
   );
 
   const handleSave = () => {
-    if (!newParentUnitId || !newSubUnitName || !newShortName) return;
+    if (!newParentUnitId || !newSubUnitName || !newMultiplier) return;
     if (editingId) {
       updateMutation.mutate({
         id: editingId,
         parentUnitId: Number(newParentUnitId),
         name: newSubUnitName,
-        shortName: newShortName,
+        multiplier: Number(newMultiplier) || 1,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
       } as SubUnit, {
         onSuccess: () => {
           setNewParentUnitId('');
           setNewSubUnitName('');
-          setNewShortName('');
+          setNewMultiplier('');
           setNewSubUnitStatus(true);
           setEditingId(null);
           setIsAddModalVisible(false);
@@ -190,13 +194,13 @@ export const SubUnitListScreen = () => {
       addMutation.mutate({
         parentUnitId: Number(newParentUnitId),
         name: newSubUnitName,
-        shortName: newShortName,
+        multiplier: Number(newMultiplier) || 1,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
       }, {
         onSuccess: () => {
           setNewParentUnitId('');
           setNewSubUnitName('');
-          setNewShortName('');
+          setNewMultiplier('');
           setNewSubUnitStatus(true);
           setIsAddModalVisible(false);
         },
@@ -205,8 +209,7 @@ export const SubUnitListScreen = () => {
   };
 
   const filteredSubUnits = subUnits.filter(su => 
-    su.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (su.shortName || '').toLowerCase().includes(searchQuery.toLowerCase())
+    su.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -273,15 +276,16 @@ export const SubUnitListScreen = () => {
             onChangeText={setNewSubUnitName}
             placeholder="e.g. Gram"
           />
-          <AppInput
+                    <AppInput
             label={
               <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
-                Short Name <Text style={{ color: theme.colors.error }}>*</Text>
+                Multiplier <Text style={{ color: theme.colors.error }}>*</Text>
               </Text>
             }
-            value={newShortName}
-            onChangeText={setNewShortName}
-            placeholder="e.g. g"
+            value={newMultiplier}
+            onChangeText={setNewMultiplier}
+            placeholder="e.g. 100 (1 Parent = 100 Sub Unit)"
+            keyboardType="numeric"
           />
           <View style={styles.statusRow}>
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -349,5 +353,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+
+
 
 

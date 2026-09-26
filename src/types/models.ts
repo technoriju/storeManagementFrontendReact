@@ -46,7 +46,6 @@ export interface Brand extends BaseEntity {
 export interface SubUnit extends BaseEntity {
   name: string;
   parentUnitId?: number;
-  abbreviation?: string;
   multiplier?: number;
   status?: string;
   backendId?: number;

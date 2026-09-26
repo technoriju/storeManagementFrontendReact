@@ -122,7 +122,6 @@ export const initializeDatabase = () => {
         backendId INTEGER,
         name TEXT NOT NULL,
         parentUnitId INTEGER,
-        abbreviation TEXT,
         multiplier REAL DEFAULT 1,
         status TEXT DEFAULT 'Active',
         createdAt TEXT NOT NULL,
