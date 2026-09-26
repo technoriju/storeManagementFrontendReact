@@ -9,7 +9,7 @@
       "args": [
         "mcp-server-sqlite",
         "--db-path",
-        "C:/Users/LENOVO/OneDrive/Billing Sw/mobile/data/project_local.db"
+        "C:/Users/LENOVO/OneDrive/Billing Sw/mobile/billing_app.sqlite"
       ]
     }
   }

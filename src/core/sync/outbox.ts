@@ -90,7 +90,7 @@ export const outboxRepo = {
     );
   },
 
-  rebaseEntity: async (entityType: string, oldid: number, newid: number, backendid: number) => {
+  rebaseEntity: async (entityType: string, oldId: number, newId: number, backendId: number) => {
     const res = await db.execute(
       `SELECT id, payload FROM outbox WHERE entityType = ? AND entityId = ?`,
       [entityType, oldId],

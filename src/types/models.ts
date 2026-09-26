@@ -25,7 +25,7 @@ export interface Category extends BaseEntity {
 export interface SubCategory extends BaseEntity {
   name: string;
   description?: string;
-  categoryid: number;
+  categoryId: number;
   status?: 'active' | 'inactive';
   backendId?: number;
 }

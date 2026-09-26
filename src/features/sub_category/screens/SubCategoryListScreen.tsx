@@ -25,7 +25,7 @@ export const SubCategoryListScreen = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   
   const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
@@ -44,7 +44,7 @@ export const SubCategoryListScreen = () => {
       title: 'Category', 
       flex: 2,
       minWidth: 150,
-      render: (val: string) => {
+      render: (val: number) => {
         const cat = categories.find(c => c.id === val);
         return <Text style={{ color: theme.colors.textSecondary }}>{cat ? cat.name : 'Unknown'}</Text>;
       }
