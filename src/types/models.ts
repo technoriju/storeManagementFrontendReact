@@ -1,5 +1,5 @@
 export interface BaseEntity {
-  id: string;
+  id: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -17,39 +17,39 @@ export interface User extends BaseEntity {
 export interface Category extends BaseEntity {
   name: string;
   description?: string;
-  parentId?: string;
+  parentId?: number;
   /** Backend primary key. Local id can be temporary while offline. */
-  backendId?: string;
+  backendId?: number;
 }
 
 export interface SubCategory extends BaseEntity {
   name: string;
   description?: string;
-  categoryId: string;
+  categoryid: number;
   status?: 'active' | 'inactive';
-  backendId?: string;
+  backendId?: number;
 }
 
 export interface Unit extends BaseEntity {
   name: string;
   abbreviation: string;
-  backendId?: string;
+  backendId?: number;
 }
 
 export interface Brand extends BaseEntity {
   name: string;
   description?: string;
   status?: string;
-  backendId?: string;
+  backendId?: number;
 }
 
 export interface SubUnit extends BaseEntity {
   name: string;
-  parentUnitId?: string;
+  parentUnitId?: number;
   abbreviation?: string;
   multiplier?: number;
   status?: string;
-  backendId?: string;
+  backendId?: number;
 }
 
 export interface Product extends BaseEntity {
@@ -59,14 +59,14 @@ export interface Product extends BaseEntity {
   description?: string;
   price: number;
   cost: number;
-  categoryId?: string;
-  unitId?: string;
+  categoryId?: number;
+  unitId?: number;
   stockQuantity: number;
   lowStockThreshold?: number;
 }
 
 export interface Customer extends BaseEntity {
-  backendId?: string;
+  backendId?: number;
   name: string;
   email?: string;
   phone?: string;
@@ -76,7 +76,7 @@ export interface Customer extends BaseEntity {
 }
 
 export interface Supplier extends BaseEntity {
-  backendId?: string;
+  backendId?: number;
   name: string;
   contactName?: string;
   email?: string;
@@ -94,8 +94,8 @@ export interface Payment extends BaseEntity {
   type: PaymentType;
   reference?: string;
   notes?: string;
-  customerId?: string;
-  supplierId?: string;
+  customerId?: number;
+  supplierId?: number;
 }
 
 export interface Setting {
@@ -103,3 +103,5 @@ export interface Setting {
   value: string;
   updatedAt: string;
 }
+
+

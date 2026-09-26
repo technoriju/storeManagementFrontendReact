@@ -5,8 +5,8 @@ interface SubCategoryState {
   subCategories: SubCategory[];
   setSubCategories: (subCategories: SubCategory[]) => void;
   addSubCategory: (subCategory: SubCategory) => void;
-  updateSubCategory: (id: string, subCategory: Partial<SubCategory>) => void;
-  deleteSubCategory: (id: string) => void;
+  updateSubCategory: (id: number, subCategory: Partial<SubCategory>) => void;
+  deleteSubCategory: (id: number) => void;
 }
 
 export const useSubCategoryStore = create<SubCategoryState>((set) => ({
@@ -31,3 +31,4 @@ export const useSubCategoryStore = create<SubCategoryState>((set) => ({
     subCategories: state.subCategories.filter((c) => c.id !== id),
   })),
 }));
+

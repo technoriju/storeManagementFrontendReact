@@ -16,3 +16,5 @@ export const FilterBar = ({ children }: any) => {
 const styles = StyleSheet.create({
   container: { flexDirection: 'row' },
 });
+
+

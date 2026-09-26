@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Modal } from 'react-native';
-import { v4 as uuidv4 } from 'uuid';
+
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
 import { useSupplierStore } from '../store/supplierStore';
 import { Supplier } from '../../../types/models';
@@ -77,7 +77,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
         }
       } else {
         const newSupplier: Supplier = {
-          id: uuidv4(),
+          id: Math.floor(Math.random() * -1000000000),
           name: fullName,
           email,
           phone,
@@ -319,3 +319,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   }
 });
+
+
+

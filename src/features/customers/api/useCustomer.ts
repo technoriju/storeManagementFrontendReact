@@ -12,11 +12,9 @@ export const useCustomers = () => {
     queryFn: async () => {
       const localItems = await customerRepository.getAll();
 
-      if (localItems.some(item => item.syncStatus !== 'synced')) {
-        void customerRepository.fetchFromApi().then(async () => {
+      void customerRepository.fetchFromApi().then(async () => {
           queryClient.setQueryData(CUSTOMER_QUERY_KEY, await customerRepository.getAll());
         }).catch(() => undefined);
-      }
 
       return localItems;
     },
@@ -30,7 +28,7 @@ export const useAddCustomer = () => {
     mutationFn: async (data: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
       const newEntity: Customer = {
         ...data,
-        id: Math.random().toString(36).substring(7),
+        id: Math.floor(Math.random() * -1000000000),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending_insert',
@@ -73,7 +71,7 @@ export const useDeleteCustomer = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       await customerRepository.delete(id, true);
       return id;
     },
@@ -85,3 +83,6 @@ export const useDeleteCustomer = () => {
     },
   });
 };
+
+
+

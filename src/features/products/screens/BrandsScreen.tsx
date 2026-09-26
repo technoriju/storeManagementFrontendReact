@@ -30,3 +30,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: 'bold' },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });
+
+

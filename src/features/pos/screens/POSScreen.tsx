@@ -144,7 +144,7 @@ export const POSScreen = () => {
         </View>
         <FlatList
           data={filteredProducts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderProduct}
           numColumns={Platform.OS === 'web' ? 4 : 2}
           contentContainerStyle={styles.productList}
@@ -170,7 +170,7 @@ export const POSScreen = () => {
 
         <FlatList
           data={cart}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderCartItem}
           style={styles.cartList}
         />
@@ -407,3 +407,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+

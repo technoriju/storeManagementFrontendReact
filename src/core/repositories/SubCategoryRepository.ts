@@ -37,7 +37,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     }
   }
 
-  async delete(id: string, shouldSync = true): Promise<void> {
+  async delete(id: number, shouldSync = true): Promise<void> {
     const entity = await this.getById(id);
     if (!entity) return;
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
@@ -64,7 +64,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
 
   protected toRow(entity: SubCategory): any[] {
     return [
-      entity.id || Math.random().toString(36).substring(7),
+      entity.id || Math.floor(Math.random() * -1000000000),
       entity.backendId || null,
       entity.name || 'Unnamed SubCategory',
       entity.description || null,
@@ -208,8 +208,8 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       for (const rawItem of latestItems) {
         try {
           const item: any = { ...rawItem };
-          item.backendId = String(item.backendId || item.serverId || item.subcategoryId || item.subcategory_id || item.sub_category_id || item._id || item.id || '');
-          item.id = String(item.id || item.backendId || Math.random().toString(36).substring(7));
+          item.backendId = Number(item.backendId || item.serverId || item.subcategoryId || item.subcategory_id || item.sub_category_id || item._id || item.id || '');
+          item.id = Number(item.id || item.backendId || Math.floor(Math.random() * -1000000000));
           item.name = item.name || item.subCategoryName || item.sub_category_name || item.subCategory || item.subcategory || item.sub_category || item.title || 'Unnamed SubCategory';
           item.description = item.description || null;
           item.categoryId = String(item.categoryId || item.category_id || item.category?._id || item.category?.id || (typeof item.category === 'string' ? item.category : ''));
@@ -242,3 +242,6 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
 }
 
 export const subCategoryRepository = new SubCategoryRepository();
+
+
+

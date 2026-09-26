@@ -22,3 +22,5 @@ export const MobileHeader = ({ title, onMenuPress, rightContent }: any) => {
 const styles = StyleSheet.create({
   container: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, borderBottomWidth: 1 },
 });
+
+

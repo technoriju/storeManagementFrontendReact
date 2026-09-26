@@ -73,3 +73,5 @@ const styles = StyleSheet.create({
   date: { color: '#888', fontSize: 12, marginBottom: 4 },
   notes: { color: '#666', fontStyle: 'italic', marginTop: 4 }
 });
+
+

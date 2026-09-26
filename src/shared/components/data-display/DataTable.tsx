@@ -81,3 +81,5 @@ const styles = StyleSheet.create({
   cardLabel: { fontSize: 14, fontWeight: '500', flex: 1 },
   cardValue: { flex: 2, alignItems: 'flex-end' },
 });
+
+

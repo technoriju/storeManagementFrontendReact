@@ -37,7 +37,7 @@ export class CategoryRepository extends BaseRepository<Category> {
     }
   }
 
-  async delete(id: string, shouldSync = true): Promise<void> {
+  async delete(id: number, shouldSync = true): Promise<void> {
     const entity = await this.getById(id);
     if (!entity) return;
     await db.execute(`DELETE FROM categories WHERE id = ?`, [id]);
@@ -65,7 +65,7 @@ export class CategoryRepository extends BaseRepository<Category> {
 
   protected toRow(entity: Category): any[] {
     return [
-      entity.id || Math.random().toString(36).substring(7),
+      entity.id || Math.floor(Math.random() * -1000000000),
       entity.backendId || null,
       entity.name || 'Unnamed Category',
       entity.description || null,
@@ -197,8 +197,8 @@ export class CategoryRepository extends BaseRepository<Category> {
       for (const rawItem of latestItems) {
         try {
           const item: any = { ...rawItem };
-          item.backendId = String(item.backendId || item.serverId || item.categoryId || item._id || item.id || '');
-          item.id = String(item.id || item.backendId || Math.random().toString(36).substring(7));
+          item.backendId = Number(item.backendId || item.serverId || item.categoryId || item._id || item.id || '');
+          item.id = Number(item.id || item.backendId || Math.floor(Math.random() * -1000000000));
           item.name = item.name || item.categoryName || item.category_name || item.title || 'Unnamed Category';
           item.description = item.description || item.categoryDescription || item.category_description || null;
           item.syncStatus = 'synced';
@@ -235,3 +235,6 @@ export class CategoryRepository extends BaseRepository<Category> {
 }
 
 export const categoryRepository = new CategoryRepository();
+
+
+

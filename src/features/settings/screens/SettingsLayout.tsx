@@ -18,7 +18,7 @@ import { PrinterSettingsScreen } from './PrinterSettingsScreen';
 import { SyncSettingsScreen } from './SyncSettingsScreen';
 
 interface SettingRoute {
-  id: string;
+  id: number;
   label: string;
   group: string;
   permission: string;
@@ -229,3 +229,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   }
 });
+
+
+

@@ -159,3 +159,5 @@ const styles = StyleSheet.create({
   deleteButton: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   deleteText: { color: '#B91C1C', fontSize: 12, fontWeight: '600' },
 });
+
+

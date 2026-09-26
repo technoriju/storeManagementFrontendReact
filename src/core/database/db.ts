@@ -27,7 +27,7 @@ export const initializeDatabase = () => {
     // Users Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL,
         email TEXT NOT NULL,
         role TEXT NOT NULL,
@@ -42,11 +42,11 @@ export const initializeDatabase = () => {
     // Categories Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS categories (
-        id TEXT PRIMARY KEY,
-        backendId TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         name TEXT NOT NULL,
         description TEXT,
-        parentId TEXT,
+        parentId INTEGER,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         deletedAt TEXT,
@@ -55,7 +55,7 @@ export const initializeDatabase = () => {
     `);
 
     try {
-      db.execute('ALTER TABLE categories ADD COLUMN backendId TEXT;');
+      db.execute('ALTER TABLE categories ADD COLUMN backendId INTEGER;');
     } catch (e) {
       // Column might already exist, ignore
     }
@@ -70,11 +70,11 @@ export const initializeDatabase = () => {
     // SubCategories Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS sub_categories (
-        id TEXT PRIMARY KEY,
-        backendId TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         name TEXT NOT NULL,
         description TEXT,
-        categoryId TEXT NOT NULL,
+        categoryId INTEGER NOT NULL,
         status TEXT DEFAULT 'active',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
@@ -92,8 +92,8 @@ export const initializeDatabase = () => {
     // Units Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS units (
-        id TEXT PRIMARY KEY,
-        backendId TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         name TEXT NOT NULL,
         abbreviation TEXT NOT NULL,
         createdAt TEXT NOT NULL,
@@ -105,8 +105,8 @@ export const initializeDatabase = () => {
     // Brands Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS brands (
-        id TEXT PRIMARY KEY,
-        backendId TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         name TEXT NOT NULL,
         description TEXT,
         status TEXT DEFAULT 'Active',
@@ -118,10 +118,10 @@ export const initializeDatabase = () => {
 
     db.execute(`
       CREATE TABLE IF NOT EXISTS sub_units (
-        id TEXT PRIMARY KEY,
-        backendId TEXT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         name TEXT NOT NULL,
-        parentUnitId TEXT,
+        parentUnitId INTEGER,
         abbreviation TEXT,
         multiplier REAL DEFAULT 1,
         status TEXT DEFAULT 'Active',
@@ -132,11 +132,11 @@ export const initializeDatabase = () => {
     `);
 
     for (const statement of [
-      'ALTER TABLE units ADD COLUMN backendId TEXT',
-      'ALTER TABLE brands ADD COLUMN backendId TEXT',
+      'ALTER TABLE units ADD COLUMN backendId INTEGER',
+      'ALTER TABLE brands ADD COLUMN backendId INTEGER',
       'ALTER TABLE brands ADD COLUMN status TEXT DEFAULT \'Active\'',
-      'ALTER TABLE customers ADD COLUMN backendId TEXT',
-      'ALTER TABLE suppliers ADD COLUMN backendId TEXT',
+      'ALTER TABLE customers ADD COLUMN backendId INTEGER',
+      'ALTER TABLE suppliers ADD COLUMN backendId INTEGER',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -144,9 +144,9 @@ export const initializeDatabase = () => {
     // Unit Conversions Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS unit_conversions (
-        id TEXT PRIMARY KEY,
-        fromUnitId TEXT NOT NULL,
-        toUnitId TEXT NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fromunitId INTEGER NOT NULL,
+        tounitId INTEGER NOT NULL,
         multiplier REAL NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
@@ -157,7 +157,7 @@ export const initializeDatabase = () => {
     // Products Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS products (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         sku TEXT NOT NULL,
         barcode TEXT,
@@ -170,10 +170,10 @@ export const initializeDatabase = () => {
         wholesalePrice REAL,
         retailPrice REAL,
         mrp REAL,
-        categoryId TEXT,
-        brandId TEXT,
-        unitId TEXT,
-        subUnitId TEXT,
+        categoryId INTEGER,
+        brandId INTEGER,
+        unitId INTEGER,
+        subunitId INTEGER,
         conversionRate REAL,
         openingStock REAL DEFAULT 0,
         stockQuantity REAL NOT NULL DEFAULT 0,
@@ -187,7 +187,7 @@ export const initializeDatabase = () => {
     // Customers Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS customers (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         email TEXT,
         phone TEXT,
@@ -203,7 +203,7 @@ export const initializeDatabase = () => {
     // Suppliers Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS suppliers (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         contactName TEXT,
         email TEXT,
@@ -219,14 +219,14 @@ export const initializeDatabase = () => {
     // Payments Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS payments (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         amount REAL NOT NULL,
         method TEXT NOT NULL,
         type TEXT NOT NULL,
         reference TEXT,
         notes TEXT,
-        customerId TEXT,
-        supplierId TEXT,
+        customerId INTEGER,
+        supplierId INTEGER,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
@@ -236,9 +236,9 @@ export const initializeDatabase = () => {
     // Sales Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS sales (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         invoiceNumber TEXT NOT NULL,
-        customerId TEXT,
+        customerId INTEGER,
         subtotal REAL NOT NULL,
         discount REAL NOT NULL,
         gst REAL NOT NULL,
@@ -253,9 +253,9 @@ export const initializeDatabase = () => {
     // Sale Items Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS sale_items (
-        id TEXT PRIMARY KEY,
-        saleId TEXT NOT NULL,
-        productId TEXT NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        saleId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unitPrice REAL NOT NULL,
         discount REAL NOT NULL,
@@ -270,9 +270,9 @@ export const initializeDatabase = () => {
     // Purchases Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS purchases (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         invoiceNumber TEXT NOT NULL,
-        supplierId TEXT,
+        supplierId INTEGER,
         subtotal REAL NOT NULL,
         discount REAL NOT NULL,
         gst REAL NOT NULL,
@@ -287,9 +287,9 @@ export const initializeDatabase = () => {
     // Purchase Items Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS purchase_items (
-        id TEXT PRIMARY KEY,
-        purchaseId TEXT NOT NULL,
-        productId TEXT NOT NULL,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchaseId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
         quantity REAL NOT NULL,
         unitPrice REAL NOT NULL,
         discount REAL NOT NULL,
@@ -304,7 +304,7 @@ export const initializeDatabase = () => {
     // Expenses Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS expenses (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         category TEXT NOT NULL,
         amount REAL NOT NULL,
         date TEXT NOT NULL,
@@ -328,9 +328,9 @@ export const initializeDatabase = () => {
     // Outbox Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS outbox (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         entityType TEXT NOT NULL,
-        entityId TEXT NOT NULL,
+        entityId INTEGER NOT NULL,
         operation TEXT NOT NULL,
         payload TEXT,
         createdAt TEXT NOT NULL,
@@ -353,7 +353,7 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS tombstones (
         entityType TEXT NOT NULL,
-        entityId TEXT NOT NULL,
+        entityId INTEGER NOT NULL,
         deletedAt TEXT NOT NULL,
         PRIMARY KEY (entityType, entityId)
       );
@@ -365,4 +365,6 @@ export const initializeDatabase = () => {
     throw error;
   }
 };
+
+
 

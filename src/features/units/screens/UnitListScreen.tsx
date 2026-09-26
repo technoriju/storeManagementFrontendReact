@@ -28,7 +28,7 @@ export const UnitListScreen = () => {
   const [newUnitName, setNewUnitName] = useState('');
   const [newShortName, setNewShortName] = useState('');
   const [newUnitStatus, setNewUnitStatus] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const columns = [
     { 
@@ -299,3 +299,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+

@@ -28,3 +28,5 @@ const styles = StyleSheet.create({
   drawer: { height: '80%', width: '100%' },
   header: { padding: 16, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }
 });
+
+

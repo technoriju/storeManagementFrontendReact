@@ -1,8 +1,9 @@
 export interface SubUnit {
-  id: string;
-  parentUnitId: string;
+  id: number;
+  parentUnitId: number;
   name: string;
   shortName: string;
   createdAt: string;
   status: 'Active' | 'Inactive';
 }
+

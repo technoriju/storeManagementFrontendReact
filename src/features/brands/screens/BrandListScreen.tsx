@@ -27,7 +27,7 @@ export const BrandListScreen = () => {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newBrandName, setNewBrandName] = useState('');
   const [newBrandStatus, setNewBrandStatus] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const columns = [
     { 
@@ -282,3 +282,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+

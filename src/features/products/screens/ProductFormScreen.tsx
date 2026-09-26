@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, ScrollView, TextInput, TouchableOpacity, Pressa
 import { useTheme } from '../../../shared/theme/theme';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
-import { v4 as uuidv4 } from 'uuid';
+
 import { Product } from '../types';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AddCategoryModal } from '../components/AddCategoryModal';
@@ -73,34 +73,34 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [productType, setProductType] = useState('single');
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
   const [variants, setVariants] = useState([
-    { id: uuidv4(), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
+    { id: Math.floor(Math.random() * -1000000000), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
   ]);
   const [hasMultipleUnits, setHasMultipleUnits] = useState(false);
   const [subUnits, setSubUnits] = useState([
-    { id: uuidv4(), unit: '', value: '' }
+    { id: Math.floor(Math.random() * -1000000000), unit: '', value: '' }
   ]);
 
   const handleAddSubUnit = () => {
-    setSubUnits([...subUnits, { id: uuidv4(), unit: '', value: '' }]);
+    setSubUnits([...subUnits, { id: Math.floor(Math.random() * -1000000000), unit: '', value: '' }]);
   };
 
-  const handleRemoveSubUnit = (id: string) => {
+  const handleRemoveSubUnit = (id: number) => {
     setSubUnits(subUnits.filter(u => u.id !== id));
   };
 
-  const handleUpdateSubUnit = (id: string, field: string, val: any) => {
+  const handleUpdateSubUnit = (id: number, field: string, val: any) => {
     setSubUnits(subUnits.map(u => u.id === id ? { ...u, [field]: val } : u));
   };
 
   const handleAddVariant = () => {
-    setVariants([...variants, { id: uuidv4(), variation: '', value: '', sku: '', qty: 1, price: '' }]);
+    setVariants([...variants, { id: Math.floor(Math.random() * -1000000000), variation: '', value: '', sku: '', qty: 1, price: '' }]);
   };
 
-  const handleRemoveVariant = (id: string) => {
+  const handleRemoveVariant = (id: number) => {
     setVariants(variants.filter(v => v.id !== id));
   };
 
-  const handleUpdateVariant = (id: string, field: string, val: any) => {
+  const handleUpdateVariant = (id: number, field: string, val: any) => {
     setVariants(variants.map(v => v.id === id ? { ...v, [field]: val } : v));
   };
 
@@ -661,6 +661,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   }
 });
+
+
+
+
 
 
 

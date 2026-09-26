@@ -1,13 +1,13 @@
 import { db } from '../database/db';
-import { v4 as uuidv4 } from 'uuid';
+
 
 export type OutboxOperation = 'CREATE' | 'UPDATE' | 'DELETE';
 export type OutboxStatus = 'PENDING' | 'IN_FLIGHT' | 'FAILED';
 
 export interface OutboxItem {
-  id: string;
+  id: number;
   entityType: string;
-  entityId: string;
+  entityId: number;
   operation: OutboxOperation;
   payload?: string; // JSON string
   createdAt: string;
@@ -19,12 +19,12 @@ export interface OutboxItem {
 export const outboxRepo = {
   add: async (
     entityType: string,
-    entityId: string,
+    entityId: number,
     operation: OutboxOperation,
     payload?: any
   ): Promise<OutboxItem> => {
     const item: OutboxItem = {
-      id: uuidv4(),
+      id: Date.now(),
       entityType,
       entityId,
       operation,
@@ -65,32 +65,32 @@ export const outboxRepo = {
     return (res.rows as unknown as OutboxItem[]) || [];
   },
 
-  updateStatus: async (id: string, status: OutboxStatus, lastError?: string) => {
+  updateStatus: async (id: number, status: OutboxStatus, lastError?: string) => {
     await db.execute(
       `UPDATE outbox SET status = ?, lastError = ? WHERE id = ?`,
       [status, lastError || null, id]
     );
   },
 
-  incrementRetry: async (id: string, maxRetries: number = 3) => {
+  incrementRetry: async (id: number, maxRetries: number = 3) => {
     await db.execute(
       `UPDATE outbox SET retryCount = retryCount + 1, status = CASE WHEN retryCount + 1 >= ? THEN 'FAILED' ELSE 'PENDING' END WHERE id = ?`,
       [maxRetries, id]
     );
   },
 
-  remove: async (id: string) => {
+  remove: async (id: number) => {
     await db.execute(`DELETE FROM outbox WHERE id = ?`, [id]);
   },
 
-  removeForEntity: async (entityType: string, entityId: string) => {
+  removeForEntity: async (entityType: string, entityId: number) => {
     await db.execute(
       `DELETE FROM outbox WHERE entityType = ? AND entityId = ?`,
       [entityType, entityId]
     );
   },
 
-  rebaseEntity: async (entityType: string, oldId: string, newId: string, backendId: string) => {
+  rebaseEntity: async (entityType: string, oldid: number, newid: number, backendid: number) => {
     const res = await db.execute(
       `SELECT id, payload FROM outbox WHERE entityType = ? AND entityId = ?`,
       [entityType, oldId],
@@ -150,13 +150,13 @@ export const syncMetadataRepo = {
 };
 
 export const tombstoneRepo = {
-  add: async (entityType: string, entityId: string) => {
+  add: async (entityType: string, entityId: number) => {
     await db.execute(
       `INSERT OR IGNORE INTO tombstones (entityType, entityId, deletedAt) VALUES (?, ?, ?)`,
       [entityType, entityId, new Date().toISOString()]
     );
   },
-  isDeleted: async (entityType: string, entityId: string): Promise<boolean> => {
+  isDeleted: async (entityType: string, entityId: number): Promise<boolean> => {
     const res = await db.execute(
       `SELECT 1 FROM tombstones WHERE entityType = ? AND entityId = ?`,
       [entityType, entityId]
@@ -164,3 +164,5 @@ export const tombstoneRepo = {
     return (res.rows?.length || 0) > 0;
   },
 };
+
+

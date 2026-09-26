@@ -15,7 +15,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
   protected abstract getInsertPlaceholders(): string;
   protected abstract getUpdateSet(): string;
 
-  async getById(id: string): Promise<T | null> {
+  async getById(id: number): Promise<T | null> {
     const res = await db.execute(
       `SELECT * FROM ${this.tableName} WHERE id = ?`,
       [id]
@@ -87,7 +87,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
     }
   }
 
-  async delete(id: string, shouldSync = true): Promise<void> {
+  async delete(id: number, shouldSync = true): Promise<void> {
     const entity = await this.getById(id);
     if (!entity) return;
 
@@ -104,3 +104,4 @@ export abstract class BaseRepository<T extends BaseEntity> {
   // Pull from API to Local Database
   public abstract fetchFromApi(): Promise<unknown>;
 }
+

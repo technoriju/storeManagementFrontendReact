@@ -16,7 +16,7 @@ interface Props {
 
 export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
   const [currentScreen, setCurrentScreen] = useState<PurchaseScreenType>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   React.useEffect(() => {
     if (initialScreen === 'purchases') setCurrentScreen('list');
@@ -46,3 +46,5 @@ export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
 };
 
 const styles = StyleSheet.create({ container: { flex: 1 } });
+
+

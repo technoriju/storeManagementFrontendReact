@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { v4 as uuidv4 } from 'uuid';
+
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
@@ -35,7 +35,7 @@ export const PaymentFormScreen = ({ route, navigation }: any) => {
     try {
       const now = new Date().toISOString();
       const newPayment: Payment = {
-        id: uuidv4(),
+        id: Math.floor(Math.random() * -1000000000),
         amount: parsedAmount,
         method,
         type,
@@ -162,3 +162,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#28a745', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 24, marginBottom: 40 },
   buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
+
+
+

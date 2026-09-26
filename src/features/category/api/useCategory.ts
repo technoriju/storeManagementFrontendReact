@@ -10,13 +10,9 @@ export const useCategories = () => {
     queryKey: CATEGORY_QUERY_KEY,
     queryFn: async () => {
       const localCategories = await categoryRepository.getAll();
-      const hasOfflineData = localCategories.some(c => c.syncStatus !== 'synced');
-      
-      if (hasOfflineData) {
-        void categoryRepository.fetchFromApi().then(async () => {
+      void categoryRepository.fetchFromApi().then(async () => {
           queryClient.setQueryData(CATEGORY_QUERY_KEY, await categoryRepository.getAll());
-        });
-      }
+      });
       return localCategories;
     },
   });
@@ -29,7 +25,7 @@ export const useAddCategory = () => {
     mutationFn: async (data: Partial<Category>) => {
       const newCategory = {
         ...data,
-        id: data.id || Math.random().toString(36).substring(7), // Simple ID gen if not provided
+        id: data.id || Math.floor(Math.random() * -1000000000), // Simple ID gen if not provided
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending_insert'
@@ -51,7 +47,7 @@ export const useUpdateCategory = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Category> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Category> }) => {
       const existing = await categoryRepository.getById(id);
       
       const updated = {
@@ -81,7 +77,7 @@ export const useDeleteCategory = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       await categoryRepository.delete(id);
     },
     onSuccess: (_, deletedId) => {
@@ -93,3 +89,7 @@ export const useDeleteCategory = () => {
     },
   });
 };
+
+
+
+

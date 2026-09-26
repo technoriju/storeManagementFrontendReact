@@ -10,7 +10,7 @@ type Operation = 'insert' | 'update' | 'delete';
 export type CrudConfig<T extends BaseEntity> = {
   tableName: string;
   entityType: string;
-  endpoint: { BASE: string; BY_ID: (id: string | number) => string };
+  endpoint: { BASE: string; BY_ID: (id: number | number) => string };
   columns: string;
   placeholders: string;
   updateSet: string;
@@ -59,14 +59,14 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     }
   }
 
-  async delete(id: string, shouldSync = true) {
+  async delete(id: number, shouldSync = true) {
     const entity = await this.getById(id);
     if (!entity) return;
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (!shouldSync) return;
     await tombstoneRepo.add(this.config.entityType, id);
     await outboxRepo.removeForEntity(this.config.entityType, id);
-    if (/^\d+$/.test(String((entity as any).backendId || entity.id))) {
+    if (/^\d+$/.test(Number((entity as any).backendId || entity.id))) {
       await outboxRepo.add(this.config.entityType, id, 'DELETE', entity);
       this.requestSync();
     }
@@ -74,7 +74,7 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
 
   protected async syncWithApi(entity: T, operation: Operation) {
     const payload = this.config.payload(entity);
-    const serverId = String((entity as any).backendId || entity.id);
+    const serverId = Number((entity as any).backendId || entity.id);
     let response: any;
     if (operation === 'insert') response = await apiClient.post(this.config.endpoint.BASE, payload);
     if (operation === 'update') response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
@@ -83,8 +83,8 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     if (operation === 'insert') {
       const body = response?.data?.data || response?.data || {};
       const returnedId = body.id || body._id || body[`${this.config.tableName.slice(0, -1)}Id`];
-      if (returnedId && String(returnedId) !== String(entity.id)) {
-        await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [String(returnedId), String(returnedId), entity.id]);
+      if (returnedId && Number(returnedId) !== String(entity.id)) {
+        await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
         return;
       }
     }
@@ -130,5 +130,6 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
 }
 
 export const now = () => new Date().toISOString();
-export const idOf = (item: any, fallback?: string) => String(item.id || item._id || item.backendId || fallback || Math.random().toString(36).substring(7));
-export const endpointFor = (key: keyof typeof API_ENDPOINTS) => API_ENDPOINTS[key] as { BASE: string; BY_ID: (id: string | number) => string };
+export const idOf = (item: any, fallback?: number) => Number(item.id || item._id || item.backendId || fallback || Math.floor(Math.random() * -1000000000));
+export const endpointFor = (key: keyof typeof API_ENDPOINTS) => API_ENDPOINTS[key] as { BASE: string; BY_ID: (id: number | number) => string };
+

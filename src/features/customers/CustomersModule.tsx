@@ -10,7 +10,7 @@ export type CustomerScreenType = 'list' | 'details' | 'form' | 'payment_history'
 
 export const CustomersModule = () => {
   const [currentScreen, setCurrentScreen] = useState<CustomerScreenType>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const navigateTo = (screen: CustomerScreenType, id?: string) => {
     if (id !== undefined) setSelectedId(id);
@@ -39,3 +39,5 @@ export const CustomersModule = () => {
   );
 };
 const styles = StyleSheet.create({ container: { flex: 1 } });
+
+

@@ -1,6 +1,7 @@
 export interface Brand {
-  id: string;
+  id: number;
   name: string;
   createdAt: string;
   status: 'Active' | 'Inactive';
 }
+

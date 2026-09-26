@@ -22,7 +22,7 @@ export const SubCategoryListScreen = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -340,3 +340,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+

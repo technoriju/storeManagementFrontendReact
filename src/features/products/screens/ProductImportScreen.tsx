@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text, Alert, FlatList } from 'react-native';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import RNFS from 'react-native-fs';
@@ -8,7 +8,7 @@ import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { ProductScreenType } from '../ProductsModule';
 import { useProductStore } from '../store/productStore';
 import { Product } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+
 
 interface Props {
   onNavigate: (screen: ProductScreenType) => void;
@@ -125,7 +125,7 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
         const cost = Number(row.data['Purchase Price'] || row.data.Cost || 0);
 
         const newProduct: Product = {
-          id: uuidv4(),
+          id: Math.floor(Math.random() * -1000000000),
           name: String(name),
           sku: String(sku),
           price: price,
@@ -217,7 +217,7 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
                         {!item.isValid && (
                           <View style={styles.errorList}>
                             {item.errors.map((err, i) => (
-                              <Text key={i} style={{ color: theme.colors.error, fontSize: 12 }}>â€¢ {err}</Text>
+                              <Text key={i} style={{ color: theme.colors.error, fontSize: 12 }}>• {err}</Text>
                             ))}
                           </View>
                         )}
@@ -276,4 +276,7 @@ const styles = StyleSheet.create({
   resultContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   resultText: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 }
 });
+
+
+
 

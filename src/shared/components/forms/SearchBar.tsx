@@ -21,3 +21,5 @@ const styles = StyleSheet.create({
   container: { borderWidth: 1, paddingHorizontal: 12, height: 40, justifyContent: 'center' },
   input: { flex: 1, padding: 0 },
 });
+
+

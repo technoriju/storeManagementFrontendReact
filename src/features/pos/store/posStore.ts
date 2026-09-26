@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
+
 import { Product } from '../../products/types';
 
 export interface CartItem {
-  id: string; // unique id for the cart item
+  id: number; // unique id for the cart item
   product: Product;
   quantity: number;
   unit: string; // The unit used for this sale
@@ -13,13 +13,13 @@ export interface CartItem {
 }
 
 interface Customer {
-  id: string;
+  id: number;
   name: string;
   phone?: string;
 }
 
 interface HoldSale {
-  id: string;
+  id: number;
   timestamp: number;
   items: CartItem[];
   customer: Customer | null;
@@ -33,13 +33,13 @@ interface POSState {
   
   // Actions
   addToCart: (product: Product, quantity?: number, unit?: string) => void;
-  updateCartItem: (id: string, updates: Partial<CartItem>) => void;
-  removeFromCart: (id: string) => void;
+  updateCartItem: (id: number, updates: Partial<CartItem>) => void;
+  removeFromCart: (id: number) => void;
   clearCart: () => void;
   setCustomer: (customer: Customer | null) => void;
   
   holdCurrentSale: (name?: string) => void;
-  resumeSale: (holdSaleId: string) => void;
+  resumeSale: (holdSaleid: number) => void;
   
   // Computed values getters
   getSubtotal: () => number;
@@ -68,7 +68,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
       // Add new item
       const newItem: CartItem = {
-        id: uuidv4(),
+        id: Math.floor(Math.random() * -1000000000),
         product,
         quantity,
         unit: unit || product.unitId || '',
@@ -106,7 +106,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       if (state.cart.length === 0) return state;
 
       const newHoldSale: HoldSale = {
-        id: uuidv4(),
+        id: Math.floor(Math.random() * -1000000000),
         timestamp: Date.now(),
         items: [...state.cart],
         customer: state.customer,
@@ -161,3 +161,5 @@ export const usePOSStore = create<POSState>((set, get) => ({
     return getSubtotal() - getTotalDiscount() + getTotalGST();
   },
 }));
+
+

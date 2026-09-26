@@ -12,7 +12,7 @@ export type InventoryScreenType = 'dashboard' | 'list' | 'ledger' | 'adjustment'
 
 export const InventoryModule = () => {
   const [currentScreen, setCurrentScreen] = useState<InventoryScreenType>('dashboard');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const navigateTo = (screen: InventoryScreenType, id?: string) => {
     setSelectedId(id || null);
@@ -36,3 +36,5 @@ export const InventoryModule = () => {
 };
 
 const styles = StyleSheet.create({ container: { flex: 1 } });
+
+

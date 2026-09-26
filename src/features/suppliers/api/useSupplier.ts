@@ -12,11 +12,9 @@ export const useSuppliers = () => {
     queryFn: async () => {
       const localItems = await supplierRepository.getAll();
 
-      if (localItems.some(item => item.syncStatus !== 'synced')) {
-        void supplierRepository.fetchFromApi().then(async () => {
+      void supplierRepository.fetchFromApi().then(async () => {
           queryClient.setQueryData(SUPPLIER_QUERY_KEY, await supplierRepository.getAll());
         }).catch(() => undefined);
-      }
 
       return localItems;
     },
@@ -30,7 +28,7 @@ export const useAddSupplier = () => {
     mutationFn: async (data: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
       const newEntity: Supplier = {
         ...data,
-        id: Math.random().toString(36).substring(7),
+        id: Math.floor(Math.random() * -1000000000),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending_insert',
@@ -73,7 +71,7 @@ export const useDeleteSupplier = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       await supplierRepository.delete(id, true);
       return id;
     },
@@ -85,3 +83,6 @@ export const useDeleteSupplier = () => {
     },
   });
 };
+
+
+

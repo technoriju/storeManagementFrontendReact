@@ -10,7 +10,7 @@ export type SupplierScreenType = 'list' | 'details' | 'form' | 'payment_history'
 
 export const SuppliersModule = () => {
   const [currentScreen, setCurrentScreen] = useState<SupplierScreenType>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const navigateTo = (screen: SupplierScreenType, id?: string) => {
     if (id !== undefined) setSelectedId(id);
@@ -39,3 +39,5 @@ export const SuppliersModule = () => {
   );
 };
 const styles = StyleSheet.create({ container: { flex: 1 } });
+
+

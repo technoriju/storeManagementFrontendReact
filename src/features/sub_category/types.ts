@@ -1,5 +1,5 @@
 export interface SubCategory {
-  id: string;
+  id: number;
   image?: string;
   subCategory: string;
   category: string;
@@ -7,3 +7,4 @@ export interface SubCategory {
   description: string;
   status: 'Active' | 'Inactive';
 }
+

@@ -96,13 +96,13 @@ class SyncEngine {
 
     try {
       await this.processOutbox();
-      await categoryRepository.fetchFromApi();
-      await subCategoryRepository.fetchFromApi();
-      await brandRepository.fetchFromApi();
-      await unitRepository.fetchFromApi();
-      await subUnitRepository.fetchFromApi();
-      await customerRepository.fetchFromApi();
-      await supplierRepository.fetchFromApi();
+
+
+
+
+
+
+
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -162,7 +162,7 @@ class SyncEngine {
   }
 
   private async pullServerChanges() {
-    if (this.isOnline) await categoryRepository.fetchFromApi();
+
   }
 
   private async applyServerChange(entityType: string, item: any) {

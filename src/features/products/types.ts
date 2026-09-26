@@ -1,5 +1,5 @@
 export interface Product {
-  id: string;
+  id: number;
   name: string;
   sku: string;
   barcode?: string;
@@ -26,7 +26,7 @@ export interface Product {
 }
 
 export interface Category {
-  id: string;
+  id: number;
   name: string;
   description?: string;
   parentId?: string; // For subcategories
@@ -36,7 +36,7 @@ export interface Category {
 }
 
 export interface Brand {
-  id: string;
+  id: number;
   name: string;
   description?: string;
   createdAt: string;
@@ -45,7 +45,7 @@ export interface Brand {
 }
 
 export interface Unit {
-  id: string;
+  id: number;
   name: string;
   abbreviation: string;
   createdAt: string;
@@ -54,11 +54,12 @@ export interface Unit {
 }
 
 export interface UnitConversion {
-  id: string;
-  fromUnitId: string;
-  toUnitId: string;
+  id: number;
+  fromUnitid: number;
+  toUnitid: number;
   multiplier: number;
   createdAt: string;
   updatedAt: string;
   syncStatus: string;
 }
+

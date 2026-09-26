@@ -29,8 +29,8 @@ export const SubUnitListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [newParentUnitId, setNewParentUnitId] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [newParentUnitId, setNewParentUnitId] = useState<number | ''>('');
   const [newSubUnitName, setNewSubUnitName] = useState('');
   const [newShortName, setNewShortName] = useState('');
   const [newSubUnitStatus, setNewSubUnitStatus] = useState(true);
@@ -57,7 +57,7 @@ export const SubUnitListScreen = () => {
       title: 'Parent Unit', 
       flex: 1.5,
       minWidth: 120,
-      render: (value: string) => {
+      render: (value: number) => {
         const parent = units.find(u => u.id === value);
         return <Text style={{ color: theme.colors.textSecondary }}>{parent ? parent.name : '-'}</Text>;
       }
@@ -148,7 +148,7 @@ export const SubUnitListScreen = () => {
       <Pressable
         onPress={() => {
           setEditingId(item.id);
-          setNewParentUnitId(item.parentUnitId || '');
+          setNewParentUnitId(item.parentUnitId ? Number(item.parentUnitId) : '');
           setNewSubUnitName(item.name);
           setNewShortName(item.shortName || '');
           setNewSubUnitStatus(item.status === 'Active');
@@ -172,7 +172,7 @@ export const SubUnitListScreen = () => {
     if (editingId) {
       updateMutation.mutate({
         id: editingId,
-        parentUnitId: newParentUnitId,
+        parentUnitId: Number(newParentUnitId),
         name: newSubUnitName,
         shortName: newShortName,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
@@ -188,7 +188,7 @@ export const SubUnitListScreen = () => {
       });
     } else {
       addMutation.mutate({
-        parentUnitId: newParentUnitId,
+        parentUnitId: Number(newParentUnitId),
         name: newSubUnitName,
         shortName: newShortName,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
@@ -349,3 +349,5 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
+

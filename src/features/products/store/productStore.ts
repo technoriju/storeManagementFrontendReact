@@ -15,7 +15,7 @@ interface ProductState {
   setProducts: (products: Product[]) => void;
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
-  deleteProduct: (id: string) => void;
+  deleteProduct: (id: number) => void;
 
   setCategories: (categories: Category[]) => void;
   addCategory: (category: Category) => void;
@@ -74,3 +74,4 @@ export const useProductStore = create<ProductState>((set) => ({
     }
   },
 }));
+

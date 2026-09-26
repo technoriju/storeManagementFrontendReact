@@ -30,3 +30,5 @@ const styles = StyleSheet.create({
   container: { width: '100%' },
   input: { borderWidth: 1, height: 40, paddingHorizontal: 16 },
 });
+
+

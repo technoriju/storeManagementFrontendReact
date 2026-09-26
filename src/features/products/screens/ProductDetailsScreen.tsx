@@ -6,7 +6,7 @@ import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 
 interface Props {
-  productId: string;
+  productid: number;
   onNavigate: (screen: ProductScreenType, productId?: string) => void;
 }
 
@@ -86,3 +86,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'column', gap: 12 },
   actionBtn: { marginBottom: 12 }
 });
+
+
+

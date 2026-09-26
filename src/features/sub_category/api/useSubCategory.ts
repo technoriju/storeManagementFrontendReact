@@ -33,7 +33,7 @@ export const useAddSubCategory = () => {
     mutationFn: async (data: Omit<SubCategory, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
       const newEntity: SubCategory = {
         ...data,
-        id: Math.random().toString(36).substring(7),
+        id: Math.floor(Math.random() * -1000000000),
         status: data.status || 'active',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -77,7 +77,7 @@ export const useDeleteSubCategory = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       await subCategoryRepository.delete(id, true);
       return id;
     },
@@ -89,3 +89,5 @@ export const useDeleteSubCategory = () => {
     },
   });
 };
+
+

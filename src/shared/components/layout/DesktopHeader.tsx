@@ -18,3 +18,5 @@ export const DesktopHeader = ({ title, rightContent }: any) => {
 const styles = StyleSheet.create({
   container: { height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, borderBottomWidth: 1 },
 });
+
+

@@ -13,3 +13,5 @@ export const CategoryModule = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 });
+
+
