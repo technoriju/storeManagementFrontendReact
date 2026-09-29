@@ -83,8 +83,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     if (operation === 'insert') {
       const body = response?.data?.data || response?.data || {};
       const returnedId = body.id || body._id || body[`${this.config.tableName.slice(0, -1)}Id`];
-      if (returnedId && Number(returnedId) !== String(entity.id)) {
+      if (returnedId && String(returnedId) !== String(entity.id)) {
         await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
+        await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
         return;
       }
     }
