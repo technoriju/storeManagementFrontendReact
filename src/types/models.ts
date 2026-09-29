@@ -71,7 +71,7 @@ export interface Customer extends BaseEntity {
   phone?: string;
   address?: string;
   taxId?: string;
-  outstandingBalance?: number;
+  gstin?: string;
 }
 
 export interface Supplier extends BaseEntity {

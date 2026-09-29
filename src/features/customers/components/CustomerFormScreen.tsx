@@ -24,6 +24,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
   const [state, setState] = useState('');
   const [country, setCountry] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [gstin, setGstin] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
         setEmail(customer.email || '');
         setPhone(customer.phone || '');
         setAddress(customer.address || '');
+        setGstin(customer.gstin || '');
       }
     } catch (e) {
       console.error(e);
@@ -68,6 +70,8 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
             email,
             phone,
             address: fullAddress,
+            gstin,
+            
             updatedAt: now,
             syncStatus: 'pending_update'
           };
@@ -81,7 +85,9 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
           email,
           phone,
           address: fullAddress,
-          outstandingBalance: 0,
+          
+          gstin,
+          
           createdAt: now,
           updatedAt: now,
           syncStatus: 'pending_insert'
@@ -156,6 +162,11 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
                 <Text style={styles.label}>Postal Code <Text style={styles.asterisk}>*</Text></Text>
                 <TextInput style={styles.input} value={postalCode} onChangeText={setPostalCode} />
               </View>
+            </View>
+
+            <View style={styles.fullCol}>
+              <Text style={styles.label}>GSTIN</Text>
+              <TextInput style={styles.input} value={gstin} onChangeText={setGstin} autoCapitalize="characters" />
             </View>
 
             {/* Status Toggle */}

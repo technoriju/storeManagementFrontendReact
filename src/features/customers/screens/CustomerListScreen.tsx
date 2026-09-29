@@ -35,7 +35,7 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       title: 'Code', 
       width: 100,
       render: (value: any, item: any) => {
-        const code = `CU${String((item.id?.charCodeAt(0) || 0) % 999).padStart(3, '0')}`;
+        const code = `CU${String((String(item.id).charCodeAt(0) || 0) % 999).padStart(3, '0')}`;
         return <Text style={{ color: theme.colors.textSecondary }}>{code}</Text>;
       }
     },

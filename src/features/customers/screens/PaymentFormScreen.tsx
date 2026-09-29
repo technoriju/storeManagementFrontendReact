@@ -53,10 +53,8 @@ export const PaymentFormScreen = ({ route, navigation }: any) => {
       if (customerId) {
         const customer = await customerRepository.getById(customerId);
         if (customer) {
-          const balanceChange = type === 'receive' ? -parsedAmount : parsedAmount;
           const updatedCustomer = {
             ...customer,
-            outstandingBalance: (customer.outstandingBalance || 0) + balanceChange,
             updatedAt: now,
             syncStatus: 'pending_update' as const
           };

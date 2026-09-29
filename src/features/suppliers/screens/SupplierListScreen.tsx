@@ -36,7 +36,7 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
       width: 100,
       render: (value: any, item: any, index?: number) => {
         // Generating a dummy code based on ID or index, assuming simple string
-        const code = `SU${String((item.id?.charCodeAt(0) || 0) % 999).padStart(3, '0')}`;
+        const code = `SU${String((String(item.id).charCodeAt(0) || 0) % 999).padStart(3, '0')}`;
         return <Text style={{ color: theme.colors.textSecondary }}>{code}</Text>;
       }
     },

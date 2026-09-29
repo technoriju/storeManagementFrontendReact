@@ -44,8 +44,7 @@ export const CustomerDetailsScreen = ({ route, navigation }: any) => {
         <Text style={styles.label}>Email: <Text style={styles.value}>{customer.email || 'N/A'}</Text></Text>
         <Text style={styles.label}>Phone: <Text style={styles.value}>{customer.phone || 'N/A'}</Text></Text>
         <Text style={styles.label}>Address: <Text style={styles.value}>{customer.address || 'N/A'}</Text></Text>
-        <Text style={styles.label}>Tax ID: <Text style={styles.value}>{customer.taxId || 'N/A'}</Text></Text>
-        <Text style={styles.label}>Outstanding Balance: <Text style={styles.balance}>${customer.outstandingBalance || 0}</Text></Text>
+        <Text style={styles.label}>GSTIN: <Text style={styles.value}>{customer.gstin || 'N/A'}</Text></Text>
       </View>
 
       <TouchableOpacity 

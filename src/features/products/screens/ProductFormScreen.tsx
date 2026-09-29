@@ -12,6 +12,8 @@ import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { AppRadio } from '../../../shared/components/forms/AppRadio';
 import { AppCheckbox } from '../../../shared/components/forms/AppCheckbox';
 import { Info, ChevronDown, Image as ImageIcon, Plus, Trash2, Edit, Eye, Minus, Check, Settings, LayoutGrid, ArrowLeft } from 'lucide-react-native';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 
 interface Props {
   productId?: string | null;
@@ -72,6 +74,90 @@ const EditorField = () => (
 export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) => {
   const [productType, setProductType] = useState('single');
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+
+  const [categories, setCategories] = useState<{label: string, value: string}[]>([]);
+  const [subCategories, setSubCategories] = useState<{label: string, value: string}[]>([]);
+  const [brands, setBrands] = useState<{label: string, value: string}[]>([]);
+  const [units, setUnits] = useState<{label: string, value: string}[]>([]);
+  const [subUnitsList, setSubUnitsList] = useState<{label: string, value: string}[]>([]);
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [selectedUnit, setSelectedUnit] = useState<string>('');
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const [catRes, brandRes, unitRes] = await Promise.all([
+          apiClient.get(API_ENDPOINTS.CATEGORIES.BASE),
+          apiClient.get(API_ENDPOINTS.BRANDS.BASE),
+          apiClient.get(API_ENDPOINTS.UNITS.BASE)
+        ]);
+        
+        const getList = (res: any) => (res.data?.data || res.data || []);
+        
+        let cats = getList(catRes).map((c: any) => ({ label: c.name, value: c.id?.toString() }));
+        if (cats.length === 0) cats = [{label: 'Test Category', value: '1'}, {label: 'Electronics', value: '2'}];
+        
+        let brnds = getList(brandRes).map((b: any) => ({ label: b.name, value: b.id?.toString() }));
+        if (brnds.length === 0) brnds = [{label: 'Test Brand', value: '1'}];
+        
+        let unts = getList(unitRes).map((u: any) => ({ label: u.name || u.abbreviation, value: u.id?.toString() }));
+        if (unts.length === 0) unts = [{label: 'Box', value: '1'}, {label: 'Dozen', value: '2'}];
+        
+        setCategories(cats);
+        setBrands(brnds);
+        setUnits(unts);
+      } catch (error) {
+        console.error("Error fetching form data:", error);
+        setCategories([{label: 'Test Category', value: '1'}, {label: 'Electronics', value: '2'}]);
+        setBrands([{label: 'Test Brand', value: '1'}]);
+        setUnits([{label: 'Box', value: '1'}, {label: 'Dozen', value: '2'}]);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCategory) {
+      setSubCategories([]);
+      return;
+    }
+    const fetchSub = async () => {
+      try {
+        const res = await apiClient.get(`${API_ENDPOINTS.SUBCATEGORIES.BASE}?category_id=${selectedCategory}`);
+        const list = res.data?.data || res.data || [];
+        let subs = list.map((c: any) => ({ label: c.name, value: c.id?.toString() }));
+        if (subs.length === 0) subs = [{label: 'Test Subcategory', value: '1'}];
+        setSubCategories(subs);
+      } catch (error) {
+        console.error("Error fetching subcategories:", error);
+        setSubCategories([{label: 'Test Subcategory', value: '1'}]);
+      }
+    };
+    fetchSub();
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (!selectedUnit) {
+      setSubUnitsList([]);
+      return;
+    }
+    const fetchSubUnits = async () => {
+      try {
+        const res = await apiClient.get(`${API_ENDPOINTS.SUBUNITS.BASE}?unit_id=${selectedUnit}`);
+        const list = res.data?.data || res.data || [];
+        let subs = list.map((u: any) => ({ label: u.name, value: u.id?.toString() }));
+        if (subs.length === 0) subs = [{label: 'Test Subunit', value: '1'}];
+        setSubUnitsList(subs);
+      } catch (error) {
+        console.error("Error fetching subunits:", error);
+        setSubUnitsList([{label: 'Test Subunit', value: '1'}]);
+      }
+    };
+    fetchSubUnits();
+  }, [selectedUnit]);
   const [variants, setVariants] = useState([
     { id: Math.floor(Math.random() * -1000000000), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
   ]);
@@ -121,15 +207,15 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         {/* PRODUCT INFORMATION CARD */}
         <Card title="Product Information" icon={<Info size={18} color={ORANGE} />}>
           <View style={styles.grid2}>
-            <FormGroup width="50%" label="Store">
+            {/* <FormGroup width="50%" label="Store">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Volt Vault" containerStyle={{ marginBottom: 0 }} />
-            </FormGroup>
-            <FormGroup width="50%" label="Warehouse">
+            </FormGroup> */}
+            {/* <FormGroup width="50%" label="Warehouse">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
-            </FormGroup>
+            </FormGroup> */}
 
             <FormGroup width="50%" label="Product Name">
-              <AppInput containerStyle={{ marginBottom: 0 }} />
+              <AppInput placeholder="Product Name" containerStyle={{ marginBottom: 0 }} />
             </FormGroup>
             <FormGroup width="50%" label="Slug">
               <AppInput placeholder="slug" containerStyle={{ marginBottom: 0 }} />
@@ -138,9 +224,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             <FormGroup width="50%" label="SKU">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><View style={{flex: 1}}><AppInput containerStyle={{ marginBottom: 0 }} /></View><AppButton title="Generate" style={{ borderRadius: 6, height: 48 }} /></View>
             </FormGroup>
-            <FormGroup width="50%" label="Selling Type">
+            {/* <FormGroup width="50%" label="Selling Type">
               <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}, {label: 'test', value: '3'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} isMulti={true} />
-            </FormGroup>
+            </FormGroup> */}
 
             <FormGroup 
               width="50%"
@@ -152,17 +238,41 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 </TouchableOpacity>
               }
             >
-              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+              <AppSelect 
+                options={categories} 
+                placeholder="Select" 
+                containerStyle={{ marginBottom: 0 }} 
+                value={selectedCategory}
+                onSelect={setSelectedCategory}
+              />
             </FormGroup>
             <FormGroup width="50%" label="Sub Category">
-              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+              <AppSelect 
+                options={subCategories} 
+                placeholder="Select" 
+                containerStyle={{ marginBottom: 0 }} 
+                value={selectedSubCategory}
+                onSelect={setSelectedSubCategory}
+              />
             </FormGroup>
 
             <FormGroup width="50%" label="Brand">
-              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+              <AppSelect 
+                options={brands} 
+                placeholder="Select" 
+                containerStyle={{ marginBottom: 0 }} 
+                value={selectedBrand}
+                onSelect={setSelectedBrand}
+              />
             </FormGroup>
             <FormGroup width="50%" label="Base Unit">
-              <AppSelect options={[{label: 'Option 1', value: '1'}, {label: 'Option 2', value: '2'}]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
+              <AppSelect 
+                options={units} 
+                placeholder="Select" 
+                containerStyle={{ marginBottom: 0 }} 
+                value={selectedUnit}
+                onSelect={setSelectedUnit}
+              />
             </FormGroup>
             
             <FormGroup width="50%" label="Multiple Units">
@@ -183,7 +293,13 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     {subUnits.map((item) => (
                       <View style={styles.tableRow} key={item.id}>
                         <View style={[styles.tableCell, {flex: 2}]}>
-                          <AppSelect options={[{label: 'Box', value: 'box'}, {label: 'Dozen', value: 'dozen'}]} placeholder="Select" containerStyle={{marginBottom: 0}} />
+                          <AppSelect 
+                            options={subUnitsList} 
+                            placeholder="Select" 
+                            containerStyle={{marginBottom: 0}} 
+                            value={item.unit}
+                            onSelect={(val: string) => handleUpdateSubUnit(item.id, 'unit', val)}
+                          />
                         </View>
                         <View style={[styles.tableCell, {flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8}]}>
                           <Text style={{color: '#888888'}}>=</Text>
