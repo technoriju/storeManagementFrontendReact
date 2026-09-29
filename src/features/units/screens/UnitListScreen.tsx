@@ -17,6 +17,16 @@ import {
   ChevronDown
 } from 'lucide-react-native';
 
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return value;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
 export const UnitListScreen = () => {
   const theme = useTheme();
   const { data: units = [], isLoading: isLoadingUnits, refetch } = useUnits();
@@ -32,10 +42,17 @@ export const UnitListScreen = () => {
 
   const columns = [
     { 
-      key: 'shortName', 
-      title: 'Short name', 
+      key: 'name', 
+      title: 'Unit', 
       flex: 2,
       minWidth: 150,
+      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+    },
+    { 
+      key: 'shortName', 
+      title: 'Short name', 
+      flex: 1.5,
+      minWidth: 100,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
     },
     { 
@@ -43,7 +60,7 @@ export const UnitListScreen = () => {
       title: 'Created Date', 
       flex: 1.5,
       minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{formatDate(value)}</Text>
     },
     { 
       key: 'status', 

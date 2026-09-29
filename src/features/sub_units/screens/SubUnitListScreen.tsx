@@ -19,6 +19,16 @@ import {
   ChevronDown
 } from 'lucide-react-native';
 
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return value;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
 export const SubUnitListScreen = () => {
   const theme = useTheme();
   const { data: subUnits = [], isLoading: isLoadingSubUnits, refetch } = useSubUnits();
@@ -51,7 +61,7 @@ export const SubUnitListScreen = () => {
       flex: 1.5,
       minWidth: 150,
       render: (value: number, item: any) => {
-        const parent = units.find(u => u.id === item.parentUnitId);
+        const parent = units.find(u => String(u.id) === String(item?.parentUnitId) || (u.backendId && String(u.backendId) === String(item?.parentUnitId)));
         if (!parent) return <Text style={{ color: theme.colors.textSecondary }}>-</Text>;
         return <Text style={{ color: theme.colors.textSecondary, fontWeight: '500' }}>1 {parent.name} = {value || 1} {item.name}</Text>;
       }
@@ -62,7 +72,7 @@ export const SubUnitListScreen = () => {
       flex: 1.5,
       minWidth: 120,
       render: (value: number) => {
-        const parent = units.find(u => u.id === value);
+        const parent = units.find(u => String(u.id) === String(value) || (u.backendId && String(u.backendId) === String(value)));
         return <Text style={{ color: theme.colors.textSecondary }}>{parent ? parent.name : '-'}</Text>;
       }
     },
@@ -71,23 +81,26 @@ export const SubUnitListScreen = () => {
       title: 'Created Date', 
       flex: 1.5,
       minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{formatDate(value)}</Text>
     },
     { 
       key: 'status', 
       title: 'Status', 
       width: 100,
-      render: (value: string) => (
-        <View style={{ 
-          backgroundColor: value === 'Active' ? '#10B981' : theme.colors.error, 
-          paddingHorizontal: 8, 
-          paddingVertical: 4, 
-          borderRadius: 4, 
-          alignSelf: 'flex-start' 
-        }}>
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>• {value}</Text>
-        </View>
-      )
+      render: (value: string) => {
+        const isActive = String(value || '').toLowerCase() === 'active';
+        return (
+          <View style={{ 
+            backgroundColor: isActive ? '#10B981' : theme.colors.error, 
+            paddingHorizontal: 8, 
+            paddingVertical: 4, 
+            borderRadius: 4, 
+            alignSelf: 'flex-start' 
+          }}>
+            <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>• {value || (isActive ? 'Active' : 'Inactive')}</Text>
+          </View>
+        );
+      }
     }
   ];
 
@@ -152,10 +165,10 @@ export const SubUnitListScreen = () => {
       <Pressable
         onPress={() => {
           setEditingId(item.id);
-          setNewParentUnitId(item.parentUnitId ? Number(item.parentUnitId) : '');
-          setNewSubUnitName(item.name);
+          setNewParentUnitId(item.parentUnitId !== undefined && item.parentUnitId !== null && item.parentUnitId !== '' ? Number(item.parentUnitId) : '');
+          setNewSubUnitName(item.name || '');
           setNewMultiplier(item.multiplier ? String(item.multiplier) : '1');
-          setNewSubUnitStatus(item.status === 'Active');
+          setNewSubUnitStatus(String(item.status || '').toLowerCase() === 'active');
           setIsAddModalVisible(true);
         }}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
@@ -177,7 +190,7 @@ export const SubUnitListScreen = () => {
       updateMutation.mutate({
         id: editingId,
         parentUnitId: Number(newParentUnitId),
-        name: newSubUnitName,
+        name: newSubUnitName.trim(),
         multiplier: Number(newMultiplier) || 1,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
       } as SubUnit, {
@@ -189,11 +202,14 @@ export const SubUnitListScreen = () => {
           setEditingId(null);
           setIsAddModalVisible(false);
         },
+        onError: (err: any) => {
+          Alert.alert('Error', err?.message || 'Failed to update sub unit');
+        }
       });
     } else {
       addMutation.mutate({
         parentUnitId: Number(newParentUnitId),
-        name: newSubUnitName,
+        name: newSubUnitName.trim(),
         multiplier: Number(newMultiplier) || 1,
         status: newSubUnitStatus ? 'Active' : 'Inactive',
       }, {
@@ -204,13 +220,20 @@ export const SubUnitListScreen = () => {
           setNewSubUnitStatus(true);
           setIsAddModalVisible(false);
         },
+        onError: (err: any) => {
+          Alert.alert('Error', err?.message || 'Failed to add sub unit');
+        }
       });
     }
   };
 
-  const filteredSubUnits = subUnits.filter(su => 
-    su.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredSubUnits = subUnits.filter(su => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    const parent = units.find(u => String(u.id) === String(su.parentUnitId) || (u.backendId && String(u.backendId) === String(su.parentUnitId)));
+    const parentName = parent ? parent.name : '';
+    return (su.name || '').toLowerCase().includes(query) || parentName.toLowerCase().includes(query);
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

@@ -103,7 +103,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         let brnds = getList(brandRes).map((b: any) => ({ label: b.name, value: b.id?.toString() }));
         if (brnds.length === 0) brnds = [{label: 'Test Brand', value: '1'}];
         
-        let unts = getList(unitRes).map((u: any) => ({ label: u.name || u.abbreviation, value: u.id?.toString() }));
+        let unts = getList(unitRes).map((u: any) => ({ label: u.name || u.shortName, value: u.id?.toString() }));
         if (unts.length === 0) unts = [{label: 'Box', value: '1'}, {label: 'Dozen', value: '2'}];
         
         setCategories(cats);

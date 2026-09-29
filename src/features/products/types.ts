@@ -47,7 +47,7 @@ export interface Brand {
 export interface Unit {
   id: number;
   name: string;
-  abbreviation: string;
+  shortName: string;
   createdAt: string;
   updatedAt: string;
   syncStatus: string;

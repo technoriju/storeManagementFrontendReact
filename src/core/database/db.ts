@@ -95,7 +95,7 @@ export const initializeDatabase = () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         backendId INTEGER,
         name TEXT NOT NULL,
-        abbreviation TEXT NOT NULL,
+        shortName TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
@@ -131,9 +131,14 @@ export const initializeDatabase = () => {
     `);
 
     for (const statement of [
+      'ALTER TABLE units RENAME COLUMN abbreviation TO shortName',
       'ALTER TABLE units ADD COLUMN backendId INTEGER',
       'ALTER TABLE brands ADD COLUMN backendId INTEGER',
       'ALTER TABLE brands ADD COLUMN status TEXT DEFAULT \'Active\'',
+      'ALTER TABLE sub_units ADD COLUMN backendId INTEGER',
+      'ALTER TABLE sub_units ADD COLUMN multiplier REAL DEFAULT 1',
+      'ALTER TABLE sub_units ADD COLUMN parentUnitId INTEGER',
+      'ALTER TABLE sub_units ADD COLUMN status TEXT DEFAULT \'Active\'',
       'ALTER TABLE customers ADD COLUMN backendId INTEGER',
       'ALTER TABLE suppliers ADD COLUMN backendId INTEGER',
     ]) {

@@ -32,7 +32,7 @@ export interface SubCategory extends BaseEntity {
 
 export interface Unit extends BaseEntity {
   name: string;
-  abbreviation: string;
+  shortName: string;
   backendId?: number;
 }
 

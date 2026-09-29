@@ -1,10 +1,32 @@
 const storageKey = 'billing_app.sqlite.mock';
-const tables = ['users', 'categories', 'units', 'brands', 'products', 'customers', 'suppliers', 'payments', 'sales', 'sale_items', 'purchases', 'purchase_items', 'expenses', 'settings', 'outbox', 'sync_metadata', 'tombstones'];
+const tables = [
+  'users',
+  'categories',
+  'sub_categories',
+  'units',
+  'brands',
+  'sub_units',
+  'unit_conversions',
+  'products',
+  'customers',
+  'suppliers',
+  'payments',
+  'sales',
+  'sale_items',
+  'purchases',
+  'purchase_items',
+  'expenses',
+  'settings',
+  'outbox',
+  'sync_metadata',
+  'tombstones',
+];
 
 const load = () => {
   try {
     const saved = JSON.parse(globalThis.localStorage?.getItem(storageKey) || '{}');
-    return Object.fromEntries(tables.map((table) => [table, saved[table] || []]));
+    const allTableKeys = Array.from(new Set([...tables, ...Object.keys(saved)]));
+    return Object.fromEntries(allTableKeys.map((table) => [table, saved[table] || []]));
   } catch {
     return Object.fromEntries(tables.map((table) => [table, []]));
   }
@@ -18,7 +40,8 @@ export const open = () => {
     const sql = query.replace(/\s+/g, ' ').trim();
     const tableMatch = sql.match(/(?:FROM|INTO|UPDATE|TABLE) ([a-z_]+)/i);
     const table = tableMatch?.[1]?.toLowerCase();
-    if (!table || !data[table]) return { rows: [] };
+    if (!table) return { rows: [] };
+    if (!data[table]) data[table] = [];
     if (/^CREATE TABLE|^ALTER TABLE/i.test(sql)) return { rows: [] };
 
     if (/^SELECT COUNT\(\*\)/i.test(sql)) {
@@ -44,8 +67,8 @@ export const open = () => {
     if (/^INSERT/i.test(sql)) {
       const columns = sql.match(/\(([^)]+)\)/)?.[1].split(',').map((value) => value.trim()) || [];
       const row = Object.fromEntries(columns.map((column, index) => [column, args[index]]));
-      const index = data[table].findIndex((item) => item.id === row.id);
-      if (index >= 0 && /OR REPLACE/i.test(sql)) data[table][index] = { ...data[table][index], ...row };
+      const index = data[table].findIndex((item) => String(item.id) === String(row.id));
+      if (index >= 0) data[table][index] = { ...data[table][index], ...row };
       else data[table].push(row);
       save(data);
       return { rows: [] };

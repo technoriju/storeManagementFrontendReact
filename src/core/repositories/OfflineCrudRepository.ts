@@ -82,7 +82,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
 
     if (operation === 'insert') {
       const body = response?.data?.data || response?.data || {};
-      const returnedId = body.id || body._id || body[`${this.config.tableName.slice(0, -1)}Id`];
+      const entityName = this.config.tableName.slice(0, -1);
+      const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+      const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`];
       if (returnedId && String(returnedId) !== String(entity.id)) {
         await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
         await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
@@ -106,13 +108,19 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
       if (Array.isArray(value)) return value;
       if (!value || typeof value !== 'object') return [];
       for (const key of ['data', 'items', 'results', 'rows', 'records']) {
-        const found = findItems(value[key]);
-        if (found.length) return found;
+        if (value[key]) {
+          const found = findItems(value[key]);
+          if (found.length) return found;
+        }
+      }
+      for (const val of Object.values(value)) {
+        if (Array.isArray(val)) return val;
       }
       return [];
     };
     const normalized: T[] = [];
     for (const raw of findItems(response.data)) {
+      if (raw.deletedAt) continue;
       const item = this.config.normalize(raw);
       const existing = await super.getById(item.id);
       if (existing) await super.update(item, false);
