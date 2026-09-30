@@ -20,7 +20,7 @@ import {
 } from 'lucide-react-native';
 
 interface Props {
-  onNavigate: (screen: ProductScreenType, productId?: string) => void;
+  onNavigate: (screen: ProductScreenType, productId?: string | number) => void;
 }
 
 export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
@@ -69,9 +69,9 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     },
     { 
       key: 'price', 
-      title: 'Price', 
+      title: 'Price (₹)', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'unitId', 

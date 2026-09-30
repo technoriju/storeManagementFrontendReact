@@ -21,8 +21,8 @@ export const ProductsModule = () => {
   const [currentScreen, setCurrentScreen] = useState<ProductScreenType>('list');
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
 
-  const navigateTo = (screen: ProductScreenType, productId?: string) => {
-    setSelectedProductId(productId || null);
+  const navigateTo = (screen: ProductScreenType, productId?: string | number) => {
+    setSelectedProductId(productId !== undefined && productId !== null ? Number(productId) : null);
     setCurrentScreen(screen);
   };
 

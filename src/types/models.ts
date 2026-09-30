@@ -55,13 +55,24 @@ export interface Product extends BaseEntity {
   name: string;
   sku: string;
   barcode?: string;
+  hsn?: string;
+  gst?: number;
   description?: string;
   price: number;
   cost: number;
+  purchasePrice?: number;
+  wholesalePrice?: number;
+  retailPrice?: number;
+  mrp?: number;
   categoryId?: number;
+  brandId?: number;
   unitId?: number;
+  subunitId?: number;
+  conversionRate?: number;
+  openingStock?: number;
   stockQuantity: number;
   lowStockThreshold?: number;
+  backendId?: number;
 }
 
 export interface Customer extends BaseEntity {

@@ -6,8 +6,8 @@ import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 
 interface Props {
-  productid: number;
-  onNavigate: (screen: ProductScreenType, productId?: string) => void;
+  productId: number;
+  onNavigate: (screen: ProductScreenType, productId?: number | string) => void;
 }
 
 export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate }) => {
@@ -53,12 +53,12 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
           <InfoRow label="HSN Code" value={product.hsn} />
           <InfoRow label="GST (%)" value={product.gst} />
           
-          <InfoRow label="Cost" value={`$${product.cost.toFixed(2)}`} />
-          <InfoRow label="Selling Price" value={`$${product.price.toFixed(2)}`} />
-          <InfoRow label="Purchase Price" value={product.purchasePrice ? `$${product.purchasePrice.toFixed(2)}` : '-'} />
-          <InfoRow label="Wholesale Price" value={product.wholesalePrice ? `$${product.wholesalePrice.toFixed(2)}` : '-'} />
-          <InfoRow label="Retail Price" value={product.retailPrice ? `$${product.retailPrice.toFixed(2)}` : '-'} />
-          <InfoRow label="MRP" value={product.mrp ? `$${product.mrp.toFixed(2)}` : '-'} />
+          <InfoRow label="Cost" value={`₹${product.cost.toFixed(2)}`} />
+          <InfoRow label="Selling Price" value={`₹${product.price.toFixed(2)}`} />
+          <InfoRow label="Purchase Price" value={product.purchasePrice ? `₹${product.purchasePrice.toFixed(2)}` : '-'} />
+          <InfoRow label="Wholesale Price" value={product.wholesalePrice ? `₹${product.wholesalePrice.toFixed(2)}` : '-'} />
+          <InfoRow label="Retail Price" value={product.retailPrice ? `₹${product.retailPrice.toFixed(2)}` : '-'} />
+          <InfoRow label="MRP" value={product.mrp ? `₹${product.mrp.toFixed(2)}` : '-'} />
           
           <InfoRow label="Current Stock" value={product.stockQuantity} />
           <InfoRow label="Opening Stock" value={product.openingStock} />

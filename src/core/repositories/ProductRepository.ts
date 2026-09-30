@@ -7,15 +7,15 @@ export class ProductRepository extends BaseRepository<Product> {
   protected tableName = 'products';
 
   protected getInsertColumns(): string {
-    return 'id, name, sku, barcode, description, price, cost, categoryId, unitId, stockQuantity, lowStockThreshold, createdAt, updatedAt, syncStatus';
+    return 'id, name, sku, barcode, hsn, gst, description, price, cost, purchasePrice, wholesalePrice, retailPrice, mrp, categoryId, brandId, unitId, subunitId, conversionRate, openingStock, stockQuantity, lowStockThreshold, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'name = ?, sku = ?, barcode = ?, description = ?, price = ?, cost = ?, categoryId = ?, unitId = ?, stockQuantity = ?, lowStockThreshold = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'name = ?, sku = ?, barcode = ?, hsn = ?, gst = ?, description = ?, price = ?, cost = ?, purchasePrice = ?, wholesalePrice = ?, retailPrice = ?, mrp = ?, categoryId = ?, brandId = ?, unitId = ?, subunitId = ?, conversionRate = ?, openingStock = ?, stockQuantity = ?, lowStockThreshold = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Product): any[] {
@@ -24,11 +24,21 @@ export class ProductRepository extends BaseRepository<Product> {
       entity.name,
       entity.sku,
       entity.barcode || null,
+      entity.hsn || null,
+      entity.gst !== undefined ? entity.gst : null,
       entity.description || null,
       entity.price,
       entity.cost,
+      entity.purchasePrice !== undefined ? entity.purchasePrice : null,
+      entity.wholesalePrice !== undefined ? entity.wholesalePrice : null,
+      entity.retailPrice !== undefined ? entity.retailPrice : null,
+      entity.mrp !== undefined ? entity.mrp : null,
       entity.categoryId || null,
+      entity.brandId || null,
       entity.unitId || null,
+      entity.subunitId || null,
+      entity.conversionRate !== undefined ? entity.conversionRate : 1,
+      entity.openingStock !== undefined ? entity.openingStock : 0,
       entity.stockQuantity,
       entity.lowStockThreshold || null,
       entity.createdAt,
@@ -43,11 +53,21 @@ export class ProductRepository extends BaseRepository<Product> {
       name: row.name,
       sku: row.sku,
       barcode: row.barcode,
+      hsn: row.hsn,
+      gst: row.gst,
       description: row.description,
       price: row.price,
       cost: row.cost,
+      purchasePrice: row.purchasePrice,
+      wholesalePrice: row.wholesalePrice,
+      retailPrice: row.retailPrice,
+      mrp: row.mrp,
       categoryId: row.categoryId,
+      brandId: row.brandId,
       unitId: row.unitId,
+      subunitId: row.subunitId,
+      conversionRate: row.conversionRate,
+      openingStock: row.openingStock,
       stockQuantity: row.stockQuantity,
       lowStockThreshold: row.lowStockThreshold,
       createdAt: row.createdAt,
