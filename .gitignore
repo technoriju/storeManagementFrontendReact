@@ -35,6 +35,7 @@ local.properties
 !debug.keystore
 .kotlin/
 package-lock.json
+dist/
 
 # node.js
 #

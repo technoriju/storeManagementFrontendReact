@@ -1,6 +1,7 @@
 export interface Product {
   id: number;
   name: string;
+  productCode?: string;
   sku: string;
   barcode?: string;
   hsn?: string;
@@ -13,8 +14,10 @@ export interface Product {
   retailPrice?: number;
   mrp?: number;
   categoryId?: string;
+  subCategoryId?: string;
   brandId?: string;
   unitId?: string;
+  baseUnitId?: number | string;
   subUnitId?: string;
   conversionRate?: number;
   openingStock?: number;

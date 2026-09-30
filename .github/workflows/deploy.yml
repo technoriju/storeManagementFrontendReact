@@ -1,0 +1,50 @@
+name: Deploy Expo Web
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export Expo web build
+        run: npx expo export --platform web
+
+      - name: Deploy dist contents to Hostinger
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: 65002
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "dist/*"
+          target: "/home/u440336261/domains/acservicepoint.co.in/public_html/taramaenterprise"
+          strip_components: 1
+          overwrite: true
+          timeout: 60s
+          command_timeout: 10m
+
+      - name: Verify deployment
+        run: |
+          curl --fail --silent --show-error \
+            --retry 3 \
+            --retry-delay 5 \
+            https://tarama.acservicepoint.co.in/

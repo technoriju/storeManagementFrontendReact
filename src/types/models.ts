@@ -53,6 +53,7 @@ export interface SubUnit extends BaseEntity {
 
 export interface Product extends BaseEntity {
   name: string;
+  productCode?: string;
   sku: string;
   barcode?: string;
   hsn?: string;
@@ -65,8 +66,10 @@ export interface Product extends BaseEntity {
   retailPrice?: number;
   mrp?: number;
   categoryId?: number;
+  subCategoryId?: number;
   brandId?: number;
   unitId?: number;
+  baseUnitId?: number;
   subunitId?: number;
   conversionRate?: number;
   openingStock?: number;

@@ -141,6 +141,7 @@ export const initializeDatabase = () => {
       'ALTER TABLE sub_units ADD COLUMN status TEXT DEFAULT \'Active\'',
       'ALTER TABLE customers ADD COLUMN backendId INTEGER',
       'ALTER TABLE suppliers ADD COLUMN backendId INTEGER',
+      'ALTER TABLE products ADD COLUMN subCategoryId INTEGER',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -175,6 +176,7 @@ export const initializeDatabase = () => {
         retailPrice REAL,
         mrp REAL,
         categoryId INTEGER,
+        subCategoryId INTEGER,
         brandId INTEGER,
         unitId INTEGER,
         subunitId INTEGER,
