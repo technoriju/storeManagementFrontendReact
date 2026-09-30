@@ -25,8 +25,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Export Expo web build
-        run: npx expo export --platform web
+      - name: Build web
+        run: npm run build
 
       - name: Deploy dist contents to Hostinger
         uses: appleboy/scp-action@v1
