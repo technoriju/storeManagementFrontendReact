@@ -19,10 +19,10 @@ export type ProductScreenType =
 
 export const ProductsModule = () => {
   const [currentScreen, setCurrentScreen] = useState<ProductScreenType>('list');
-  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<number | string | null>(null);
 
   const navigateTo = (screen: ProductScreenType, productId?: string | number) => {
-    setSelectedProductId(productId !== undefined && productId !== null ? Number(productId) : null);
+    setSelectedProductId(productId !== undefined && productId !== null ? productId : null);
     setCurrentScreen(screen);
   };
 

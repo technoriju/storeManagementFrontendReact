@@ -98,7 +98,7 @@ const EditorField = ({ value, onChangeText }: { value?: string; onChangeText?: (
 );
 
 export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) => {
-  const { products, addProduct, updateProduct } = useProductStore();
+  const { products, addProduct, updateProduct, fetchProducts } = useProductStore();
 
   // Basic Information
   const [productName, setProductName] = useState('');
@@ -151,26 +151,82 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
   // Load existing product if editing
   useEffect(() => {
-    if (productId) {
-      const prod = products.find(p => p.id === Number(productId));
-      if (prod) {
-        setProductName(prod.name || '');
-        setSlug((prod.name || '').toLowerCase().replace(/\s+/g, '-'));
-        setSku(prod.sku || '');
-        setPurchasePrice(prod.purchasePrice !== undefined ? String(prod.purchasePrice) : (prod.cost !== undefined ? String(prod.cost) : ''));
-        setWholesalePrice(prod.wholesalePrice !== undefined ? String(prod.wholesalePrice) : '');
-        setRetailPrice(prod.retailPrice !== undefined ? String(prod.retailPrice) : (prod.price !== undefined ? String(prod.price) : ''));
-        setSelectedCategory(prod.categoryId ? String(prod.categoryId) : '');
-        setSelectedSubCategory(prod.subCategoryId ? String(prod.subCategoryId) : '');
-        setSelectedBrand(prod.brandId ? String(prod.brandId) : '');
-        setSelectedUnit(prod.unitId ? String(prod.unitId) : '');
-        setSelectedSubUnit(prod.subUnitId ? String(prod.subUnitId) : '');
-        setConversionRate(prod.conversionRate ? String(prod.conversionRate) : '1');
-        setQuantity(prod.stockQuantity !== undefined ? String(prod.stockQuantity) : '0');
-        setQuantityAlert(prod.lowStockThreshold !== undefined ? String(prod.lowStockThreshold) : '5');
-        setItemBarcode(prod.barcode || '');
-        setDescription(prod.description || '');
+    if (!productId) return;
+
+    const populateForm = (prod: any) => {
+      setProductName(prod.name || '');
+      setSlug((prod.name || '').toLowerCase().replace(/\s+/g, '-'));
+      setSku(prod.sku || prod.productCode || '');
+      setPurchasePrice(
+        prod.purchasePrice !== undefined && prod.purchasePrice !== null ? String(prod.purchasePrice) :
+        (prod.cost !== undefined && prod.cost !== null ? String(prod.cost) : '')
+      );
+      setWholesalePrice(
+        prod.wholesalePrice !== undefined && prod.wholesalePrice !== null ? String(prod.wholesalePrice) : ''
+      );
+      setRetailPrice(
+        prod.retailPrice !== undefined && prod.retailPrice !== null ? String(prod.retailPrice) :
+        (prod.price !== undefined && prod.price !== null ? String(prod.price) : '')
+      );
+      setSelectedCategory(prod.categoryId ? String(prod.categoryId) : '');
+      setSelectedSubCategory(
+        prod.subCategoryId ? String(prod.subCategoryId) : 
+        (prod.sub_category_id ? String(prod.sub_category_id) : '')
+      );
+      setSelectedBrand(prod.brandId ? String(prod.brandId) : '');
+      
+      const unitVal = prod.unitId || prod.baseUnitId || prod.unit_id || prod.base_unit_id;
+      setSelectedUnit(unitVal ? String(unitVal) : '');
+      
+      const subUnitVal = prod.subUnitId || prod.subunitId || prod.sub_unit_id;
+      setSelectedSubUnit(subUnitVal ? String(subUnitVal) : '');
+      
+      setConversionRate(prod.conversionRate ? String(prod.conversionRate) : '1');
+      setQuantity(
+        prod.stockQuantity !== undefined && prod.stockQuantity !== null ? String(prod.stockQuantity) :
+        (prod.openingStock !== undefined && prod.openingStock !== null ? String(prod.openingStock) : '0')
+      );
+      setQuantityAlert(
+        prod.lowStockThreshold !== undefined && prod.lowStockThreshold !== null ? String(prod.lowStockThreshold) :
+        (prod.lowStockLevel !== undefined && prod.lowStockLevel !== null ? String(prod.lowStockLevel) : '5')
+      );
+      setItemBarcode(prod.barcode || prod.itemBarcode || '');
+      setDescription(prod.description || '');
+
+      if (prod.taxType) {
+        setTaxType(prod.taxType === 'GST' || prod.taxType === 'Inclusive' ? 'Inclusive' : 'Exclusive');
+      } else if (prod.isPriceInclusive !== undefined) {
+        setTaxType(prod.isPriceInclusive ? 'Inclusive' : 'Exclusive');
       }
+      if (prod.gst !== undefined && prod.gst !== null) {
+        setTax(String(prod.gst));
+      } else if (prod.tax !== undefined && prod.tax !== null) {
+        setTax(String(prod.tax));
+      }
+    };
+
+    const found = products.find(p => String(p.id) === String(productId) || (p as any)._id === productId);
+    if (found) {
+      populateForm(found);
+    } else {
+      const fetchById = async () => {
+        try {
+          const res = await apiClient.get(API_ENDPOINTS.PRODUCTS.BY_ID(productId));
+          const prodData = res.data?.data || res.data;
+          if (prodData) {
+            populateForm(prodData);
+            return;
+          }
+        } catch (e) {}
+
+        try {
+          const localProd = await productRepository.getById(Number(productId));
+          if (localProd) {
+            populateForm(localProd);
+          }
+        } catch (e) {}
+      };
+      fetchById();
     }
   }, [productId, products]);
 
@@ -346,16 +402,26 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         }
       }
 
-      setSubCategories(
-        matched.map((c: any) => ({
-          label: c.name || c.subCategory || c.sub_category_name || c.title || 'Unnamed SubCategory',
-          value: String(c.id || c.backendId || c.subcategoryId || Math.random())
-        }))
-      );
+      const subCategoryOptions = matched.map((c: any) => ({
+        label: c.name || c.subCategory || c.sub_category_name || c.title || 'Unnamed SubCategory',
+        value: String(c.id || c.backendId || c.subcategoryId || '')
+      }));
+
+      if (selectedSubCategory && !subCategoryOptions.some(opt => String(opt.value) === String(selectedSubCategory))) {
+        const found = allSubs.find((c: any) => String(c.id) === String(selectedSubCategory) || String(c.backendId) === String(selectedSubCategory));
+        if (found) {
+          subCategoryOptions.unshift({
+            label: found.name || 'SubCategory',
+            value: String(found.id || found.backendId)
+          });
+        }
+      }
+
+      setSubCategories(subCategoryOptions);
     };
 
     fetchSub();
-  }, [selectedCategory, categories]);
+  }, [selectedCategory, categories, selectedSubCategory]);
 
   // Fetch sub-units when base unit changes
   useEffect(() => {
@@ -390,14 +456,27 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       }
 
       setRawSubUnits(subs);
-      setSubUnitsList(subs.map((u: any) => ({ 
+      const subOptions = subs.map((u: any) => ({ 
         label: u.name, 
         value: u.id?.toString(),
         multiplier: u.multiplier || 1
-      })));
+      }));
+
+      if (selectedSubUnit && !subOptions.some(opt => String(opt.value) === String(selectedSubUnit))) {
+        const foundSub = subs.find((u: any) => String(u.id) === String(selectedSubUnit));
+        if (foundSub) {
+          subOptions.unshift({
+            label: foundSub.name,
+            value: String(foundSub.id),
+            multiplier: foundSub.multiplier || 1
+          });
+        }
+      }
+
+      setSubUnitsList(subOptions);
     };
     fetchSubUnits();
-  }, [selectedUnit]);
+  }, [selectedUnit, selectedSubUnit]);
 
   // Handle SKU Generation
   const handleGenerateSku = () => {
@@ -464,10 +543,10 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   };
 
   // Calculations for auto-displaying sub-unit price
-  const selectedUnitObj = units.find(u => u.value === selectedUnit);
+  const selectedUnitObj = units.find(u => String(u.value) === String(selectedUnit));
   const selectedSubUnitObj = rawSubUnits.find(u => String(u.id) === String(selectedSubUnit) || String(u.backendId) === String(selectedSubUnit));
   const baseUnitName = selectedUnitObj?.label || 'Base Unit';
-  const subUnitName = selectedSubUnitObj?.name || subUnitsList.find(s => s.value === selectedSubUnit)?.label || 'Sub Unit';
+  const subUnitName = selectedSubUnitObj?.name || subUnitsList.find(s => String(s.value) === String(selectedSubUnit))?.label || 'Sub Unit';
 
   const rateNumber = parseFloat(conversionRate) > 0 ? parseFloat(conversionRate) : 1;
   const pPriceNum = parseFloat(purchasePrice) || 0;
@@ -502,7 +581,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       const cRate = parseFloat(conversionRate) || 1;
 
       const productData: Product = {
-        id: productId ? Number(productId) : Math.floor(Math.random() * -1000000000),
+        id: productId ? (isNaN(Number(productId)) ? Math.floor(Math.random() * -1000000000) : Number(productId)) : Math.floor(Math.random() * -1000000000),
         name: productName.trim(),
         productCode: sku.trim(),
         sku: sku.trim(),
@@ -543,6 +622,32 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       } catch (repoErr) {
         console.warn('Repository save warning:', repoErr);
       }
+
+      // Direct API update for sync
+      try {
+        const apiPayload: any = {
+          name: productData.name,
+          sku: productData.sku,
+          productCode: productData.sku,
+          baseUnitId: productData.baseUnitId || (productData.unitId ? Number(productData.unitId) : 1),
+          categoryId: productData.categoryId ? Number(productData.categoryId) : null,
+          subCategoryId: productData.subCategoryId ? Number(productData.subCategoryId) : null,
+          brandId: productData.brandId ? Number(productData.brandId) : null,
+          purchasePrice: productData.purchasePrice !== undefined ? Number(productData.purchasePrice) : null,
+          wholesalePrice: productData.wholesalePrice !== undefined ? Number(productData.wholesalePrice) : null,
+          retailPrice: productData.retailPrice !== undefined ? Number(productData.retailPrice) : null,
+          barcode: productData.barcode || null,
+          description: productData.description || null,
+          lowStockLevel: productData.lowStockThreshold !== undefined ? Number(productData.lowStockThreshold) : null,
+        };
+        if (productId) {
+          await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
+        }
+      } catch (apiErr) {
+        console.warn('API sync warning:', apiErr);
+      }
+
+      fetchProducts().catch(() => {});
 
       Alert.alert('Success', `Product ${productId ? 'updated' : 'added'} successfully!`);
       onNavigate('list');

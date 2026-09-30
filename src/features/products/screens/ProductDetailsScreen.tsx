@@ -6,7 +6,7 @@ import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 
 interface Props {
-  productId: number;
+  productId: number | string;
   onNavigate: (screen: ProductScreenType, productId?: number | string) => void;
 }
 
@@ -14,7 +14,7 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
   const theme = useTheme();
   const { products, deleteProduct } = useProductStore();
   
-  const product = products.find(p => p.id === productId);
+  const product = products.find(p => String(p.id) === String(productId));
 
   if (!product) {
     return (
@@ -26,7 +26,7 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
   }
 
   const handleDelete = () => {
-    deleteProduct(productId);
+    deleteProduct(Number(productId));
     onNavigate('list');
   };
 
@@ -48,17 +48,17 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Text style={[styles.productName, { color: theme.colors.text }]}>{product.name}</Text>
           
-          <InfoRow label="SKU" value={product.sku} />
+          <InfoRow label="SKU" value={product.sku || (product as any).productCode} />
           <InfoRow label="Barcode" value={product.barcode} />
-          <InfoRow label="HSN Code" value={product.hsn} />
+          <InfoRow label="HSN Code" value={product.hsn || (product as any).hsnCode} />
           <InfoRow label="GST (%)" value={product.gst} />
           
-          <InfoRow label="Cost" value={`₹${product.cost.toFixed(2)}`} />
-          <InfoRow label="Selling Price" value={`₹${product.price.toFixed(2)}`} />
-          <InfoRow label="Purchase Price" value={product.purchasePrice ? `₹${product.purchasePrice.toFixed(2)}` : '-'} />
-          <InfoRow label="Wholesale Price" value={product.wholesalePrice ? `₹${product.wholesalePrice.toFixed(2)}` : '-'} />
-          <InfoRow label="Retail Price" value={product.retailPrice ? `₹${product.retailPrice.toFixed(2)}` : '-'} />
-          <InfoRow label="MRP" value={product.mrp ? `₹${product.mrp.toFixed(2)}` : '-'} />
+          <InfoRow label="Cost" value={product.cost !== undefined && product.cost !== null ? `₹${Number(product.cost).toFixed(2)}` : (product.purchasePrice !== undefined ? `₹${Number(product.purchasePrice).toFixed(2)}` : '-')} />
+          <InfoRow label="Selling Price" value={product.price !== undefined && product.price !== null ? `₹${Number(product.price).toFixed(2)}` : (product.retailPrice !== undefined ? `₹${Number(product.retailPrice).toFixed(2)}` : '-')} />
+          <InfoRow label="Purchase Price" value={product.purchasePrice !== undefined && product.purchasePrice !== null ? `₹${Number(product.purchasePrice).toFixed(2)}` : '-'} />
+          <InfoRow label="Wholesale Price" value={product.wholesalePrice !== undefined && product.wholesalePrice !== null ? `₹${Number(product.wholesalePrice).toFixed(2)}` : '-'} />
+          <InfoRow label="Retail Price" value={product.retailPrice !== undefined && product.retailPrice !== null ? `₹${Number(product.retailPrice).toFixed(2)}` : '-'} />
+          <InfoRow label="MRP" value={product.mrp !== undefined && product.mrp !== null ? `₹${Number(product.mrp).toFixed(2)}` : '-'} />
           
           <InfoRow label="Current Stock" value={product.stockQuantity} />
           <InfoRow label="Opening Stock" value={product.openingStock} />

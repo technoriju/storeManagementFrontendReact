@@ -127,7 +127,7 @@ export const AppSelect = ({
   } else {
     hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
     if (hasValue) {
-      const selectedOption = options.find((o: AppSelectOption) => o.value === currentValue);
+      const selectedOption = options.find((o: AppSelectOption) => String(o.value) === String(currentValue));
       if (selectedOption) {
         displayValue = selectedOption.label;
       } else {
@@ -246,9 +246,9 @@ export const AppSelect = ({
                 renderItem={({ item }) => {
                   let isSelected = false;
                   if (isMulti) {
-                    isSelected = Array.isArray(currentValue) && currentValue.includes(item.value);
+                    isSelected = Array.isArray(currentValue) && currentValue.some((v: any) => String(v) === String(item.value));
                   } else {
-                    isSelected = currentValue === item.value;
+                    isSelected = String(currentValue) === String(item.value);
                   }
 
                   return (

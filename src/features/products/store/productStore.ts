@@ -44,10 +44,10 @@ export const useProductStore = create<ProductState>((set) => ({
   setProducts: (products) => set({ products }),
   addProduct: (product) => set((state) => ({ products: [...state.products, product] })),
   updateProduct: (updated) => set((state) => ({
-    products: state.products.map((p) => (p.id === updated.id ? updated : p)),
+    products: state.products.map((p) => (String(p.id) === String(updated.id) ? { ...p, ...updated } : p)),
   })),
   deleteProduct: (id) => set((state) => ({
-    products: state.products.filter((p) => p.id !== id),
+    products: state.products.filter((p) => String(p.id) !== String(id)),
   })),
 
   setCategories: (categories) => set({ categories }),
@@ -66,9 +66,8 @@ export const useProductStore = create<ProductState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE);
-      // Assuming response.data contains the products array, or response.data.data
       const data = response.data?.data || response.data;
-      set({ products: data, isLoading: false });
+      set({ products: Array.isArray(data) ? data : [], isLoading: false });
     } catch (error: any) {
       set({ error: error.message || 'Failed to fetch products', isLoading: false });
     }
