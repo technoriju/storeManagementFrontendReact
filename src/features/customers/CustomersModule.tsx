@@ -12,8 +12,8 @@ export const CustomersModule = () => {
   const [currentScreen, setCurrentScreen] = useState<CustomerScreenType>('list');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const navigateTo = (screen: CustomerScreenType, id?: string) => {
-    if (id !== undefined) setSelectedId(id);
+  const navigateTo = (screen: CustomerScreenType, id?: string | number) => {
+    if (id !== undefined) setSelectedId(Number(id));
     setCurrentScreen(screen);
   };
 

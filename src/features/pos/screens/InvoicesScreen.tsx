@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { useSales, useDeleteSale } from '../api/useSales';
 import { 
   FileText, 
@@ -26,13 +28,20 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
 
   const fallbackInvoices = useMemo(() => [
-    { id: 1, invoiceNumber: 'INV001', customerName: 'Carl Evans', date: '2024-12-24', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
-    { id: 2, invoiceNumber: 'INV002', customerName: 'Minerva Rameriz', date: '2024-12-10', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: 3, invoiceNumber: 'INV003', customerName: 'Robert Lamon', date: '2024-11-20', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: 4, invoiceNumber: 'INV004', customerName: 'Patricia Lewis', date: '2024-11-15', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
-    { id: 5, invoiceNumber: 'INV005', customerName: 'Mark Joslyn', date: '2024-10-30', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
+    { id: 1, invoiceNumber: 'INV001', customerName: 'Carl Evans', date: '2024-12-24', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
+    { id: 2, invoiceNumber: 'INV002', customerName: 'Minerva Rameriz', date: '2024-12-10', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
+    { id: 3, invoiceNumber: 'INV003', customerName: 'Robert Lamon', date: '2024-11-20', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
+    { id: 4, invoiceNumber: 'INV004', customerName: 'Patricia Lewis', date: '2024-11-15', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', syncStatus: 'synced' },
+    { id: 5, invoiceNumber: 'INV005', customerName: 'Mark Joslyn', date: '2024-10-30', total: 800, paid: 800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
   ], []);
 
   const allInvoices = useMemo(() => {
@@ -66,6 +75,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           biller: s.biller || 'Admin',
           notes: s.notes,
           items: s.items || [],
+          syncStatus: s.syncStatus || 'synced',
         };
       });
     }
@@ -175,6 +185,12 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           </View>
         );
       }
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     },
     {
       key: 'actions',

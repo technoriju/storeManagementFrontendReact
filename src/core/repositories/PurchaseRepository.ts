@@ -3,6 +3,7 @@ import { Purchase, PurchaseItem } from '../../types/models';
 import { db } from '../database/db';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
+import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
 
 export class PurchaseRepository extends BaseRepository<Purchase> {
   protected tableName = 'purchases';
@@ -151,15 +152,83 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     }
   }
 
+  private requestSync(): void {
+    void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.syncNow());
+  }
+
   protected async syncWithApi(entity: Purchase, operation: 'insert' | 'update' | 'delete'): Promise<void> {
     try {
-      if (operation !== 'delete' && entity.syncStatus !== 'synced') {
-        entity.syncStatus = 'synced';
-        await this.update(entity, false);
+      if (operation === 'delete') {
+        if (/^\d+$/.test(String(entity.id)) && entity.id > 0) {
+          await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(entity.id));
+        }
+        return;
+      }
+
+      const items = entity.items || (await this.getItemsForPurchase(entity.id));
+      const supplierId = entity.supplierId && Number(entity.supplierId) > 0 ? Number(entity.supplierId) : 1;
+      const apiPayload = {
+        branchId: 1,
+        warehouseId: 1,
+        supplierId,
+        invoiceNumber: entity.invoiceNumber || entity.reference || `PO-${entity.id}`,
+        purchaseDate: entity.date ? new Date(entity.date).toISOString() : new Date().toISOString(),
+        status: entity.status || 'Received',
+        subTotal: Number(entity.subtotal || 0),
+        taxTotal: Number((entity.orderTax || 0) + (entity.gst || 0)),
+        discountTotal: Number(entity.discount || 0),
+        grandTotal: Number(entity.total || 0),
+        paymentAmount: Number(entity.paid || 0),
+        paymentMethod: 'CASH',
+        items: items.map((it) => ({
+          productId: Number(it.productId),
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          discount: Number(it.discount || 0),
+          taxAmount: Number(it.taxAmount || 0),
+          total: Number(it.total),
+        })),
+      };
+
+      const response = await apiClient.post(API_ENDPOINTS.PURCHASES.BASE, apiPayload);
+      if (response.status >= 200 && response.status < 300) {
+        await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
+        await db.execute(`UPDATE purchase_items SET syncStatus = 'synced' WHERE purchaseId = ?`, [entity.id]);
       }
     } catch (error) {
       console.error(`Failed to sync purchase ${entity.id} with API:`, error);
+      throw error;
     }
+  }
+
+  async syncOutboxItem(item: OutboxItem): Promise<void> {
+    if (item.operation !== 'DELETE' && (await tombstoneRepo.isDeleted(this.tableName, item.entityId))) {
+      return;
+    }
+    if (item.operation === 'DELETE') {
+      if (/^\d+$/.test(String(item.entityId)) && item.entityId > 0) {
+        try {
+          await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(item.entityId));
+        } catch (e) {
+          console.warn('Failed to delete purchase on API:', e);
+        }
+      }
+      return;
+    }
+
+    let payloadData: { purchase: Purchase; items: PurchaseItem[] } | null = null;
+    if (item.payload) {
+      try {
+        payloadData = JSON.parse(item.payload);
+      } catch {}
+    }
+
+    const purchase = payloadData?.purchase || (await this.getById(item.entityId));
+    if (!purchase) return;
+    const items = payloadData?.items || (await this.getItemsForPurchase(purchase.id));
+    purchase.items = items;
+
+    await this.syncWithApi(purchase, 'insert');
   }
 
   public async fetchFromApi(): Promise<void> {
@@ -185,10 +254,21 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     await this.insert(purchase, false);
 
     // Insert items & update product stock
+    const fullItems: PurchaseItem[] = [];
     for (const item of items) {
       const itemId = Date.now() + Math.floor(Math.random() * 10000);
       const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
       const unitType = item.unitType || 'base';
+
+      const fullItem: PurchaseItem = {
+        ...item,
+        id: itemId,
+        purchaseId,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending_insert'
+      };
+      fullItems.push(fullItem);
 
       await db.execute(
         `INSERT INTO purchase_items (
@@ -229,46 +309,23 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // Attempt background API sync
-    try {
-      await apiClient.post(API_ENDPOINTS.PURCHASES.BASE, {
-        branchId: 1,
-        warehouseId: 1,
-        supplierId: purchase.supplierId || 1,
-        invoiceNumber: purchase.invoiceNumber,
-        purchaseDate: purchase.date || new Date().toISOString(),
-        status: purchase.status || 'Received',
-        subTotal: purchase.subtotal,
-        taxTotal: (purchase.orderTax || 0) + (purchase.gst || 0),
-        discountTotal: purchase.discount || 0,
-        grandTotal: purchase.total,
-        paymentAmount: purchase.paid,
-        paymentMethod: 'CASH',
-        items: items.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: item.discount || 0,
-          taxAmount: item.taxAmount || 0,
-          total: item.total
-        }))
-      });
-      purchase.syncStatus = 'synced';
-      await this.update(purchase, false);
-    } catch (e) {
-      // offline fallback
-    }
+    // Always queue in outbox for reliable auto-sync
+    await outboxRepo.add(this.tableName, purchaseId, 'CREATE', { purchase, items: fullItems });
+    this.requestSync();
 
-    return { ...purchase, items: items as PurchaseItem[] };
+    return { ...purchase, items: fullItems };
   }
 
-  public override async delete(id: number): Promise<void> {
+  public override async delete(id: number, shouldSync = true): Promise<void> {
     await db.execute('DELETE FROM purchase_items WHERE purchaseId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
-    try {
-      await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(id));
-    } catch (e) {
-      // offline
+    if (shouldSync) {
+      await tombstoneRepo.add(this.tableName, id);
+      await outboxRepo.removeForEntity(this.tableName, id);
+      if (/^\d+$/.test(String(id))) {
+        await outboxRepo.add(this.tableName, id, 'DELETE', { id });
+        this.requestSync();
+      }
     }
   }
 }

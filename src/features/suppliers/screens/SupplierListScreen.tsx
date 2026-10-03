@@ -4,6 +4,8 @@ import { useTheme } from '../../../shared/theme/theme';
 import { useSuppliers, useDeleteSupplier } from '../api/useSupplier';
 import { SupplierScreenType } from '../SuppliersModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -25,6 +27,13 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
   const { data: suppliers = [], isLoading, refetch } = useSuppliers();
   const deleteMutation = useDeleteSupplier();
   const [searchQuery, setSearchQuery] = useState('');
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
 
   // In a real app, you'd fetch here
   // Using dummy Code like SU001 for demonstration to match screenshot
@@ -84,6 +93,12 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
           <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>Active</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

@@ -10,6 +10,8 @@ import { unitRepository } from '../repositories/UnitRepository';
 import { subUnitRepository } from '../repositories/SubUnitRepository';
 import { customerRepository } from '../repositories/CustomerRepository';
 import { supplierRepository } from '../repositories/SupplierRepository';
+import { saleRepository } from '../repositories/SaleRepository';
+import { purchaseRepository } from '../repositories/PurchaseRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -119,7 +121,7 @@ class SyncEngine {
     // Clear stale jobs for deleted local records with non-server IDs.
     await outboxRepo.removeDeletedInvalidIds('categories');
     await outboxRepo.removeDeletedInvalidIds('sub_categories');
-    for (const entityType of ['brands', 'units', 'sub_units', 'customers', 'suppliers']) {
+    for (const entityType of ['brands', 'units', 'sub_units', 'customers', 'suppliers', 'sales', 'purchases']) {
       await outboxRepo.removeDeletedInvalidIds(entityType);
     }
     const pendingItems = await outboxRepo.getPendingItems();
@@ -150,6 +152,12 @@ class SyncEngine {
           await outboxRepo.remove(item.id);
         } else if (item.entityType === 'suppliers') {
           await supplierRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'sales') {
+          await saleRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'purchases') {
+          await purchaseRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);

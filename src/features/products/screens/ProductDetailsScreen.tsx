@@ -4,6 +4,7 @@ import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
 interface Props {
   productId: number | string;
@@ -46,7 +47,10 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
 
       <ScrollView style={styles.content}>
         <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Text style={[styles.productName, { color: theme.colors.text }]}>{product.name}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={[styles.productName, { color: theme.colors.text, flex: 1 }]}>{product.name}</Text>
+            <SyncBadge status={product.syncStatus || 'synced'} />
+          </View>
           
           <InfoRow label="SKU" value={product.sku || (product as any).productCode} />
           <InfoRow label="Barcode" value={product.barcode} />

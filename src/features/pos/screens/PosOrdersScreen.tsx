@@ -1,8 +1,10 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddSalesModal } from '../components/AddSalesModal';
 import { useSales, useDeleteSale } from '../api/useSales';
 import { 
@@ -87,14 +89,21 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
 
   // Initial demo orders if DB has no sales yet
   const fallbackOrders = useMemo(() => [
-    { id: '1', customerName: 'Carl Evans', avatar: 'https://i.pravatar.cc/150?u=1', reference: 'SL001', date: '2024-12-24', status: 'Completed', grandTotal: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', biller: 'Admin' },
-    { id: '2', customerName: 'Minerva Rameriz', avatar: 'https://i.pravatar.cc/150?u=2', reference: 'SL002', date: '2024-12-10', status: 'Pending', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', biller: 'Admin' },
-    { id: '3', customerName: 'Robert Lamon', avatar: 'https://i.pravatar.cc/150?u=3', reference: 'SL003', date: '2023-02-08', status: 'Completed', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Paid', biller: 'Admin' },
-    { id: '4', customerName: 'Patricia Lewis', avatar: 'https://i.pravatar.cc/150?u=4', reference: 'SL004', date: '2023-02-12', status: 'Completed', grandTotal: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', biller: 'Admin' },
-    { id: '5', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', reference: 'SL005', date: '2023-03-17', status: 'Completed', grandTotal: 800, paid: 800, due: 0, paymentStatus: 'Paid', biller: 'Admin' },
+    { id: '1', customerName: 'Carl Evans', avatar: 'https://i.pravatar.cc/150?u=1', reference: 'SL001', date: '2024-12-24', status: 'Completed', grandTotal: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
+    { id: '2', customerName: 'Minerva Rameriz', avatar: 'https://i.pravatar.cc/150?u=2', reference: 'SL002', date: '2024-12-10', status: 'Pending', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', biller: 'Admin', syncStatus: 'synced' },
+    { id: '3', customerName: 'Robert Lamon', avatar: 'https://i.pravatar.cc/150?u=3', reference: 'SL003', date: '2023-02-08', status: 'Completed', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
+    { id: '4', customerName: 'Patricia Lewis', avatar: 'https://i.pravatar.cc/150?u=4', reference: 'SL004', date: '2023-02-12', status: 'Completed', grandTotal: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', biller: 'Admin', syncStatus: 'synced' },
+    { id: '5', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', reference: 'SL005', date: '2023-03-17', status: 'Completed', grandTotal: 800, paid: 800, due: 0, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
   ], []);
 
   const allOrders = useMemo(() => {
@@ -112,6 +121,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         paymentStatus: s.paymentStatus || 'Unpaid',
         biller: s.biller || 'Admin',
         items: s.items || [],
+        syncStatus: s.syncStatus || 'synced',
       }));
     }
     return fallbackOrders;
@@ -245,6 +255,12 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       title: 'Biller', 
       width: 90,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     },
   ];
 

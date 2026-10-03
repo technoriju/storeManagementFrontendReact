@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AddPurchaseOrderModal } from '../components/AddPurchaseOrderModal';
 import { usePurchaseOrders, useDeletePurchaseOrder } from '../api/usePurchaseOrders';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { 
   FileCheck, 
   RefreshCw, 
@@ -27,12 +29,17 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const { data: dbOrders = [], isLoading, refetch } = usePurchaseOrders();
   const deletePOMutation = useDeletePurchaseOrder();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    refetch();
+  }, [lastSyncedAt, refetch]);
 
   const fallbackOrders = useMemo(() => [
-    { id: 1, orderNumber: 'PO-001', supplierName: 'Electro Mart', orderDate: '2024-12-24', status: 'Ordered', grandTotal: 1000, subtotal: 900, taxTotal: 100 },
-    { id: 2, orderNumber: 'PO-002', supplierName: 'Quantum Gadgets', orderDate: '2024-12-10', status: 'Pending', grandTotal: 1500, subtotal: 1400, taxTotal: 100 },
-    { id: 3, orderNumber: 'PO-003', supplierName: 'Prime Bazaar', orderDate: '2024-11-27', status: 'Received', grandTotal: 1500, subtotal: 1500, taxTotal: 0 },
-    { id: 4, orderNumber: 'PO-004', supplierName: 'Gadget World', orderDate: '2024-11-18', status: 'Ordered', grandTotal: 2000, subtotal: 1800, taxTotal: 200 },
+    { id: 1, orderNumber: 'PO-001', supplierName: 'Electro Mart', orderDate: '2024-12-24', status: 'Ordered', grandTotal: 1000, subtotal: 900, taxTotal: 100, syncStatus: 'synced' },
+    { id: 2, orderNumber: 'PO-002', supplierName: 'Quantum Gadgets', orderDate: '2024-12-10', status: 'Pending', grandTotal: 1500, subtotal: 1400, taxTotal: 100, syncStatus: 'synced' },
+    { id: 3, orderNumber: 'PO-003', supplierName: 'Prime Bazaar', orderDate: '2024-11-27', status: 'Received', grandTotal: 1500, subtotal: 1500, taxTotal: 0, syncStatus: 'synced' },
+    { id: 4, orderNumber: 'PO-004', supplierName: 'Gadget World', orderDate: '2024-11-18', status: 'Ordered', grandTotal: 2000, subtotal: 1800, taxTotal: 200, syncStatus: 'synced' },
   ], []);
 
   const allOrders = useMemo(() => {
@@ -49,6 +56,7 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
         shipping: Number(o.shipping || 0),
         grandTotal: Number(o.grandTotal || 0),
         status: o.status || 'Ordered',
+        syncStatus: (o as any).syncStatus || 'synced',
         notes: o.notes,
         items: o.items || [],
       }));
@@ -142,6 +150,12 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
           </View>
         );
       }
+    },
+    {
+      key: 'syncStatus',
+      title: 'Sync',
+      width: 90,
+      render: (value: string) => <SyncBadge status={value} />,
     },
     {
       key: 'actions',

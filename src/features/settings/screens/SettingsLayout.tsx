@@ -18,7 +18,7 @@ import { PrinterSettingsScreen } from './PrinterSettingsScreen';
 import { SyncSettingsScreen } from './SyncSettingsScreen';
 
 interface SettingRoute {
-  id: number;
+  id: string;
   label: string;
   group: string;
   permission: string;

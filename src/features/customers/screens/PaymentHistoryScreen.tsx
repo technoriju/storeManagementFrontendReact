@@ -2,15 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { Payment } from '../../../types/models';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 
 export const PaymentHistoryScreen = ({ route }: any) => {
   const { customerId, supplierId } = route.params || {};
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
     loadPayments();
-  }, [customerId, supplierId]);
+  }, [customerId, supplierId, lastSyncedAt]);
 
   const loadPayments = async () => {
     try {
@@ -39,11 +42,14 @@ export const PaymentHistoryScreen = ({ route }: any) => {
       ) : (
         <FlatList
           data={payments}
-          keyExtractor={item => item.id}
+          keyExtractor={item => String(item.id)}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.row}>
-                <Text style={styles.type}>{item.type === 'receive' ? 'Received' : 'Paid'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.type}>{item.type === 'receive' ? 'Received' : 'Paid'}</Text>
+                  <SyncBadge status={item.syncStatus || 'synced'} />
+                </View>
                 <Text style={[styles.amount, item.type === 'receive' ? styles.receive : styles.pay]}>
                   ${item.amount.toFixed(2)}
                 </Text>

@@ -8,7 +8,7 @@ import { X } from 'lucide-react-native';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 
 interface CustomerFormScreenProps {
-  customerId?: string | null;
+  customerId?: number | string | null;
   onNavigate: (screen: 'list') => void;
 }
 
@@ -35,7 +35,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
 
   const loadCustomer = async () => {
     try {
-      const customer = await customerRepository.getById(customerId!);
+      const customer = await customerRepository.getById(Number(customerId!));
       if (customer) {
         const parts = customer.name.split(' ');
         setFirstName(parts[0] || '');
@@ -62,7 +62,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
     try {
       const now = new Date().toISOString();
       if (customerId) {
-        const existing = await customerRepository.getById(customerId);
+        const existing = await customerRepository.getById(Number(customerId));
         if (existing) {
           const updated: Customer = {
             ...existing,

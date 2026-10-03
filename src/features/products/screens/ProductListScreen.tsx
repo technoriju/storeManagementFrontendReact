@@ -5,6 +5,8 @@ import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { ImportProductModal } from '../components/ImportProductModal';
 import { 
   FileText, 
@@ -28,10 +30,17 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   const { products, isLoading, error, fetchProducts } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      fetchProducts();
+    }
+  }, [lastSyncedAt, fetchProducts]);
 
   const columns = [
     { key: 'sku', title: 'SKU', width: 100 },
@@ -95,6 +104,12 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
           <Text style={{ color: theme.colors.textSecondary }}>Admin User</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     },
   ];
 

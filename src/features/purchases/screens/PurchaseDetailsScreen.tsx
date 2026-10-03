@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useTheme } from '../../../shared/theme/theme';
 import { usePurchase } from '../api/usePurchases';
 import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign } from 'lucide-react-native';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
@@ -46,7 +47,8 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                     {purchase.reference || purchase.invoiceNumber}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <SyncBadge status={purchase.syncStatus || 'synced'} />
                   <View style={[styles.badge, { backgroundColor: '#10B981' }]}>
                     <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>{purchase.status}</Text>
                   </View>

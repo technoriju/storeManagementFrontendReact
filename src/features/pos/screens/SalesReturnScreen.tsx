@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AddSalesReturnModal } from '../components/AddSalesReturnModal';
 import { useSalesReturns, useDeleteSaleReturn } from '../api/useSalesReturns';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { 
   RotateCcw, 
   RefreshCw, 
@@ -27,12 +29,17 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const { data: dbReturns = [], isLoading, refetch } = useSalesReturns();
   const deleteReturnMutation = useDeleteSaleReturn();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    refetch();
+  }, [lastSyncedAt, refetch]);
 
   const fallbackReturns = useMemo(() => [
-    { id: 1, returnNumber: 'SRT-001', customerName: 'Carl Evans', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Defective speaker' },
-    { id: 2, returnNumber: 'SRT-002', customerName: 'Minerva Rameriz', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong color' },
-    { id: 3, returnNumber: 'SRT-003', customerName: 'Robert Lamon', date: '2024-11-20', status: 'Received', totalAmount: 2000, reason: 'Customer changed mind' },
-    { id: 4, returnNumber: 'SRT-004', customerName: 'Mark Joslyn', date: '2024-11-15', status: 'Received', totalAmount: 800, reason: 'Damaged packaging' },
+    { id: 1, returnNumber: 'SRT-001', customerName: 'Carl Evans', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Defective speaker', syncStatus: 'synced' },
+    { id: 2, returnNumber: 'SRT-002', customerName: 'Minerva Rameriz', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong color', syncStatus: 'synced' },
+    { id: 3, returnNumber: 'SRT-003', customerName: 'Robert Lamon', date: '2024-11-20', status: 'Received', totalAmount: 2000, reason: 'Customer changed mind', syncStatus: 'synced' },
+    { id: 4, returnNumber: 'SRT-004', customerName: 'Mark Joslyn', date: '2024-11-15', status: 'Received', totalAmount: 800, reason: 'Damaged packaging', syncStatus: 'synced' },
   ], []);
 
   const allReturns = useMemo(() => {
@@ -44,6 +51,7 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
         date: r.date,
         totalAmount: Number(r.totalAmount || 0),
         status: r.status || 'Received',
+        syncStatus: (r as any).syncStatus || 'synced',
         reason: r.reason,
         items: r.items || [],
       }));
@@ -143,6 +151,12 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       flex: 1.5,
       minWidth: 130,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }} numberOfLines={1}>{value || '-'}</Text>
+    },
+    {
+      key: 'syncStatus',
+      title: 'Sync',
+      width: 90,
+      render: (value: string) => <SyncBadge status={value} />,
     },
     {
       key: 'actions',

@@ -8,7 +8,7 @@ import { X } from 'lucide-react-native';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 
 interface SupplierFormScreenProps {
-  supplierId?: string | null;
+  supplierId?: number | string | null;
   onNavigate: (screen: 'list') => void;
 }
 
@@ -34,7 +34,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
 
   const loadSupplier = async () => {
     try {
-      const supplier = await supplierRepository.getById(supplierId!);
+      const supplier = await supplierRepository.getById(Number(supplierId!));
       if (supplier) {
         const parts = supplier.name.split(' ');
         setFirstName(parts[0] || '');
@@ -61,7 +61,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
     try {
       const now = new Date().toISOString();
       if (supplierId) {
-        const existing = await supplierRepository.getById(supplierId);
+        const existing = await supplierRepository.getById(Number(supplierId));
         if (existing) {
           const updated: Supplier = {
             ...existing,

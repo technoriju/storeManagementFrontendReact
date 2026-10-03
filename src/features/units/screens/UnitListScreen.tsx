@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useUnits, useAddUnit, useUpdateUnit, useDeleteUnit, Unit } from '../api/useUnit';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -30,6 +32,13 @@ const formatDate = (value?: string) => {
 export const UnitListScreen = () => {
   const theme = useTheme();
   const { data: units = [], isLoading: isLoadingUnits, refetch } = useUnits();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
   const addMutation = useAddUnit();
   const updateMutation = useUpdateUnit();
   const deleteMutation = useDeleteUnit();
@@ -77,6 +86,12 @@ export const UnitListScreen = () => {
           <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>• {value}</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { ImportPurchaseModal } from '../components/ImportPurchaseModal';
 import { usePurchases, useDeletePurchase } from '../api/usePurchases';
@@ -30,14 +32,21 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const { data: dbPurchases = [], isLoading, refetch } = usePurchases();
   const deletePurchaseMutation = useDeletePurchase();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
 
   // Initial seed demo purchases shown if database is fresh
   const fallbackPurchases = useMemo(() => [
-    { id: '1', supplierName: 'Electro Mart', reference: 'PT001', date: '2024-12-24', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
-    { id: '2', supplierName: 'Quantum Gadgets', reference: 'PT002', date: '2024-12-10', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: '3', supplierName: 'Prime Bazaar', reference: 'PT003', date: '2024-11-27', status: 'Received', total: 1500, paid: 1800, due: 0, paymentStatus: 'Paid' },
-    { id: '4', supplierName: 'Gadget World', reference: 'PT004', date: '2024-11-18', status: 'Ordered', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
-    { id: '5', supplierName: 'Volt Vault', reference: 'PT005', date: '2024-11-06', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
+    { id: '1', supplierName: 'Electro Mart', reference: 'PT001', date: '2024-12-24', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
+    { id: '2', supplierName: 'Quantum Gadgets', reference: 'PT002', date: '2024-12-10', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
+    { id: '3', supplierName: 'Prime Bazaar', reference: 'PT003', date: '2024-11-27', status: 'Received', total: 1500, paid: 1800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
+    { id: '4', supplierName: 'Gadget World', reference: 'PT004', date: '2024-11-18', status: 'Ordered', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', syncStatus: 'synced' },
+    { id: '5', supplierName: 'Volt Vault', reference: 'PT005', date: '2024-11-06', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
   ], []);
 
   // Display DB purchases if any exist, otherwise fallback
@@ -53,6 +62,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         paid: Number(p.paid || 0),
         due: Number(p.due || 0),
         paymentStatus: p.paymentStatus || 'Unpaid',
+        syncStatus: p.syncStatus || 'synced',
       }));
     }
     return fallbackPurchases;
@@ -177,6 +187,12 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         );
       }
     },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
+    }
   ];
 
   const headerActions = (
