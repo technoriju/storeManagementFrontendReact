@@ -154,7 +154,7 @@ export interface Purchase extends BaseEntity {
   paid: number;
   due: number;
   status: 'Received' | 'Pending' | 'Ordered';
-  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue';
+  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue' | 'Partial';
   notes?: string;
   items?: PurchaseItem[];
 }
@@ -196,10 +196,147 @@ export interface Sale extends BaseEntity {
   paid: number;
   due: number;
   status: 'Completed' | 'Pending' | 'Ordered';
-  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue';
+  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue' | 'Partial';
   biller?: string;
   notes?: string;
   items?: SaleItem[];
 }
+
+export interface SaleReturnItem {
+  id?: number;
+  saleReturnId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  taxAmount?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface SaleReturn extends BaseEntity {
+  saleId?: number;
+  returnNumber: string;
+  reference?: string;
+  customerId?: number;
+  customerName?: string;
+  date: string;
+  subtotal?: number;
+  taxTotal?: number;
+  discountTotal?: number;
+  totalAmount: number;
+  status: 'Received' | 'Pending';
+  reason?: string;
+  items?: SaleReturnItem[];
+}
+
+export interface PurchaseReturnItem {
+  id?: number;
+  purchaseReturnId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  taxAmount?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface PurchaseReturn extends BaseEntity {
+  purchaseId?: number;
+  returnNumber: string;
+  reference?: string;
+  supplierId?: number;
+  supplierName?: string;
+  date: string;
+  subtotal?: number;
+  taxTotal?: number;
+  discountTotal?: number;
+  totalAmount: number;
+  status: 'Received' | 'Pending';
+  reason?: string;
+  items?: PurchaseReturnItem[];
+}
+
+export interface QuotationItem {
+  id?: number;
+  quotationId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  taxAmount?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface Quotation extends BaseEntity {
+  quotationNumber: string;
+  customerId: number;
+  customerName?: string;
+  date: string;
+  expiryDate?: string;
+  subtotal: number;
+  discount: number;
+  taxTotal: number;
+  shipping: number;
+  grandTotal: number;
+  status: 'Sent' | 'Ordered' | 'Pending' | 'Expired' | 'Accepted';
+  notes?: string;
+  items?: QuotationItem[];
+}
+
+export interface PurchaseOrderItem {
+  id?: number;
+  purchaseOrderId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+  taxAmount?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface PurchaseOrder extends BaseEntity {
+  orderNumber: string;
+  supplierId: number;
+  supplierName?: string;
+  orderDate: string;
+  expectedDate?: string;
+  subtotal: number;
+  discount: number;
+  taxTotal: number;
+  shipping: number;
+  grandTotal: number;
+  status: 'Ordered' | 'Pending' | 'Received' | 'Cancelled';
+  notes?: string;
+  items?: PurchaseOrderItem[];
+}
+
 
 

@@ -18,21 +18,21 @@ import {
   X,
   Search,
   Trash2,
-  RotateCcw,
+  FileText,
   AlertCircle,
 } from 'lucide-react-native';
-import { useSuppliers } from '../../suppliers/api/useSupplier';
-import { usePurchases } from '../api/usePurchases';
+import { useCustomers } from '../../customers/api/useCustomer';
 import { useProductStore } from '../../products/store/productStore';
-import { useCreatePurchaseReturn } from '../api/usePurchaseReturns';
+import { useCreateQuotation } from '../api/useQuotations';
 import { Product } from '../../products/types';
 
-interface ReturnItemRow {
+interface QuotationItemRow {
   productId: number;
   productName: string;
   sku?: string;
   quantity: number;
   unitPrice: number;
+  discount: number;
   taxAmount: number;
   total: number;
 }
@@ -42,25 +42,26 @@ interface Props {
   onClose: () => void;
 }
 
-export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
 
-  const { data: suppliers = [] } = useSuppliers();
-  const { data: purchases = [] } = usePurchases();
+  const { data: customers = [] } = useCustomers();
   const { products, fetchProducts } = useProductStore();
-  const createPurchaseReturnMutation = useCreatePurchaseReturn();
+  const createQuotationMutation = useCreateQuotation();
 
-  const [supplierId, setSupplierId] = useState<string>('');
-  const [purchaseId, setPurchaseId] = useState<string>('');
+  const [customerId, setCustomerId] = useState<string>('');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [returnNumber, setReturnNumber] = useState<string>(() => `PRT-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [reason, setReason] = useState<string>('');
-  const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
+  const [expiryDate, setExpiryDate] = useState<string>('');
+  const [reference, setReference] = useState<string>(() => `QT-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [status, setStatus] = useState<'Sent' | 'Ordered' | 'Pending'>('Sent');
+  const [shipping, setShipping] = useState<string>('0');
+  const [discountTotal, setDiscountTotal] = useState<string>('0');
+  const [notes, setNotes] = useState<string>('');
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [items, setItems] = useState<ReturnItemRow[]>([]);
+  const [items, setItems] = useState<QuotationItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,32 +70,26 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
         fetchProducts().catch(() => {});
       }
       setDate(new Date().toISOString().split('T')[0]);
-      setReturnNumber(`PRT-${Math.floor(100000 + Math.random() * 900000)}`);
+      setReference(`QT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
   }, [visible, products.length, fetchProducts]);
 
-  const supplierOptions = useMemo(() => {
-    return suppliers.map((s) => ({
-      label: s.name,
-      value: String(s.id),
+  const customerOptions = useMemo(() => {
+    return customers.map((c) => ({
+      label: c.name,
+      value: String(c.id),
     }));
-  }, [suppliers]);
+  }, [customers]);
 
-  const purchaseOptions = useMemo(() => {
-    return purchases.map((p) => ({
-      label: `${p.invoiceNumber} - ${p.supplierName || 'Supplier'} ($${p.total})`,
-      value: String(p.id),
-    }));
-  }, [purchases]);
-
-  const selectedSupplier = useMemo(() => {
-    return suppliers.find((s) => String(s.id) === String(supplierId));
-  }, [suppliers, supplierId]);
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c) => String(c.id) === String(customerId));
+  }, [customers, customerId]);
 
   const statusOptions = [
-    { label: 'Received / Returned (Deduct from inventory)', value: 'Received' },
-    { label: 'Pending Approval', value: 'Pending' },
+    { label: 'Sent', value: 'Sent' },
+    { label: 'Ordered', value: 'Ordered' },
+    { label: 'Pending', value: 'Pending' },
   ];
 
   const filteredProducts = useMemo(() => {
@@ -103,20 +98,32 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
     return products.filter((p) => {
       const matchName = p.name?.toLowerCase().includes(q);
       const matchSku = p.sku?.toLowerCase().includes(q);
-      return matchName || matchSku;
+      const matchBarcode = p.barcode?.toLowerCase().includes(q);
+      return matchName || matchSku || matchBarcode;
     }).slice(0, 8);
   }, [searchQuery, products]);
 
   const handleSelectProduct = (product: Product) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
-    const unitPrice = Number(product.purchasePrice || product.cost || 0);
+    const unitPrice = Number(product.retailPrice || product.price || 0);
+    const taxRate = Number(product.gst || 0);
 
     if (existingIndex >= 0) {
       const updated = [...items];
-      updated[existingIndex].quantity += 1;
-      updated[existingIndex].total = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      const row = updated[existingIndex];
+      const newQty = row.quantity + 1;
+      const sub = newQty * row.unitPrice - row.discount;
+      const tax = (sub * taxRate) / 100;
+      updated[existingIndex] = {
+        ...row,
+        quantity: newQty,
+        taxAmount: tax,
+        total: sub + tax,
+      };
       setItems(updated);
     } else {
+      const sub = 1 * unitPrice;
+      const tax = (sub * taxRate) / 100;
       setItems((prev) => [
         ...prev,
         {
@@ -125,8 +132,9 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
           sku: product.sku,
           quantity: 1,
           unitPrice,
-          taxAmount: 0,
-          total: unitPrice,
+          discount: 0,
+          taxAmount: tax,
+          total: sub + tax,
         },
       ]);
     }
@@ -137,8 +145,17 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
   const handleUpdateQuantity = (index: number, qty: number) => {
     if (qty <= 0) return;
     const updated = [...items];
-    updated[index].quantity = qty;
-    updated[index].total = qty * updated[index].unitPrice;
+    const row = updated[index];
+    const sub = qty * row.unitPrice - row.discount;
+    const prod = products.find((p) => p.id === row.productId);
+    const taxRate = Number(prod?.gst || 0);
+    const tax = (sub * taxRate) / 100;
+    updated[index] = {
+      ...row,
+      quantity: qty,
+      taxAmount: tax,
+      total: sub + tax,
+    };
     setItems(updated);
   };
 
@@ -146,59 +163,74 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const totalReturnAmount = useMemo(() => {
-    return items.reduce((acc, row) => acc + row.total, 0);
+  const itemsSubtotal = useMemo(() => {
+    return items.reduce((acc, row) => acc + row.quantity * row.unitPrice, 0);
   }, [items]);
 
+  const itemsTax = useMemo(() => {
+    return items.reduce((acc, row) => acc + row.taxAmount, 0);
+  }, [items]);
+
+  const grandTotal = useMemo(() => {
+    const ship = parseFloat(shipping) || 0;
+    const disc = parseFloat(discountTotal) || 0;
+    return Math.max(0, itemsSubtotal - disc + itemsTax + ship);
+  }, [itemsSubtotal, itemsTax, shipping, discountTotal]);
+
   const handleSubmit = async () => {
+    if (!customerId && customers.length > 0) {
+      setErrorMessage('Please select a customer.');
+      return;
+    }
     if (items.length === 0) {
-      setErrorMessage('Please add at least one product to return.');
+      setErrorMessage('Please add at least one product to the quotation.');
       return;
     }
 
     try {
-      await createPurchaseReturnMutation.mutateAsync({
-        purchaseReturn: {
-          purchaseId: purchaseId ? Number(purchaseId) : undefined,
-          returnNumber: returnNumber || `PRT-${Date.now().toString().slice(-6)}`,
-          reference: returnNumber,
-          supplierId: supplierId ? Number(supplierId) : undefined,
-          supplierName: selectedSupplier?.name || 'Supplier',
+      await createQuotationMutation.mutateAsync({
+        quotation: {
+          quotationNumber: reference || `QT-${Date.now().toString().slice(-6)}`,
+          customerId: Number(customerId) || 1,
+          customerName: selectedCustomer?.name || 'Walk-in Customer',
           date: date || new Date().toISOString().split('T')[0],
-          subtotal: totalReturnAmount,
-          taxTotal: 0,
-          discountTotal: 0,
-          totalAmount: totalReturnAmount,
+          expiryDate: expiryDate || undefined,
+          subtotal: itemsSubtotal,
+          discount: parseFloat(discountTotal) || 0,
+          taxTotal: itemsTax,
+          shipping: parseFloat(shipping) || 0,
+          grandTotal,
           status,
-          reason,
+          notes,
         },
         items: items.map((i) => ({
           productId: i.productId,
           productName: i.productName,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
+          discount: i.discount,
           taxAmount: i.taxAmount,
           total: i.total,
         })),
       });
 
-      Alert.alert('Success', 'Purchase return created and inventory updated!');
+      Alert.alert('Success', 'Quotation created successfully');
       setItems([]);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to create purchase return');
+      setErrorMessage(err?.message || 'Failed to create quotation');
     }
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '95%' : '80%', maxWidth: 850 }]}>
+        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '95%' : '80%', maxWidth: 900 }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <RotateCcw size={20} color="#F97316" />
-              <Text style={[styles.title, { color: theme.colors.text }]}>Add Purchase Return</Text>
+              <FileText size={20} color={theme.colors.primary} />
+              <Text style={[styles.title, { color: theme.colors.text }]}>Add Quotation</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.textSecondary} />
@@ -213,42 +245,41 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               </View>
             )}
 
-            {/* Row 1: Purchase Reference, Supplier, Return No */}
+            {/* Row 1: Customer, Date, Reference */}
             <View style={[styles.formRow, isMobile && styles.formRowCol]}>
               <View style={styles.formCol}>
                 <AppSelect
-                  label="Select Purchase Order/Bill"
-                  placeholder="Choose Purchase (optional)"
-                  options={purchaseOptions}
-                  value={purchaseId}
-                  onSelect={setPurchaseId}
-                />
-              </View>
-              <View style={styles.formCol}>
-                <AppSelect
-                  label="Supplier"
-                  placeholder="Select Supplier"
-                  options={supplierOptions}
-                  value={supplierId}
-                  onSelect={setSupplierId}
+                  label="Customer *"
+                  placeholder="Select Customer"
+                  options={customerOptions}
+                  value={customerId}
+                  onSelect={setCustomerId}
                 />
               </View>
               <View style={styles.formCol}>
                 <AppInput
-                  label="Return Reference *"
-                  value={returnNumber}
-                  onChangeText={setReturnNumber}
+                  label="Quotation Date *"
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View style={styles.formCol}>
+                <AppInput
+                  label="Reference / Quotation No *"
+                  value={reference}
+                  onChangeText={setReference}
                 />
               </View>
             </View>
 
-            {/* Row 2: Date, Status, Reason */}
+            {/* Row 2: Expiry Date & Status */}
             <View style={[styles.formRow, isMobile && styles.formRowCol]}>
               <View style={styles.formCol}>
                 <AppInput
-                  label="Return Date *"
-                  value={date}
-                  onChangeText={setDate}
+                  label="Expiry Date"
+                  value={expiryDate}
+                  onChangeText={setExpiryDate}
                   placeholder="YYYY-MM-DD"
                 />
               </View>
@@ -260,19 +291,11 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                   onSelect={(v: any) => setStatus(v)}
                 />
               </View>
-              <View style={styles.formCol}>
-                <AppInput
-                  label="Return Reason"
-                  value={reason}
-                  onChangeText={setReason}
-                  placeholder="e.g. Damaged batch, Expired"
-                />
-              </View>
             </View>
 
             {/* Product Search */}
             <View style={{ marginTop: 12, zIndex: 10 }}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Add Products to Return *</Text>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Add Products *</Text>
               <View style={[styles.searchWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
                 <Search size={18} color={theme.colors.textSecondary} />
                 <TextInput
@@ -298,10 +321,10 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                     >
                       <View>
                         <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{p.name}</Text>
-                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>SKU: {p.sku || 'N/A'}</Text>
                       </View>
-                      <Text style={{ color: '#F97316', fontWeight: '600' }}>
-                        ${Number(p.purchasePrice || p.cost || 0).toFixed(2)}
+                      <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>
+                        ${Number(p.retailPrice || p.price || 0).toFixed(2)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -311,7 +334,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
             {/* Items Table */}
             <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Returned Items</Text>
+              <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Quotation Items</Text>
               {items.length === 0 ? (
                 <View style={[styles.emptyBox, { borderColor: theme.colors.border }]}>
                   <Text style={{ color: theme.colors.textSecondary }}>No products added yet</Text>
@@ -320,15 +343,18 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                 <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
                   <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
                     <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Cost</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Debit Total</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Price</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Qty</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Tax</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Total</Text>
                     <Text style={[styles.th, { width: 40 }]}></Text>
                   </View>
 
                   {items.map((row, idx) => (
                     <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
-                      <Text style={{ flex: 2, color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
+                      <View style={{ flex: 2 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
+                      </View>
                       <Text style={{ flex: 1, color: theme.colors.textSecondary }}>${row.unitPrice.toFixed(2)}</Text>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
@@ -345,6 +371,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                           <Text style={{ color: theme.colors.text }}>+</Text>
                         </TouchableOpacity>
                       </View>
+                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>${row.taxAmount.toFixed(2)}</Text>
                       <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>${row.total.toFixed(2)}</Text>
                       <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
                         <Trash2 size={16} color="#EF4444" />
@@ -355,12 +382,49 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               )}
             </View>
 
-            {/* Total Debit Summary */}
-            <View style={{ marginTop: 16, alignItems: 'flex-end' }}>
-              <View style={[styles.totalsCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, width: isMobile ? '100%' : 300 }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Debit Note:</Text>
-                  <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 20 }}>${totalReturnAmount.toFixed(2)}</Text>
+            {/* Totals & Notes */}
+            <View style={[styles.formRow, { marginTop: 16 }]}>
+              <View style={{ flex: 1, gap: 12 }}>
+                <AppInput
+                  label="Discount ($)"
+                  value={discountTotal}
+                  onChangeText={setDiscountTotal}
+                  keyboardType="numeric"
+                />
+                <AppInput
+                  label="Shipping ($)"
+                  value={shipping}
+                  onChangeText={setShipping}
+                  keyboardType="numeric"
+                />
+                <AppInput
+                  label="Notes"
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Terms, valid for 30 days, etc."
+                />
+              </View>
+
+              <View style={[styles.totalsCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                <View style={styles.totalRow}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Subtotal:</Text>
+                  <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${itemsSubtotal.toFixed(2)}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Tax:</Text>
+                  <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${itemsTax.toFixed(2)}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Discount:</Text>
+                  <Text style={{ color: '#EF4444', fontWeight: '500' }}>-${(parseFloat(discountTotal) || 0).toFixed(2)}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Shipping:</Text>
+                  <Text style={{ color: theme.colors.text, fontWeight: '500' }}>+${(parseFloat(shipping) || 0).toFixed(2)}</Text>
+                </View>
+                <View style={[styles.totalRow, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }]}>
+                  <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total:</Text>
+                  <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>${grandTotal.toFixed(2)}</Text>
                 </View>
               </View>
             </View>
@@ -375,10 +439,10 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               style={{ minWidth: 100 }}
             />
             <AppButton
-              title={createPurchaseReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
+              title={createQuotationMutation.isPending ? 'Saving...' : 'Submit Quotation'}
               onPress={handleSubmit}
-              disabled={createPurchaseReturnMutation.isPending}
-              style={{ minWidth: 140, backgroundColor: '#F97316' }}
+              disabled={createQuotationMutation.isPending}
+              style={{ minWidth: 140 }}
             />
           </View>
         </View>
@@ -409,6 +473,7 @@ const styles = StyleSheet.create({
   th: { fontSize: 12, fontWeight: '600' },
   tableRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1 },
   qtyBtn: { width: 24, height: 24, borderWidth: 1, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
-  totalsCard: { borderWidth: 1, borderRadius: 8, padding: 16 },
+  totalsCard: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 16, gap: 8 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, padding: 16, borderTopWidth: 1 },
 });

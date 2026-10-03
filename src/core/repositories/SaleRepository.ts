@@ -1,6 +1,8 @@
 import { BaseRepository } from './BaseRepository';
 import { Sale, SaleItem } from '../../types/models';
 import { db } from '../database/db';
+import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class SaleRepository extends BaseRepository<Sale> {
   protected tableName = 'sales';
@@ -233,12 +235,47 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
+    // Attempt background API sync
+    try {
+      await apiClient.post(API_ENDPOINTS.SALES.BASE, {
+        branchId: 1,
+        warehouseId: 1,
+        customerId: sale.customerId || 1,
+        invoiceNumber: sale.invoiceNumber,
+        saleDate: sale.date || new Date().toISOString(),
+        status: sale.status || 'Completed',
+        subTotal: sale.subtotal,
+        taxTotal: (sale.orderTax || 0) + (sale.gst || 0),
+        discountTotal: sale.discount || 0,
+        grandTotal: sale.total,
+        paymentAmount: sale.paid,
+        paymentMethod: 'CASH',
+        items: items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+          taxAmount: item.taxAmount || 0,
+          total: item.total
+        }))
+      });
+      sale.syncStatus = 'synced';
+      await this.update(sale, false);
+    } catch (e) {
+      // offline fallback
+    }
+
     return { ...sale, items: items as SaleItem[] };
   }
 
   public override async delete(id: number): Promise<void> {
     await db.execute('DELETE FROM sale_items WHERE saleId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    try {
+      await apiClient.delete(API_ENDPOINTS.SALES.BY_ID(id));
+    } catch (e) {
+      // offline
+    }
   }
 }
 

@@ -21,10 +21,10 @@ import {
   RotateCcw,
   AlertCircle,
 } from 'lucide-react-native';
-import { useSuppliers } from '../../suppliers/api/useSupplier';
-import { usePurchases } from '../api/usePurchases';
+import { useCustomers } from '../../customers/api/useCustomer';
 import { useProductStore } from '../../products/store/productStore';
-import { useCreatePurchaseReturn } from '../api/usePurchaseReturns';
+import { useCreateSaleReturn } from '../api/useSalesReturns';
+import { useSales } from '../api/useSales';
 import { Product } from '../../products/types';
 
 interface ReturnItemRow {
@@ -42,19 +42,19 @@ interface Props {
   onClose: () => void;
 }
 
-export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
 
-  const { data: suppliers = [] } = useSuppliers();
-  const { data: purchases = [] } = usePurchases();
+  const { data: customers = [] } = useCustomers();
+  const { data: sales = [] } = useSales();
   const { products, fetchProducts } = useProductStore();
-  const createPurchaseReturnMutation = useCreatePurchaseReturn();
+  const createSaleReturnMutation = useCreateSaleReturn();
 
-  const [supplierId, setSupplierId] = useState<string>('');
-  const [purchaseId, setPurchaseId] = useState<string>('');
+  const [customerId, setCustomerId] = useState<string>('');
+  const [saleId, setSaleId] = useState<string>('');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [returnNumber, setReturnNumber] = useState<string>(() => `PRT-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [returnNumber, setReturnNumber] = useState<string>(() => `SRT-${Math.floor(100000 + Math.random() * 900000)}`);
   const [reason, setReason] = useState<string>('');
   const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
 
@@ -69,32 +69,32 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
         fetchProducts().catch(() => {});
       }
       setDate(new Date().toISOString().split('T')[0]);
-      setReturnNumber(`PRT-${Math.floor(100000 + Math.random() * 900000)}`);
+      setReturnNumber(`SRT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
   }, [visible, products.length, fetchProducts]);
 
-  const supplierOptions = useMemo(() => {
-    return suppliers.map((s) => ({
-      label: s.name,
+  const customerOptions = useMemo(() => {
+    return customers.map((c) => ({
+      label: c.name,
+      value: String(c.id),
+    }));
+  }, [customers]);
+
+  const saleOptions = useMemo(() => {
+    return sales.map((s) => ({
+      label: `${s.invoiceNumber} - ${s.customerName || 'Customer'} ($${s.total})`,
       value: String(s.id),
     }));
-  }, [suppliers]);
+  }, [sales]);
 
-  const purchaseOptions = useMemo(() => {
-    return purchases.map((p) => ({
-      label: `${p.invoiceNumber} - ${p.supplierName || 'Supplier'} ($${p.total})`,
-      value: String(p.id),
-    }));
-  }, [purchases]);
-
-  const selectedSupplier = useMemo(() => {
-    return suppliers.find((s) => String(s.id) === String(supplierId));
-  }, [suppliers, supplierId]);
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c) => String(c.id) === String(customerId));
+  }, [customers, customerId]);
 
   const statusOptions = [
-    { label: 'Received / Returned (Deduct from inventory)', value: 'Received' },
-    { label: 'Pending Approval', value: 'Pending' },
+    { label: 'Received (Restock to inventory)', value: 'Received' },
+    { label: 'Pending Inspection', value: 'Pending' },
   ];
 
   const filteredProducts = useMemo(() => {
@@ -109,7 +109,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
   const handleSelectProduct = (product: Product) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
-    const unitPrice = Number(product.purchasePrice || product.cost || 0);
+    const unitPrice = Number(product.retailPrice || product.price || 0);
 
     if (existingIndex >= 0) {
       const updated = [...items];
@@ -152,18 +152,18 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
   const handleSubmit = async () => {
     if (items.length === 0) {
-      setErrorMessage('Please add at least one product to return.');
+      setErrorMessage('Please add at least one returned product.');
       return;
     }
 
     try {
-      await createPurchaseReturnMutation.mutateAsync({
-        purchaseReturn: {
-          purchaseId: purchaseId ? Number(purchaseId) : undefined,
-          returnNumber: returnNumber || `PRT-${Date.now().toString().slice(-6)}`,
+      await createSaleReturnMutation.mutateAsync({
+        saleReturn: {
+          saleId: saleId ? Number(saleId) : undefined,
+          returnNumber: returnNumber || `SRT-${Date.now().toString().slice(-6)}`,
           reference: returnNumber,
-          supplierId: supplierId ? Number(supplierId) : undefined,
-          supplierName: selectedSupplier?.name || 'Supplier',
+          customerId: customerId ? Number(customerId) : undefined,
+          customerName: selectedCustomer?.name || 'Walk-in Customer',
           date: date || new Date().toISOString().split('T')[0],
           subtotal: totalReturnAmount,
           taxTotal: 0,
@@ -182,11 +182,11 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
         })),
       });
 
-      Alert.alert('Success', 'Purchase return created and inventory updated!');
+      Alert.alert('Success', 'Sales return created and items restocked to inventory!');
       setItems([]);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to create purchase return');
+      setErrorMessage(err?.message || 'Failed to create sales return');
     }
   };
 
@@ -197,8 +197,8 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <RotateCcw size={20} color="#F97316" />
-              <Text style={[styles.title, { color: theme.colors.text }]}>Add Purchase Return</Text>
+              <RotateCcw size={20} color="#0EA5E9" />
+              <Text style={[styles.title, { color: theme.colors.text }]}>Add Sales Return</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <X size={20} color={theme.colors.textSecondary} />
@@ -213,24 +213,24 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               </View>
             )}
 
-            {/* Row 1: Purchase Reference, Supplier, Return No */}
+            {/* Row 1: Sale Reference, Customer, Return No */}
             <View style={[styles.formRow, isMobile && styles.formRowCol]}>
               <View style={styles.formCol}>
                 <AppSelect
-                  label="Select Purchase Order/Bill"
-                  placeholder="Choose Purchase (optional)"
-                  options={purchaseOptions}
-                  value={purchaseId}
-                  onSelect={setPurchaseId}
+                  label="Select Sale Invoice"
+                  placeholder="Choose Sale (optional)"
+                  options={saleOptions}
+                  value={saleId}
+                  onSelect={setSaleId}
                 />
               </View>
               <View style={styles.formCol}>
                 <AppSelect
-                  label="Supplier"
-                  placeholder="Select Supplier"
-                  options={supplierOptions}
-                  value={supplierId}
-                  onSelect={setSupplierId}
+                  label="Customer"
+                  placeholder="Select Customer"
+                  options={customerOptions}
+                  value={customerId}
+                  onSelect={setCustomerId}
                 />
               </View>
               <View style={styles.formCol}>
@@ -265,14 +265,14 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                   label="Return Reason"
                   value={reason}
                   onChangeText={setReason}
-                  placeholder="e.g. Damaged batch, Expired"
+                  placeholder="e.g. Defective, Wrong Size"
                 />
               </View>
             </View>
 
             {/* Product Search */}
             <View style={{ marginTop: 12, zIndex: 10 }}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Add Products to Return *</Text>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Add Returned Products *</Text>
               <View style={[styles.searchWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
                 <Search size={18} color={theme.colors.textSecondary} />
                 <TextInput
@@ -300,8 +300,8 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                         <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{p.name}</Text>
                         <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
                       </View>
-                      <Text style={{ color: '#F97316', fontWeight: '600' }}>
-                        ${Number(p.purchasePrice || p.cost || 0).toFixed(2)}
+                      <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>
+                        ${Number(p.retailPrice || p.price || 0).toFixed(2)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -320,9 +320,9 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                 <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
                   <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
                     <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Cost</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Price</Text>
                     <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Debit Total</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Refund Total</Text>
                     <Text style={[styles.th, { width: 40 }]}></Text>
                   </View>
 
@@ -355,12 +355,12 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               )}
             </View>
 
-            {/* Total Debit Summary */}
+            {/* Total Refund Summary */}
             <View style={{ marginTop: 16, alignItems: 'flex-end' }}>
               <View style={[styles.totalsCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, width: isMobile ? '100%' : 300 }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Debit Note:</Text>
-                  <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 20 }}>${totalReturnAmount.toFixed(2)}</Text>
+                  <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Refund:</Text>
+                  <Text style={{ color: '#0EA5E9', fontWeight: '700', fontSize: 20 }}>${totalReturnAmount.toFixed(2)}</Text>
                 </View>
               </View>
             </View>
@@ -375,10 +375,10 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
               style={{ minWidth: 100 }}
             />
             <AppButton
-              title={createPurchaseReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
+              title={createSaleReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
               onPress={handleSubmit}
-              disabled={createPurchaseReturnMutation.isPending}
-              style={{ minWidth: 140, backgroundColor: '#F97316' }}
+              disabled={createSaleReturnMutation.isPending}
+              style={{ minWidth: 140, backgroundColor: '#0EA5E9' }}
             />
           </View>
         </View>

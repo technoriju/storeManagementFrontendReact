@@ -1,18 +1,18 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AddPurchaseReturnModal } from '../components/AddPurchaseReturnModal';
+import { usePurchaseReturns, useDeletePurchaseReturn } from '../api/usePurchaseReturns';
 import { 
-  FileText, 
-  FileSpreadsheet, 
+  RotateCcw, 
   RefreshCw, 
-  ChevronUp, 
   PlusCircle, 
-  Edit,
-  Trash2,
-  ChevronDown
+  Trash2, 
+  Eye, 
+  X,
+  Truck,
 } from 'lucide-react-native';
 
 interface Props {
@@ -22,52 +22,92 @@ interface Props {
 export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewItem, setViewItem] = useState<any | null>(null);
 
-  // Mock data based on the screenshot
-  const returns = [
-    { id: '1', img: 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&q=80&w=100', date: '24 Dec 2024', supplierName: 'Electro Mart', reference: 'PT001', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
-    { id: '2', img: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&q=80&w=100', date: '10 Dec 2024', supplierName: 'Quantum Gadgets', reference: 'PT002', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: '3', img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=100', date: '27 Nov 2024', supplierName: 'Prime Bazaar', reference: 'PT003', status: 'Received', total: 1500, paid: 1800, due: 0, paymentStatus: 'Paid' },
-    { id: '4', img: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&q=80&w=100', date: '18 Nov 2024', supplierName: 'Gadget World', reference: 'PT004', status: 'Received', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
-    { id: '5', img: 'https://images.unsplash.com/photo-1543512214-318c7553f230?auto=format&fit=crop&q=80&w=100', date: '06 Nov 2024', supplierName: 'Volt Vault', reference: 'PT005', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
-    { id: '6', img: 'https://images.unsplash.com/photo-1505843490538-5133c6c7d0e1?auto=format&fit=crop&q=80&w=100', date: '25 Oct 2024', supplierName: 'Elite Retail', reference: 'PT006', status: 'Pending', total: 750, paid: 0, due: 750, paymentStatus: 'Unpaid' },
-    { id: '7', img: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=100', date: '14 Oct 2024', supplierName: 'Prime Mart', reference: 'PT007', status: 'Received', total: 1300, paid: 1300, due: 0, paymentStatus: 'Paid' },
-    { id: '8', img: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=100', date: '14 Oct 2024', supplierName: 'NeoTech Store', reference: 'PT008', status: 'Received', total: 1100, paid: 1100, due: 0, paymentStatus: 'Paid' },
-    { id: '9', img: 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&q=80&w=100', date: '20 Sep 2024', supplierName: 'Urban Mart', reference: 'PT009', status: 'Pending', total: 2300, paid: 2300, due: 0, paymentStatus: 'Paid' },
-  ];
+  const { data: dbReturns = [], isLoading, refetch } = usePurchaseReturns();
+  const deleteReturnMutation = useDeletePurchaseReturn();
+
+  const fallbackReturns = useMemo(() => [
+    { id: 1, returnNumber: 'PRT-001', supplierName: 'Electro Mart', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Damaged motherboards' },
+    { id: 2, returnNumber: 'PRT-002', supplierName: 'Quantum Gadgets', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong specification' },
+    { id: 3, returnNumber: 'PRT-003', supplierName: 'Prime Bazaar', date: '2024-11-27', status: 'Received', totalAmount: 1500, reason: 'Over-supplied batch' },
+    { id: 4, returnNumber: 'PRT-004', supplierName: 'Gadget World', date: '2024-11-18', status: 'Received', totalAmount: 2000, reason: 'Defective screen units' },
+  ], []);
+
+  const allReturns = useMemo(() => {
+    if (dbReturns && dbReturns.length > 0) {
+      return dbReturns.map((r) => ({
+        id: r.id,
+        returnNumber: r.returnNumber,
+        supplierName: r.supplierName || 'Unknown Supplier',
+        date: r.date,
+        totalAmount: Number(r.totalAmount || 0),
+        status: r.status || 'Received',
+        reason: r.reason,
+        items: r.items || [],
+      }));
+    }
+    return fallbackReturns;
+  }, [dbReturns, fallbackReturns]);
+
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return allReturns;
+    const q = searchQuery.toLowerCase().trim();
+    return allReturns.filter((item) =>
+      item.returnNumber?.toLowerCase().includes(q) ||
+      item.supplierName?.toLowerCase().includes(q) ||
+      item.status?.toLowerCase().includes(q) ||
+      item.reason?.toLowerCase().includes(q)
+    );
+  }, [allReturns, searchQuery]);
+
+  const handleDelete = (item: any) => {
+    Alert.alert(
+      'Delete Purchase Return',
+      `Are you sure you want to delete purchase return ${item.returnNumber}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteReturnMutation.mutateAsync(item.id);
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Received': return { bg: '#10B981', text: 'white' };
-      case 'Pending': return { bg: '#0EA5E9', text: 'white' };
+      case 'Pending': return { bg: '#F97316', text: 'white' };
       default: return { bg: theme.colors.border, text: theme.colors.text };
-    }
-  };
-
-  const getPaymentStatusStyle = (status: string) => {
-    switch (status) {
-      case 'Paid': return { bg: '#ECFDF5', text: '#10B981', dot: '#10B981' };
-      case 'Unpaid': return { bg: '#FEF2F2', text: '#EF4444', dot: '#EF4444' };
-      case 'Overdue': return { bg: '#FFFBEB', text: '#F59E0B', dot: '#F59E0B' };
-      default: return { bg: theme.colors.background, text: theme.colors.textSecondary, dot: 'transparent' };
     }
   };
 
   const columns = [
     { 
-      key: 'img', 
-      title: 'Product Image', 
-      width: 120,
+      key: 'returnNumber', 
+      title: 'Return No', 
+      flex: 1.2,
+      minWidth: 120,
+      render: (value: string) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{value}</Text>
+    },
+    { 
+      key: 'supplierName', 
+      title: 'Supplier Name', 
+      flex: 1.5,
+      minWidth: 150,
       render: (value: string) => (
-        <View style={{ alignItems: 'flex-start' }}>
-          {value ? (
-            <Image source={{ uri: value }} style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background }} />
-          ) : (
-            <View style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
-            </View>
-          )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Truck size={14} color={theme.colors.textSecondary} />
+          <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
         </View>
       )
     },
@@ -75,27 +115,19 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'date', 
       title: 'Date', 
       flex: 1,
-      minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
-    },
-    { 
-      key: 'supplierName', 
-      title: 'Supplier Name', 
-      flex: 1.5,
-      minWidth: 150,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
-    },
-    { 
-      key: 'reference', 
-      title: 'Reference', 
-      flex: 1,
       minWidth: 100,
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
     },
     { 
+      key: 'totalAmount', 
+      title: 'Debit Amount', 
+      width: 120,
+      render: (value: number) => <Text style={{ color: '#F97316', fontWeight: '600' }}>${value?.toFixed(2) || '0.00'}</Text>
+    },
+    { 
       key: 'status', 
       title: 'Status', 
-      width: 100,
+      width: 110,
       render: (value: string) => {
         const colors = getStatusColor(value);
         return (
@@ -106,150 +138,139 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     },
     { 
-      key: 'total', 
-      title: 'Total', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      key: 'reason', 
+      title: 'Reason', 
+      flex: 1.5,
+      minWidth: 130,
+      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }} numberOfLines={1}>{value || '-'}</Text>
     },
-    { 
-      key: 'paid', 
-      title: 'Paid', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
-    },
-    { 
-      key: 'due', 
-      title: 'Due', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
-    },
-    { 
-      key: 'paymentStatus', 
-      title: 'Payment Status', 
-      width: 130,
-      render: (value: string) => {
-        const style = getPaymentStatusStyle(value);
-        return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: style.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: style.dot }} />
-            <Text style={{ color: style.text, fontSize: 12, fontWeight: '500' }}>{value}</Text>
-          </View>
-        );
-      }
-    },
+    {
+      key: 'actions',
+      title: 'Actions',
+      width: 80,
+      render: (_: any, item: any) => (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable onPress={() => setViewItem(item)} style={{ padding: 4 }}>
+            <Eye size={16} color={theme.colors.textSecondary} />
+          </Pressable>
+          <Pressable onPress={() => handleDelete(item)} style={{ padding: 4 }}>
+            <Trash2 size={16} color="#EF4444" />
+          </Pressable>
+        </View>
+      )
+    }
   ];
-
-  const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <ChevronUp size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-        onPress={() => setIsModalVisible(true)}
-      >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Purchase Return</Text>
-      </Pressable>
-    </>
-  );
-
-  const filters = (
-    <>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Status</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Sort By : Last 7 Days</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-    </>
-  );
-
-  const renderRowActions = (item: any) => (
-    <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Edit size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-    </>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AdvancedTable
-        title="Purchase Returns"
-        subtitle="Manage your purchase return"
-        headerActions={headerActions}
-        columns={columns}
-        data={returns}
-        onSearch={setSearchQuery}
-        filters={filters}
-        renderRowActions={renderRowActions}
-        isLoading={false}
+      {/* Header bar */}
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Purchase Return</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Manage returns to suppliers and inventory write-offs</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable 
+            style={[styles.iconButton, { borderColor: theme.colors.border }]}
+            onPress={() => refetch()}
+          >
+            <RefreshCw size={16} color={theme.colors.textSecondary} />
+          </Pressable>
+
+          <Pressable 
+            style={[styles.addButton, { backgroundColor: '#F97316' }]}
+            onPress={() => setShowAddModal(true)}
+          >
+            <PlusCircle size={16} color="white" />
+            <Text style={styles.addButtonText}>Add Purchase Return</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Advanced Table */}
+      <View style={styles.tableCard}>
+        <AdvancedTable
+          data={filteredData}
+          columns={columns}
+          onSearch={setSearchQuery}
+          searchPlaceholder="Search return no, supplier, reason..."
+          isLoading={isLoading}
+          hasCheckbox={false}
+        />
+      </View>
+
+      {/* Add Purchase Return Modal */}
+      <AddPurchaseReturnModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
       />
-      <AddPurchaseReturnModal 
-        visible={isModalVisible} 
-        onClose={() => setIsModalVisible(false)} 
-      />
+
+      {/* View Return Details Modal */}
+      {viewItem && (
+        <Modal visible={!!viewItem} transparent animationType="fade">
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Return #{viewItem.returnNumber}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Supplier: {viewItem.supplierName}</Text>
+                </View>
+                <Pressable onPress={() => setViewItem(null)}>
+                  <X size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ padding: 16, maxHeight: 400 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Date: {viewItem.date}</Text>
+                  <Text style={{ color: theme.colors.textSecondary }}>Status: {viewItem.status}</Text>
+                </View>
+                {viewItem.reason && (
+                  <Text style={{ color: theme.colors.textSecondary, marginBottom: 8 }}>
+                    Reason: <Text style={{ color: theme.colors.text }}>{viewItem.reason}</Text>
+                  </Text>
+                )}
+
+                {viewItem.items && viewItem.items.length > 0 && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 6 }}>Returned Products:</Text>
+                    {viewItem.items.map((i: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ${Number(i.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${Number(i.total).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Debit Note:</Text>
+                    <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 18 }}>${Number(viewItem.totalAmount).toFixed(2)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
-  },
-  primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 36,
-    borderRadius: 6,
-    gap: 8,
-  },
-  primaryActionText: {
-    color: 'white',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  filterDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    height: 40,
-    backgroundColor: 'white',
-  },
-  rowActionBtn: {
-    width: 32,
-    height: 32,
-    borderWidth: 1,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
-  }
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 20, fontWeight: 'bold' },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  iconButton: { padding: 8, borderWidth: 1, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  addButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  addButtonText: { color: 'white', fontWeight: '600', fontSize: 13 },
+  tableCard: { flex: 1 },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold' },
 });
-
-

@@ -1,6 +1,8 @@
 import { BaseRepository } from './BaseRepository';
 import { Purchase, PurchaseItem } from '../../types/models';
 import { db } from '../database/db';
+import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
 
 export class PurchaseRepository extends BaseRepository<Purchase> {
   protected tableName = 'purchases';
@@ -227,12 +229,47 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
+    // Attempt background API sync
+    try {
+      await apiClient.post(API_ENDPOINTS.PURCHASES.BASE, {
+        branchId: 1,
+        warehouseId: 1,
+        supplierId: purchase.supplierId || 1,
+        invoiceNumber: purchase.invoiceNumber,
+        purchaseDate: purchase.date || new Date().toISOString(),
+        status: purchase.status || 'Received',
+        subTotal: purchase.subtotal,
+        taxTotal: (purchase.orderTax || 0) + (purchase.gst || 0),
+        discountTotal: purchase.discount || 0,
+        grandTotal: purchase.total,
+        paymentAmount: purchase.paid,
+        paymentMethod: 'CASH',
+        items: items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+          taxAmount: item.taxAmount || 0,
+          total: item.total
+        }))
+      });
+      purchase.syncStatus = 'synced';
+      await this.update(purchase, false);
+    } catch (e) {
+      // offline fallback
+    }
+
     return { ...purchase, items: items as PurchaseItem[] };
   }
 
   public override async delete(id: number): Promise<void> {
     await db.execute('DELETE FROM purchase_items WHERE purchaseId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    try {
+      await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(id));
+    } catch (e) {
+      // offline
+    }
   }
 }
 

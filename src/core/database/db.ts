@@ -386,6 +386,178 @@ export const initializeDatabase = () => {
       );
     `);
 
+    // Quotations Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS quotations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quotationNumber TEXT NOT NULL,
+        customerId INTEGER NOT NULL,
+        customerName TEXT,
+        date TEXT NOT NULL,
+        expiryDate TEXT,
+        subtotal REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxTotal REAL DEFAULT 0,
+        shipping REAL DEFAULT 0,
+        grandTotal REAL NOT NULL,
+        status TEXT DEFAULT 'Sent',
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Quotation Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS quotation_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quotationId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
+        productName TEXT,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxAmount REAL DEFAULT 0,
+        unit TEXT,
+        unitType TEXT DEFAULT 'base',
+        conversionRate REAL DEFAULT 1,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchase Orders Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchase_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        orderNumber TEXT NOT NULL,
+        supplierId INTEGER NOT NULL,
+        supplierName TEXT,
+        orderDate TEXT NOT NULL,
+        expectedDate TEXT,
+        subtotal REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxTotal REAL DEFAULT 0,
+        shipping REAL DEFAULT 0,
+        grandTotal REAL NOT NULL,
+        status TEXT DEFAULT 'Ordered',
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchase Order Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchase_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchaseOrderId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
+        productName TEXT,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxAmount REAL DEFAULT 0,
+        unit TEXT,
+        unitType TEXT DEFAULT 'base',
+        conversionRate REAL DEFAULT 1,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Sale Returns Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sale_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        saleId INTEGER,
+        returnNumber TEXT NOT NULL,
+        reference TEXT,
+        customerId INTEGER,
+        customerName TEXT,
+        date TEXT NOT NULL,
+        subtotal REAL DEFAULT 0,
+        taxTotal REAL DEFAULT 0,
+        discountTotal REAL DEFAULT 0,
+        totalAmount REAL NOT NULL,
+        status TEXT DEFAULT 'Received',
+        reason TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Sale Return Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS sale_return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        saleReturnId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
+        productName TEXT,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxAmount REAL DEFAULT 0,
+        unit TEXT,
+        unitType TEXT DEFAULT 'base',
+        conversionRate REAL DEFAULT 1,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchase Returns Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchase_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchaseId INTEGER,
+        returnNumber TEXT NOT NULL,
+        reference TEXT,
+        supplierId INTEGER,
+        supplierName TEXT,
+        date TEXT NOT NULL,
+        subtotal REAL DEFAULT 0,
+        taxTotal REAL DEFAULT 0,
+        discountTotal REAL DEFAULT 0,
+        totalAmount REAL NOT NULL,
+        status TEXT DEFAULT 'Received',
+        reason TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Purchase Return Items Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS purchase_return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchaseReturnId INTEGER NOT NULL,
+        productId INTEGER NOT NULL,
+        productName TEXT,
+        quantity REAL NOT NULL,
+        unitPrice REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        taxAmount REAL DEFAULT 0,
+        unit TEXT,
+        unitType TEXT DEFAULT 'base',
+        conversionRate REAL DEFAULT 1,
+        total REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
     // Settings Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS settings (

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, Pressable, Image, Modal, Alert } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { PosScreenType } from '../PosModule';
+import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AddSalesModal } from '../components/AddSalesModal';
 import { useSales, useDeleteSale } from '../api/useSales';
@@ -14,7 +14,8 @@ import {
   ChevronDown,
   MoreVertical,
   Eye,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react-native';
 
 interface Props {
@@ -28,7 +29,7 @@ const MenuItem = ({ icon, label, onPress }: any) => (
   </Pressable>
 );
 
-const ActionMenu = ({ item, theme, onDelete }: { item: any; theme: any; onDelete: (item: any) => void }) => {
+const ActionMenu = ({ item, theme, onDelete, onView }: { item: any; theme: any; onDelete: (item: any) => void; onView: (item: any) => void }) => {
   const [visible, setVisible] = useState(false);
   const [layout, setLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const buttonRef = useRef<any>(null);
@@ -56,6 +57,14 @@ const ActionMenu = ({ item, theme, onDelete }: { item: any; theme: any; onDelete
             borderColor: theme.colors.border,
           }]}>
             <MenuItem
+              icon={<Eye size={16} color={theme.colors.primary} />}
+              label="View Order"
+              onPress={() => {
+                setVisible(false);
+                onView(item);
+              }}
+            />
+            <MenuItem
               icon={<Trash2 size={16} color="#EF4444" />}
               label="Delete Sale"
               onPress={() => {
@@ -74,6 +83,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -101,6 +111,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         due: Number(s.due || 0),
         paymentStatus: s.paymentStatus || 'Unpaid',
         biller: s.biller || 'Admin',
+        items: s.items || [],
       }));
     }
     return fallbackOrders;
@@ -262,7 +273,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const renderRowActions = (item: any) => (
-    <ActionMenu item={item} theme={theme} onDelete={handleDelete} />
+    <ActionMenu item={item} theme={theme} onDelete={handleDelete} onView={setSelectedOrder} />
   );
 
   return (
@@ -279,12 +290,69 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         isLoading={isLoading}
       />
       <AddSalesModal visible={showAddModal} onClose={() => setShowAddModal(false)} />
+
+      {selectedOrder && (
+        <Modal visible={!!selectedOrder} transparent animationType="fade">
+          <View style={[styles.modalOverlayCenter, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Order #{selectedOrder.reference}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Customer: {selectedOrder.customerName}</Text>
+                </View>
+                <Pressable onPress={() => setSelectedOrder(null)}>
+                  <X size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ padding: 16, maxHeight: 400 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Date: {selectedOrder.date}</Text>
+                  <Text style={{ color: theme.colors.textSecondary }}>Status: {selectedOrder.status}</Text>
+                </View>
+
+                {selectedOrder.items && selectedOrder.items.length > 0 && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 6 }}>Ordered Items:</Text>
+                    {selectedOrder.items.map((i: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ${Number(i.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${Number(i.total).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10, gap: 4 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>Grand Total:</Text>
+                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 16 }}>${Number(selectedOrder.grandTotal).toFixed(2)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: '#10B981', fontWeight: '500' }}>Paid:</Text>
+                    <Text style={{ color: '#10B981', fontWeight: '500' }}>${Number(selectedOrder.paid).toFixed(2)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: selectedOrder.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>Due:</Text>
+                    <Text style={{ color: selectedOrder.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>${Number(selectedOrder.due).toFixed(2)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   modalOverlay: { flex: 1 },
+  modalOverlayCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold' },
   popover: {
     position: 'absolute',
     width: 150,
