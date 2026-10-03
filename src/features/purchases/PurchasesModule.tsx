@@ -16,7 +16,7 @@ interface Props {
 
 export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
   const [currentScreen, setCurrentScreen] = useState<PurchaseScreenType>('list');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   React.useEffect(() => {
     if (initialScreen === 'purchases') setCurrentScreen('list');
@@ -24,7 +24,7 @@ export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
     else if (initialScreen === 'purchase_return') setCurrentScreen('return');
   }, [initialScreen]);
 
-  const navigateTo = (screen: PurchaseScreenType, id?: string) => {
+  const navigateTo = (screen: PurchaseScreenType, id?: string | number) => {
     setSelectedId(id || null);
     setCurrentScreen(screen);
   };

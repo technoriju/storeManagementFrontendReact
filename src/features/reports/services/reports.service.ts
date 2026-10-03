@@ -59,18 +59,155 @@ export class ReportsService {
 
   static async getInventoryReport(filters: ReportFilters) {
     let query = `
-      SELECT id, name, sku, stockQuantity, cost, price, (stockQuantity * cost) as stockValue
-      FROM products
+      SELECT 
+        p.id, 
+        p.name, 
+        p.sku, 
+        p.stockQuantity as baseStock,
+        COALESCE(u.shortName, u.name, 'Box') as baseUnit,
+        p.conversionRate,
+        COALESCE(su.name, 'Pcs') as subUnit,
+        CASE 
+          WHEN p.conversionRate > 1 THEN ROUND(p.stockQuantity * p.conversionRate, 2)
+          ELSE p.stockQuantity 
+        END as subUnitStock,
+        CASE 
+          WHEN p.conversionRate > 1 THEN 
+            ROUND(p.stockQuantity, 2) || ' ' || COALESCE(u.shortName, u.name, 'Box') || ' (' || ROUND(p.stockQuantity * p.conversionRate, 0) || ' ' || COALESCE(su.name, 'Pcs') || ')'
+          ELSE 
+            ROUND(p.stockQuantity, 2) || ' ' || COALESCE(u.shortName, u.name, 'Box')
+        END as stockWithUnits,
+        p.cost as boxCost,
+        CASE 
+          WHEN p.conversionRate > 1 THEN ROUND(p.cost / p.conversionRate, 2)
+          ELSE p.cost
+        END as pcsCost,
+        ROUND(p.stockQuantity * p.cost, 2) as stockValuation
+      FROM products p
+      LEFT JOIN units u ON p.unitId = u.id OR p.baseUnitId = u.id
+      LEFT JOIN sub_units su ON p.subUnitId = su.id OR p.subunitId = su.id
       WHERE 1=1
     `;
     
     if (filters.productId) {
-      query += ` AND id = '${filters.productId}'`;
+      query += ` AND p.id = '${filters.productId}'`;
     }
     
-    query += ' ORDER BY name ASC';
+    query += ' ORDER BY p.name ASC';
     const res = await db.execute(query);
     return res.rows || [];
+  }
+
+  static async getProfitAndLossReport(filters: ReportFilters) {
+    // 1. Sales Revenue
+    const salesRes = await db.execute(`
+      SELECT 
+        SUM(total) as grossSales,
+        SUM(discount) as totalDiscount,
+        SUM(gst) as totalTax
+      FROM sales
+      WHERE ${this.buildDateCondition('createdAt', filters)} AND status != 'cancelled'
+    `);
+    const grossSales = Number(salesRes.rows[0]?.grossSales || 0);
+    const totalDiscount = Number(salesRes.rows[0]?.totalDiscount || 0);
+    const netSales = grossSales;
+
+    // 2. Cost of Goods Sold (COGS) converted with unitCost & conversionRate
+    const cogsRes = await db.execute(`
+      SELECT SUM(
+        si.quantity * CASE 
+          WHEN si.unitCost IS NOT NULL AND si.unitCost > 0 THEN si.unitCost
+          WHEN si.unitType = 'sub' AND si.conversionRate > 0 THEN (p.cost / si.conversionRate)
+          WHEN p.conversionRate > 1 AND si.unitType = 'sub' THEN (p.cost / p.conversionRate)
+          ELSE p.cost
+        END
+      ) as totalCOGS
+      FROM sale_items si
+      JOIN products p ON si.productId = p.id
+      JOIN sales s ON si.saleId = s.id
+      WHERE ${this.buildDateCondition('s.createdAt', filters)} AND s.status != 'cancelled'
+    `);
+    const cogs = Number(cogsRes.rows[0]?.totalCOGS || 0);
+
+    // 3. Operating Expenses
+    const expRes = await db.execute(`
+      SELECT SUM(amount) as totalExpenses
+      FROM expenses
+      WHERE ${this.buildDateCondition('date', filters)}
+    `);
+    const totalExpenses = Number(expRes.rows[0]?.totalExpenses || 0);
+
+    // 4. Calculations
+    const grossProfit = netSales - cogs;
+    const netProfit = grossProfit - totalExpenses;
+    const grossMarginPercent = netSales > 0 ? Number(((grossProfit / netSales) * 100).toFixed(2)) : 0;
+    const netMarginPercent = netSales > 0 ? Number(((netProfit / netSales) * 100).toFixed(2)) : 0;
+
+    return [
+      { metric: '1. Gross Sales Revenue', amount: grossSales, notes: 'Total sales invoices' },
+      { metric: '2. Sales Discounts Given', amount: totalDiscount, notes: 'Discounts deducted' },
+      { metric: '3. Net Sales Revenue', amount: netSales, notes: 'Sales after discount' },
+      { metric: '4. Cost of Goods Sold (COGS)', amount: cogs, notes: 'Calculated using unit & sub-unit conversion costs' },
+      { metric: '5. GROSS PROFIT', amount: grossProfit, notes: `Gross Margin: ${grossMarginPercent}%` },
+      { metric: '6. Operating Expenses', amount: totalExpenses, notes: 'General and operational costs' },
+      { metric: '7. NET PROFIT / (LOSS)', amount: netProfit, notes: `Net Margin: ${netMarginPercent}%` },
+    ];
+  }
+
+  static async getBalanceSheetReport(filters: ReportFilters) {
+    // Current Assets:
+    // a. Stock Valuation: base units * box cost
+    const stockRes = await db.execute(`
+      SELECT SUM(stockQuantity * cost) as stockValuation FROM products
+    `);
+    const stockValuation = Number(stockRes.rows[0]?.stockValuation || 0);
+
+    // b. Cash & Bank (Collected Sales - Paid Purchases - Expenses)
+    const cashInRes = await db.execute(`
+      SELECT SUM(paid) as totalCashIn FROM sales WHERE status != 'cancelled'
+    `);
+    const cashIn = Number(cashInRes.rows[0]?.totalCashIn || 0);
+
+    const cashOutPurchasesRes = await db.execute(`
+      SELECT SUM(paid) as totalPurchasesPaid FROM purchases WHERE status != 'cancelled'
+    `);
+    const purchasesPaid = Number(cashOutPurchasesRes.rows[0]?.totalPurchasesPaid || 0);
+
+    const expensesRes = await db.execute(`
+      SELECT SUM(amount) as totalExpenses FROM expenses
+    `);
+    const totalExpenses = Number(expensesRes.rows[0]?.totalExpenses || 0);
+
+    const netCashAndBank = Math.max(0, cashIn - purchasesPaid - totalExpenses);
+
+    // c. Accounts Receivable (Customer Outstanding)
+    const arRes = await db.execute(`
+      SELECT SUM(due) as accountsReceivable FROM sales WHERE status != 'cancelled'
+    `);
+    const accountsReceivable = Number(arRes.rows[0]?.accountsReceivable || 0);
+
+    const totalCurrentAssets = stockValuation + netCashAndBank + accountsReceivable;
+
+    // Current Liabilities:
+    // Accounts Payable (Supplier Outstanding)
+    const apRes = await db.execute(`
+      SELECT SUM(due) as accountsPayable FROM purchases WHERE status != 'cancelled'
+    `);
+    const accountsPayable = Number(apRes.rows[0]?.accountsPayable || 0);
+    const totalCurrentLiabilities = accountsPayable;
+
+    // Equity: Net Working Capital
+    const workingCapital = totalCurrentAssets - totalCurrentLiabilities;
+
+    return [
+      { category: 'ASSETS', item: 'Inventory Valuation (Stock in Box/Pcs)', amount: stockValuation, type: 'Current Asset' },
+      { category: 'ASSETS', item: 'Cash & Liquid Balance', amount: netCashAndBank, type: 'Current Asset' },
+      { category: 'ASSETS', item: 'Accounts Receivable (Customers Owe)', amount: accountsReceivable, type: 'Current Asset' },
+      { category: 'ASSETS', item: 'TOTAL CURRENT ASSETS', amount: totalCurrentAssets, type: 'Subtotal' },
+      { category: 'LIABILITIES', item: 'Accounts Payable (Owed to Suppliers)', amount: accountsPayable, type: 'Current Liability' },
+      { category: 'LIABILITIES', item: 'TOTAL LIABILITIES', amount: totalCurrentLiabilities, type: 'Subtotal' },
+      { category: 'EQUITY', item: 'Net Working Capital (Assets - Liabilities)', amount: workingCapital, type: 'Equity / Net Worth' },
+    ];
   }
 
   static async getGSTReport(filters: ReportFilters) {

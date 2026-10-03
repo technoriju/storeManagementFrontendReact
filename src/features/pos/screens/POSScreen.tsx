@@ -13,12 +13,14 @@ import { usePOSStore } from '../store/posStore';
 import { useKeyboardShortcut } from '../../../shared/hooks/useKeyboardShortcut';
 import { Product } from '../../products/types';
 import { useProductStore } from '../../products/store/productStore';
+import { useCreateSale } from '../api/useSales';
 
 export const POSScreen = () => {
   const {
     cart,
     customer,
     addToCart,
+    toggleCartItemUnit,
     updateCartItem,
     removeFromCart,
     clearCart,
@@ -29,7 +31,8 @@ export const POSScreen = () => {
     getGrandTotal,
   } = usePOSStore();
 
-  const { products } = useProductStore();
+  const { products, fetchProducts } = useProductStore();
+  const createSaleMutation = useCreateSale();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -61,6 +64,62 @@ export const POSScreen = () => {
     }
   };
 
+  const handleCompleteSale = async () => {
+    if (cart.length === 0) {
+      Alert.alert('Empty Cart', 'Please add items to cart first.');
+      return;
+    }
+
+    try {
+      const invNum = `POS-${Date.now().toString().slice(-6)}`;
+      await createSaleMutation.mutateAsync({
+        sale: {
+          invoiceNumber: invNum,
+          reference: invNum,
+          customerId: customer?.id || 1,
+          customerName: customer?.name || 'Walk-in Customer',
+          date: new Date().toISOString().split('T')[0],
+          subtotal: getSubtotal(),
+          discount: getTotalDiscount(),
+          gst: getTotalGST(),
+          total: getGrandTotal(),
+          paid: getGrandTotal(),
+          due: 0,
+          status: 'Completed',
+          paymentStatus: 'Paid',
+          orderTax: 0,
+          shipping: 0,
+          biller: 'POS Cashier',
+        },
+        items: cart.map((item) => {
+          const rawSubtotal = item.price * item.quantity;
+          const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
+          const taxAmt = netSubtotal * ((item.gstRate || 0) / 100);
+          return {
+            productId: item.product.id,
+            productName: item.product.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            discount: item.discount || 0,
+            gst: item.gstRate || 0,
+            taxAmount: taxAmt,
+            unitCost: item.unitCost || 0,
+            total: netSubtotal + taxAmt,
+            unit: item.unit,
+            unitType: item.unitType,
+            conversionRate: item.conversionRate,
+          };
+        }),
+      });
+
+      Alert.alert('Success', `Sale ${invNum} completed successfully!`);
+      clearCart();
+      fetchProducts().catch(() => {});
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to complete sale');
+    }
+  };
+
   useKeyboardShortcut('F2', () => {
     Alert.alert('Customer', 'Customer selection modal would open here.');
   });
@@ -74,30 +133,65 @@ export const POSScreen = () => {
   });
 
   useKeyboardShortcut('F12', () => {
-    if (cart.length === 0) {
-      Alert.alert('Empty Cart', 'Please add items to cart first.');
-      return;
-    }
-    Alert.alert('Complete', 'Sale completed successfully!');
-    clearCart();
+    handleCompleteSale();
   });
 
-  const renderProduct = ({ item }: { item: Product }) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => addToCart(item, isReturnMode ? -1 : 1)}
-    >
-      <Text style={styles.productName}>{item.name}</Text>
-      <Text style={styles.productPrice}>₹{item.price.toFixed(2)}</Text>
-      <Text style={styles.productStock}>Stock: {item.stockQuantity}</Text>
-    </TouchableOpacity>
-  );
+  const renderProduct = ({ item }: { item: Product }) => {
+    const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+    const hasSubUnit = !!(item.subUnitId || item.subunitId || cRate > 1);
+    const subUnitName = item.subUnitName || 'Pcs';
+    const baseUnitName = item.baseUnitName || item.unit || 'Box';
+    const subPrice = cRate > 0 ? (item.price / cRate).toFixed(2) : item.price.toFixed(2);
 
-  const renderCartItem = ({ item, index }: { item: any; index: number }) => (
+    return (
+      <TouchableOpacity
+        style={styles.productCard}
+        onPress={() => addToCart(item, isReturnMode ? -1 : 1)}
+      >
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productPrice}>
+          ₹{item.price.toFixed(2)} / {baseUnitName}
+        </Text>
+        {hasSubUnit && (
+          <Text style={{ fontSize: 11, color: '#0284C7', marginBottom: 2 }}>
+            ₹{subPrice} / {subUnitName}
+          </Text>
+        )}
+        <Text style={styles.productStock}>
+          Stock: {item.stockQuantity} {baseUnitName}
+          {hasSubUnit ? ` (${Math.round(item.stockQuantity * cRate)} ${subUnitName})` : ''}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCartItem = ({ item }: { item: any; index: number }) => (
     <View style={styles.cartItem}>
       <View style={styles.cartItemInfo}>
         <Text style={styles.cartItemName}>{item.product.name}</Text>
-        <Text style={styles.cartItemPrice}>₹{item.price.toFixed(2)} / {item.unit}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 }}>
+          <Text style={styles.cartItemPrice}>
+            ₹{item.price.toFixed(2)}
+          </Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: item.unitType === 'sub' ? '#3B82F6' : '#F97316',
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 4,
+            }}
+            onPress={() => toggleCartItemUnit(item.id)}
+          >
+            <Text style={{ color: 'white', fontSize: 10, fontWeight: '700' }}>
+              {item.unit || 'Unit'} ⇄
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {item.conversionRate && item.conversionRate > 1 ? (
+          <Text style={{ color: '#888', fontSize: 9, marginTop: 2 }}>
+            1 {item.baseUnitName || 'Box'} = {item.conversionRate} {item.subUnitName || 'Pcs'}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.cartItemControls}>
         <TouchableOpacity
@@ -205,9 +299,7 @@ export const POSScreen = () => {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.checkoutBtn} onPress={() => {
-          if (cart.length > 0) Alert.alert('Checkout', 'Proceeding to payment');
-        }}>
+        <TouchableOpacity style={styles.checkoutBtn} onPress={handleCompleteSale}>
           <Text style={styles.checkoutBtnText}>Checkout (F12)</Text>
         </TouchableOpacity>
       </View>

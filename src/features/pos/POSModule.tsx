@@ -13,7 +13,7 @@ interface Props {
 
 export const POSModule: React.FC<Props> = ({ initialScreen }) => {
   const [currentScreen, setCurrentScreen] = useState<PosScreenType>('orders');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   React.useEffect(() => {
     if (initialScreen === 'pos' || initialScreen === 'sales') setCurrentScreen('orders');
@@ -22,7 +22,7 @@ export const POSModule: React.FC<Props> = ({ initialScreen }) => {
     else if (initialScreen === 'quotation') setCurrentScreen('quotation');
   }, [initialScreen]);
 
-  const navigateTo = (screen: PosScreenType, id?: string) => {
+  const navigateTo = (screen: PosScreenType, id?: string | number) => {
     setSelectedId(id || null);
     setCurrentScreen(screen);
   };

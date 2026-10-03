@@ -71,6 +71,7 @@ export interface Product extends BaseEntity {
   unitId?: number;
   baseUnitId?: number;
   subunitId?: number;
+  subUnitId?: number | string;
   conversionRate?: number;
   openingStock?: number;
   stockQuantity: number;
@@ -86,6 +87,7 @@ export interface Customer extends BaseEntity {
   address?: string;
   taxId?: string;
   gstin?: string;
+  outstandingBalance?: number;
 }
 
 export interface Supplier extends BaseEntity {
@@ -115,6 +117,89 @@ export interface Setting {
   key: string;
   value: string;
   updatedAt: string;
+}
+
+export interface PurchaseItem {
+  id?: number;
+  purchaseId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  gst: number;
+  taxAmount: number;
+  unitCost?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface Purchase extends BaseEntity {
+  invoiceNumber: string;
+  reference?: string;
+  supplierId: number;
+  supplierName?: string;
+  date: string;
+  subtotal: number;
+  discount: number;
+  orderTax: number;
+  shipping: number;
+  gst: number;
+  total: number;
+  paid: number;
+  due: number;
+  status: 'Received' | 'Pending' | 'Ordered';
+  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue';
+  notes?: string;
+  items?: PurchaseItem[];
+}
+
+export interface SaleItem {
+  id?: number;
+  saleId?: number;
+  productId: number;
+  productName?: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  gst: number;
+  taxAmount: number;
+  unitCost?: number;
+  unit?: string;
+  unitType?: string;
+  conversionRate?: number;
+  total: number;
+  createdAt?: string;
+  updatedAt?: string;
+  syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
+}
+
+export interface Sale extends BaseEntity {
+  invoiceNumber: string;
+  reference?: string;
+  customerId?: number;
+  customerName?: string;
+  supplierId?: number;
+  supplierName?: string;
+  date: string;
+  subtotal: number;
+  discount: number;
+  orderTax: number;
+  shipping: number;
+  gst: number;
+  total: number;
+  paid: number;
+  due: number;
+  status: 'Completed' | 'Pending' | 'Ordered';
+  paymentStatus: 'Paid' | 'Unpaid' | 'Overdue';
+  biller?: string;
+  notes?: string;
+  items?: SaleItem[];
 }
 
 

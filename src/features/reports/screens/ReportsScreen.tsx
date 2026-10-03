@@ -6,7 +6,9 @@ import { ReportsService, ReportFilters } from '../services/reports.service';
 const REPORT_TYPES = [
   { id: 'sales', name: 'Sales Register' },
   { id: 'purchases', name: 'Purchases Register' },
-  { id: 'inventory', name: 'Inventory Valuation' },
+  { id: 'inventory', name: 'Inventory & Units' },
+  { id: 'profit_loss', name: 'Profit & Loss' },
+  { id: 'balance_sheet', name: 'Balance Sheet' },
   { id: 'gst', name: 'GST Summary' },
   { id: 'expenses', name: 'Expense Log' },
 ];
@@ -31,6 +33,12 @@ export const ReportsScreen = () => {
           break;
         case 'inventory':
           result = await ReportsService.getInventoryReport(filters);
+          break;
+        case 'profit_loss':
+          result = await ReportsService.getProfitAndLossReport(filters);
+          break;
+        case 'balance_sheet':
+          result = await ReportsService.getBalanceSheetReport(filters);
           break;
         case 'gst':
           result = await ReportsService.getGSTReport(filters);
@@ -85,7 +93,7 @@ export const ReportsScreen = () => {
         <View key={item.id || index} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
           {keys.map(k => (
             <Text key={k} style={[styles.tableCell, { color: theme.colors.text }]} numberOfLines={1}>
-              {typeof item[k] === 'number' ? (k.toLowerCase().includes('total') || k.toLowerCase().includes('gst') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('value') ? `₹${item[k].toFixed(2)}` : item[k]) : item[k]}
+              {typeof item[k] === 'number' ? (k.toLowerCase().includes('total') || k.toLowerCase().includes('gst') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('value') || k.toLowerCase().includes('cost') || k.toLowerCase().includes('valuation') ? `₹${Number(item[k]).toFixed(2)}` : item[k]) : item[k]}
             </Text>
           ))}
         </View>

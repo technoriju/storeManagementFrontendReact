@@ -18,7 +18,11 @@ export interface Product {
   brandId?: string;
   unitId?: string;
   baseUnitId?: number | string;
-  subUnitId?: string;
+  subUnitId?: number | string;
+  subunitId?: number | string;
+  unit?: string;
+  baseUnitName?: string;
+  subUnitName?: string;
   conversionRate?: number;
   openingStock?: number;
   stockQuantity: number;

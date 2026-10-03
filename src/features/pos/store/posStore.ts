@@ -7,6 +7,15 @@ export interface CartItem {
   product: Product;
   quantity: number;
   unit: string; // The unit used for this sale
+  unitType?: 'base' | 'sub';
+  baseUnitName?: string;
+  subUnitName?: string;
+  conversionRate?: number;
+  basePrice?: number;
+  subPrice?: number;
+  baseCost?: number;
+  subCost?: number;
+  unitCost?: number; // Cost of 1 unit sold (COGS)
   price: number; // Selling price used
   discount: number; // Discount amount per unit or total for the item
   gstRate: number; // e.g. 5, 12, 18, 28
@@ -32,7 +41,8 @@ interface POSState {
   holdSales: HoldSale[];
   
   // Actions
-  addToCart: (product: Product, quantity?: number, unit?: string) => void;
+  addToCart: (product: Product, quantity?: number, unit?: string, preferredUnitType?: 'base' | 'sub') => void;
+  toggleCartItemUnit: (id: number) => void;
   updateCartItem: (id: number, updates: Partial<CartItem>) => void;
   removeFromCart: (id: number) => void;
   clearCart: () => void;
@@ -53,11 +63,27 @@ export const usePOSStore = create<POSState>((set, get) => ({
   customer: null,
   holdSales: [],
 
-  addToCart: (product, quantity = 1, unit = '') => {
+  addToCart: (product, quantity = 1, unit = '', preferredUnitType) => {
     set((state) => {
+      const basePrice = product.price || product.retailPrice || 0;
+      const baseCost = product.cost || product.purchasePrice || 0;
+      const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
+      const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
+
+      const unitType: 'base' | 'sub' = preferredUnitType || (hasSubUnit ? 'sub' : 'base');
+      const baseUnitName = product.baseUnitName || product.unit || 'Box';
+      const subUnitName = product.subUnitName || 'Pcs';
+      const selectedUnit = unit || (unitType === 'sub' ? subUnitName : baseUnitName);
+
+      const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
+      const subCost = cRate > 0 ? Number((baseCost / cRate).toFixed(4)) : baseCost;
+
+      const price = unitType === 'sub' ? subPrice : basePrice;
+      const unitCost = unitType === 'sub' ? subCost : baseCost;
+
       // Check if product already exists in cart with same unit
       const existingItemIndex = state.cart.findIndex(
-        item => item.product.id === product.id && item.unit === unit
+        item => item.product.id === product.id && item.unit === selectedUnit
       );
 
       if (existingItemIndex >= 0) {
@@ -71,13 +97,43 @@ export const usePOSStore = create<POSState>((set, get) => ({
         id: Math.floor(Math.random() * -1000000000),
         product,
         quantity,
-        unit: unit || product.unitId || '',
-        price: product.price || 0, // Fallback
+        unit: selectedUnit,
+        unitType,
+        baseUnitName,
+        subUnitName,
+        conversionRate: cRate,
+        basePrice,
+        subPrice,
+        baseCost,
+        subCost,
+        unitCost,
+        price,
         discount: 0,
-        gstRate: product.gst || 0, // Fallback
+        gstRate: product.gst || 0,
       };
 
       return { cart: [...state.cart, newItem] };
+    });
+  },
+
+  toggleCartItemUnit: (id) => {
+    set((state) => {
+      const newCart = state.cart.map((item) => {
+        if (item.id !== id) return item;
+        const nextType: 'base' | 'sub' = item.unitType === 'base' ? 'sub' : 'base';
+        const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Box') : (item.subUnitName || 'Pcs');
+        const nextPrice = nextType === 'base' ? (item.basePrice || item.price) : (item.subPrice || (item.conversionRate ? Number((item.price / item.conversionRate).toFixed(2)) : item.price));
+        const nextCost = nextType === 'base' ? (item.baseCost || 0) : (item.subCost || (item.conversionRate ? Number(((item.baseCost || 0) / item.conversionRate).toFixed(4)) : 0));
+
+        return {
+          ...item,
+          unitType: nextType,
+          unit: nextUnit,
+          price: nextPrice,
+          unitCost: nextCost,
+        };
+      });
+      return { cart: newCart };
     });
   },
 

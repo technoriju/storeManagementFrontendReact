@@ -37,8 +37,8 @@ export class ProductRepository extends BaseRepository<Product> {
       entity.subCategoryId || null,
       entity.brandId || null,
       entity.unitId || null,
-      entity.subunitId || null,
-      entity.conversionRate !== undefined ? entity.conversionRate : 1,
+      (entity.subunitId || (entity as any).subUnitId) ? Number(entity.subunitId || (entity as any).subUnitId) : null,
+      entity.conversionRate !== undefined ? Number(entity.conversionRate) : 1,
       entity.openingStock !== undefined ? entity.openingStock : 0,
       entity.stockQuantity,
       entity.lowStockThreshold || null,
@@ -67,8 +67,10 @@ export class ProductRepository extends BaseRepository<Product> {
       subCategoryId: row.subCategoryId,
       brandId: row.brandId,
       unitId: row.unitId,
-      subunitId: row.subunitId,
-      conversionRate: row.conversionRate,
+      baseUnitId: row.unitId,
+      subunitId: row.subunitId ? Number(row.subunitId) : undefined,
+      subUnitId: row.subunitId ? String(row.subunitId) : undefined,
+      conversionRate: row.conversionRate !== undefined && row.conversionRate !== null ? Number(row.conversionRate) : 1,
       openingStock: row.openingStock,
       stockQuantity: row.stockQuantity,
       lowStockThreshold: row.lowStockThreshold,
@@ -126,6 +128,11 @@ export class ProductRepository extends BaseRepository<Product> {
     }
     if (entity.stockQuantity !== undefined && entity.stockQuantity !== null) {
       payload.stockQuantity = Number(entity.stockQuantity);
+    }
+    const subUnitId = entity.subUnitId || entity.subunitId || (entity as any).sub_unit_id;
+    if (subUnitId) {
+      payload.subUnitId = Number(subUnitId);
+      payload.subunitId = Number(subUnitId);
     }
     if (entity.conversionRate !== undefined && entity.conversionRate !== null) {
       payload.conversionRate = Number(entity.conversionRate);
@@ -197,6 +204,10 @@ export class ProductRepository extends BaseRepository<Product> {
           subCategoryId: item.subCategoryId ? Number(item.subCategoryId) : undefined,
           brandId: item.brandId ? Number(item.brandId) : undefined,
           unitId: item.baseUnitId ? Number(item.baseUnitId) : (item.unitId ? Number(item.unitId) : undefined),
+          baseUnitId: item.baseUnitId ? Number(item.baseUnitId) : (item.unitId ? Number(item.unitId) : undefined),
+          subunitId: item.subUnitId ? Number(item.subUnitId) : (item.subunitId ? Number(item.subunitId) : undefined),
+          subUnitId: item.subUnitId ? String(item.subUnitId) : (item.subunitId ? String(item.subunitId) : undefined),
+          conversionRate: item.conversionRate ? Number(item.conversionRate) : (item.subUnit?.multiplier || 1),
           lowStockThreshold: item.lowStockLevel !== undefined ? Number(item.lowStockLevel) : (item.lowStockThreshold !== undefined ? Number(item.lowStockThreshold) : undefined),
           stockQuantity: Number(item.stockQuantity ?? 0),
           createdAt: item.createdAt || new Date().toISOString(),
