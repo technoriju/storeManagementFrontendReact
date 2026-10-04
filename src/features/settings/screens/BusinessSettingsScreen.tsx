@@ -57,7 +57,7 @@ export const BusinessSettingsScreen = () => {
           <Text style={[styles.label, { color: theme.colors.text }]}>Business / Company Name</Text>
           <TextInput 
             style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.text }]} 
-            placeholder="E.g. MAHA TRADING CO." 
+            placeholder="E.g. Tarama Enterprise" 
             placeholderTextColor={theme.colors.textSecondary}
             value={name}
             onChangeText={setName}
@@ -80,7 +80,7 @@ export const BusinessSettingsScreen = () => {
             <Text style={[styles.label, { color: theme.colors.text }]}>Phone Number</Text>
             <TextInput 
               style={[styles.input, { borderColor: theme.colors.border, color: theme.colors.text }]} 
-              placeholder="+91 98200 12345" 
+              placeholder="+91 9732513820" 
               placeholderTextColor={theme.colors.textSecondary}
               value={phone}
               onChangeText={setPhone}

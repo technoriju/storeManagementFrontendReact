@@ -116,6 +116,627 @@ export interface ReceiptPrintPreviewModalProps {
   data: ReceiptPrintData | null;
   initialFormat?: '80mm' | 'halfA4Landscape';
   initialCustomerType?: 'retail' | 'wholesale';
+  initialColorMode?: 'bw' | 'color';
+}
+
+function printHtmlViaIframe(htmlContent: string) {
+  if (typeof document === 'undefined') return;
+
+  const existingIframe = document.getElementById('receipt-hidden-print-iframe');
+  if (existingIframe) {
+    existingIframe.remove();
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'receipt-hidden-print-iframe';
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.style.visibility = 'hidden';
+
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    const printWin = window.open('', '_blank', 'width=800,height=600');
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => {
+        printWin.print();
+        printWin.close();
+      }, 400);
+    }
+    return;
+  }
+
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
+
+  setTimeout(() => {
+    try {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    } catch (err) {
+      console.error('Iframe print error, trying popup window:', err);
+      const printWin = window.open('', '_blank', 'width=800,height=600');
+      if (printWin) {
+        printWin.document.open();
+        printWin.document.write(htmlContent);
+        printWin.document.close();
+        printWin.focus();
+        setTimeout(() => {
+          printWin.print();
+          printWin.close();
+        }, 400);
+      }
+    } finally {
+      setTimeout(() => {
+        iframe.remove();
+      }, 3000);
+    }
+  }, 250);
+}
+
+function generateReceiptHtml({
+  data,
+  business,
+  settings,
+  paperFormat,
+  customerType,
+  colorMode = 'bw',
+  showBusinessInfo,
+  showTaxBreakdown,
+  showBankDetails,
+  showQrCode,
+  showTerms,
+  showSignatures,
+}: {
+  data: ReceiptPrintData;
+  business: any;
+  settings: any;
+  paperFormat: '80mm' | 'halfA4Landscape';
+  customerType: 'retail' | 'wholesale';
+  colorMode?: 'bw' | 'color';
+  showBusinessInfo: boolean;
+  showTaxBreakdown: boolean;
+  showBankDetails: boolean;
+  showQrCode: boolean;
+  showTerms: boolean;
+  showSignatures: boolean;
+}): string {
+  const isThermal = paperFormat === '80mm';
+  const isWholesale = customerType === 'wholesale';
+  const invNumber = data.invoiceNumber || 'INV-0000';
+  const invDate = data.date || new Date().toISOString().split('T')[0];
+  const custName = data.customerName || 'Walk-in Customer';
+  const custPhone = data.customerPhone || '';
+  const custAddress = data.customerAddress || '';
+  const custGstin = data.customerGstin || '';
+  const subtotal = Number(data.subtotal || 0);
+  const discount = Number(data.discount || 0);
+  const gst = Number(data.gst || data.orderTax || 0);
+  const total = Number(data.total || 0);
+  const paid = Number(data.paid !== undefined ? data.paid : total);
+  const due = Number(data.due !== undefined ? data.due : Math.max(0, total - paid));
+  const biller = data.biller || 'Cashier';
+  const paymentMethod = data.paymentMethod || 'Cash';
+  const items = data.items || [];
+  const cgstAmount = Number((gst / 2).toFixed(2));
+  const sgstAmount = Number((gst / 2).toFixed(2));
+  const words = amountToWords(total);
+
+  const qrSvg = `
+    <svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="100" fill="#ffffff"/>
+      <rect x="8" y="8" width="30" height="30" fill="#000000"/>
+      <rect x="12" y="12" width="22" height="22" fill="#ffffff"/>
+      <rect x="16" y="16" width="14" height="14" fill="#000000"/>
+      <rect x="62" y="8" width="30" height="30" fill="#000000"/>
+      <rect x="66" y="12" width="22" height="22" fill="#ffffff"/>
+      <rect x="70" y="16" width="14" height="14" fill="#000000"/>
+      <rect x="8" y="62" width="30" height="30" fill="#000000"/>
+      <rect x="12" y="66" width="22" height="22" fill="#ffffff"/>
+      <rect x="16" y="70" width="14" height="14" fill="#000000"/>
+      <rect x="44" y="10" width="6" height="14" fill="#000000"/>
+      <rect x="52" y="16" width="6" height="22" fill="#000000"/>
+      <rect x="10" y="44" width="18" height="6" fill="#000000"/>
+      <rect x="22" y="52" width="14" height="6" fill="#000000"/>
+      <rect x="42" y="42" width="18" height="18" fill="#000000"/>
+      <rect x="46" y="46" width="10" height="10" fill="#ffffff"/>
+      <rect x="65" y="44" width="26" height="6" fill="#000000"/>
+      <rect x="74" y="54" width="16" height="6" fill="#000000"/>
+      <rect x="44" y="66" width="6" height="26" fill="#000000"/>
+      <rect x="54" y="76" width="6" height="16" fill="#000000"/>
+      <rect x="66" y="66" width="12" height="12" fill="#000000"/>
+      <rect x="80" y="80" width="12" height="12" fill="#000000"/>
+    </svg>
+  `;
+
+  if (isThermal) {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Receipt ${invNumber}</title>
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 1.5mm 2mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Courier New', Courier, monospace, monospace;
+      font-size: 11px;
+      color: #000;
+      background: #fff;
+      width: 74mm;
+      max-width: 74mm;
+      margin: 0 auto;
+      padding: 2mm 1mm;
+      line-height: 1.35;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      ${colorMode === 'bw' ? `
+      -webkit-filter: grayscale(100%);
+      filter: grayscale(100%);
+      ` : ''}
+    }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: bold; }
+    .store-name { font-size: 17px; font-weight: 900; letter-spacing: -0.2px; text-transform: uppercase; margin-bottom: 2px; text-align: center; }
+    .tagline { font-size: 10px; margin-bottom: 2px; text-align: center; }
+    .store-address { font-size: 10px; margin-bottom: 2px; text-align: center; line-height: 1.25; }
+    .store-contact { font-size: 10px; margin-bottom: 2px; text-align: center; }
+    .dashed-line { border-bottom: 1px dashed #000; margin: 5px 0; }
+    .dotted-line { border-bottom: 1px dotted #666; margin: 4px 0; }
+    .double-line { border-bottom: 2px solid #000; margin: 5px 0; }
+    .receipt-title { font-size: 11px; font-weight: 800; text-align: center; margin: 3px 0; }
+    .meta-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
+    .customer-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 5px; margin: 4px 0; border-radius: 3px; font-size: 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    th { font-size: 10px; border-bottom: 1px dashed #000; padding: 3px 0; text-align: left; }
+    td { font-size: 10px; padding: 3px 0; vertical-align: top; }
+    .item-name { font-weight: bold; font-size: 11px; }
+    .item-sub { font-size: 9.5px; color: #444; }
+    .summary-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
+    .grand-total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin: 4px 0; }
+    .qr-container { text-align: center; margin: 8px 0; }
+    .qr-caption { font-size: 9px; margin-top: 4px; font-weight: bold; }
+    .upi-id { font-size: 8px; color: #444; }
+    .footer-msg { font-size: 10px; font-weight: bold; text-align: center; margin: 6px 0 2px 0; }
+    .terms { font-size: 8px; text-align: center; color: #444; line-height: 1.25; }
+    .powered-by { font-size: 7.5px; color: #888; text-align: center; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  ${showBusinessInfo ? `
+    <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
+    ${business.tagline ? `<div class="tagline">${business.tagline}</div>` : ''}
+    <div class="store-address">${business.address || ''}</div>
+    <div class="store-contact">Phone: ${business.phone || ''}</div>
+    <div class="store-contact"><strong>GSTIN: ${business.gstin || ''}</strong></div>
+  ` : ''}
+
+  <div class="dashed-line"></div>
+
+  <div class="receipt-title">
+    ${isWholesale ? '*** WHOLESALE TAX INVOICE ***' : '*** RETAIL CASH RECEIPT ***'}
+  </div>
+
+  <div class="meta-row">
+    <span>Inv No: ${invNumber}</span>
+    <span>Date: ${invDate}</span>
+  </div>
+  <div class="meta-row">
+    <span>Cashier: ${biller}</span>
+    <span>Mode: ${paymentMethod.toUpperCase()}</span>
+  </div>
+
+  <div class="customer-box">
+    <div><strong>Customer:</strong> ${custName}</div>
+    ${custPhone ? `<div><strong>Phone:</strong> ${custPhone}</div>` : ''}
+    ${isWholesale && custGstin ? `<div><strong>Cust GSTIN:</strong> ${custGstin}</div>` : ''}
+    ${isWholesale && custAddress ? `<div><strong>Address:</strong> ${custAddress}</div>` : ''}
+  </div>
+
+  <div class="dashed-line"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 50%;">ITEM</th>
+        <th style="width: 15%; text-align: center;">QTY</th>
+        <th style="width: 15%; text-align: right;">RATE</th>
+        <th style="width: 20%; text-align: right;">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map(item => `
+        <tr>
+          <td colspan="4" style="padding-top: 3px;">
+            <div class="item-name">${item.productName || 'Product'} ${item.hsn ? `(HSN: ${item.hsn})` : ''}</div>
+            <div class="meta-row item-sub">
+              <span>${item.discount ? `Disc: -₹${Number(item.discount).toFixed(2)}` : ''} ${showTaxBreakdown && item.gst ? `GST ${item.gst}%` : ''}</span>
+              <span style="width: 15%; text-align: center;">${item.quantity}</span>
+              <span style="width: 15%; text-align: right;">${Number(item.unitPrice).toFixed(2)}</span>
+              <span style="width: 20%; text-align: right; font-weight: bold;">₹${Number(item.total).toFixed(2)}</span>
+            </div>
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="dashed-line"></div>
+
+  <div class="summary-row">
+    <span>Items Count: ${items.length}</span>
+    <span>Total Qty: ${items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}</span>
+  </div>
+  <div class="summary-row">
+    <span>Subtotal:</span>
+    <span>₹${subtotal.toFixed(2)}</span>
+  </div>
+  ${discount > 0 ? `
+    <div class="summary-row">
+      <span>Discount:</span>
+      <span>-₹${discount.toFixed(2)}</span>
+    </div>
+  ` : ''}
+  ${showTaxBreakdown && gst > 0 ? `
+    <div class="summary-row">
+      <span>CGST:</span>
+      <span>₹${cgstAmount.toFixed(2)}</span>
+    </div>
+    <div class="summary-row">
+      <span>SGST:</span>
+      <span>₹${sgstAmount.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  <div class="double-line"></div>
+
+  <div class="grand-total-row">
+    <span>GRAND TOTAL:</span>
+    <span>₹${total.toFixed(2)}</span>
+  </div>
+
+  <div class="double-line"></div>
+
+  <div class="summary-row">
+    <span>Amount Paid:</span>
+    <span class="bold">₹${paid.toFixed(2)}</span>
+  </div>
+  ${due > 0 ? `
+    <div class="summary-row bold" style="color: #dc2626;">
+      <span>Balance Due:</span>
+      <span>₹${due.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  ${showQrCode ? `
+    <div class="qr-container">
+      ${qrSvg}
+      <div class="qr-caption">Scan with UPI to Pay / Verify</div>
+      <div class="upi-id">${business.upiId || ''}</div>
+    </div>
+  ` : ''}
+
+  ${showTerms ? `
+    <div class="footer-msg">${settings.footerMessage || 'Thank you for your business! Visit Again.'}</div>
+    <div class="terms">
+      * Goods once sold will not be exchanged after 7 days.<br/>
+      * Subject to local jurisdiction.
+    </div>
+  ` : ''}
+
+  <div class="dashed-line"></div>
+  <div class="powered-by">Printed via Billing System</div>
+</body>
+</html>`;
+  }
+
+  // Regular Half A4 Landscape
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice - ${invNumber}</title>
+  <style>
+    @page {
+      size: 210mm 148.5mm landscape;
+      margin: 4mm 6mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 9.5px;
+      color: #0f172a;
+      background: #fff;
+      width: 198mm;
+      max-width: 198mm;
+      margin: 0 auto;
+      padding: 2mm 0;
+      line-height: 1.25;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      ${colorMode === 'bw' ? `
+      -webkit-filter: grayscale(100%);
+      filter: grayscale(100%);
+      ` : ''}
+    }
+    ${colorMode === 'bw' ? `
+    * {
+      -webkit-filter: grayscale(100%) !important;
+      filter: grayscale(100%) !important;
+    }
+    .inv-badge {
+      background: #000000 !important;
+      color: #ffffff !important;
+    }
+    .status-paid, .status-due {
+      color: #000000 !important;
+    }
+    .grand-total-row {
+      background: #000000 !important;
+      color: #ffffff !important;
+    }
+    .grand-total-row td {
+      color: #ffffff !important;
+    }
+    .bank-box {
+      background: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+      color: #000000 !important;
+    }
+    .bank-title {
+      color: #000000 !important;
+    }
+    ` : ''}
+    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 5px; }
+    .store-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
+    .store-sub { font-size: 9.5px; color: #334155; line-height: 1.3; }
+    .inv-badge {
+      background: ${colorMode === 'bw' ? '#000000' : (isWholesale ? '#1e293b' : '#047857')};
+      color: #fff;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 800;
+      border-radius: 3px;
+      display: inline-block;
+      text-align: right;
+    }
+    .copy-text { font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 2px; }
+    .parties-grid {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 5px;
+      margin-bottom: 5px;
+      gap: 14px;
+    }
+    .party-col { flex: 1.5; }
+    .status-col { flex: 1; text-align: right; }
+    .section-title { font-size: 8.5px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
+    .cust-name { font-size: 12px; font-weight: bold; color: #0f172a; }
+    .party-sub { font-size: 9px; color: #334155; line-height: 1.3; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 1px solid #cbd5e1; }
+    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 4px 5px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 9px; padding: 3px 5px; border: 1px solid #e2e8f0; }
+    .alt-row { background: #f8fafc; }
+    .bottom-grid { display: flex; justify-content: space-between; gap: 14px; margin-top: 5px; }
+    .bottom-left { flex: 1.3; }
+    .bottom-right { flex: 1; }
+    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 6px; border-radius: 3px; font-size: 8.5px; margin-bottom: 4px; }
+    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 4px 6px; border-radius: 3px; font-size: 8px; margin-bottom: 4px; }
+    .bank-title { font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 8.5px; margin-bottom: 2px; }
+    .terms-box { font-size: 8px; color: #64748b; line-height: 1.25; margin-top: 4px; }
+    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; }
+    .totals-table td { padding: 2px 6px; font-size: 9px; border-bottom: 1px solid #f1f5f9; }
+    .grand-total-row { background: ${colorMode === 'bw' ? '#000000' : '#0f172a'}; color: #fff; font-weight: bold; }
+    .grand-total-row td { color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: 900; }
+    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
+    .sign-box { width: 140px; text-align: center; }
+    .sign-line { border-bottom: 1px solid #334155; margin-bottom: 3px; height: 16px; }
+    .sign-label { font-size: 8px; color: #64748b; }
+    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td style="vertical-align: top; width: 60%;">
+        <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
+        ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 10px;">${business.tagline}</div>` : ''}
+        <div class="store-sub">${business.address || ''}</div>
+        <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
+        <div class="store-sub" style="font-weight: bold; color: #0f172a;">
+          GSTIN: ${business.gstin || ''} | PAN: ${business.pan || 'N/A'} | State: ${business.state || ''} (${business.stateCode || ''})
+        </div>
+      </td>
+      <td style="vertical-align: top; width: 40%; text-align: right;">
+        <div class="inv-badge">
+          ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
+        </div>
+        <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
+        <table style="margin-top: 4px; width: 100%; text-align: right;">
+          <tr>
+            <td style="font-size: 8.5px; color: #64748b;">Invoice No:</td>
+            <td style="font-size: 10px; font-weight: bold; color: #0f172a;">${invNumber}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 8.5px; color: #64748b;">Date:</td>
+            <td style="font-size: 9px; font-weight: 600; color: #0f172a;">${invDate}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 8.5px; color: #64748b;">Payment Mode:</td>
+            <td style="font-size: 9px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 8.5px; color: #64748b;">Biller:</td>
+            <td style="font-size: 9px; color: #0f172a;">${biller}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <div class="parties-grid">
+    <div class="party-col">
+      <div class="section-title">${isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}</div>
+      <div class="cust-name">${custName}</div>
+      ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
+      ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
+      ${isWholesale ? `
+        <div class="party-sub" style="margin-top: 2px;">
+          <strong>Buyer GSTIN:</strong> ${custGstin || 'Unregistered / B2C'} | <strong>State Code:</strong> ${business.stateCode || ''}
+        </div>
+      ` : ''}
+    </div>
+    <div class="status-col">
+      <div><strong>Status:</strong> <span class="${due === 0 ? 'status-paid' : 'status-due'}" style="font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due === 0 ? '#059669' : '#dc2626')};">${due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}</span></div>
+      <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">Place of Supply: ${business.state || ''} (${business.stateCode || ''})</div>
+    </div>
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 25px;">#</th>
+        <th style="text-align: left;">ITEM & DESCRIPTION</th>
+        ${isWholesale ? '<th style="width: 50px;">HSN</th>' : ''}
+        <th style="width: 40px; text-align: center;">QTY</th>
+        <th style="width: 40px; text-align: center;">UNIT</th>
+        <th style="width: 60px; text-align: right;">RATE (₹)</th>
+        <th style="width: 50px; text-align: right;">DISC (₹)</th>
+        ${showTaxBreakdown ? `
+          <th style="width: 60px; text-align: right;">TAXABLE</th>
+          <th style="width: 45px; text-align: center;">GST%</th>
+        ` : ''}
+        <th style="width: 70px; text-align: right;">AMOUNT (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((item, idx) => {
+        const rawAmt = Number(item.unitPrice || 0) * Number(item.quantity || 1);
+        const discAmt = Number(item.discount || 0);
+        const taxableAmt = Math.max(0, rawAmt - discAmt);
+        return `
+          <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
+            <td style="text-align: center;">${idx + 1}</td>
+            <td style="font-weight: 600;">${item.productName || 'Item'}</td>
+            ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
+            <td style="text-align: center;">${item.quantity}</td>
+            <td style="text-align: center;">${item.unit || 'Pcs'}</td>
+            <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
+            <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
+            ${showTaxBreakdown ? `
+              <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
+              <td style="text-align: center;">${item.gst || 0}%</td>
+            ` : ''}
+            <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('')}
+    </tbody>
+  </table>
+
+  <div class="bottom-grid">
+    <div class="bottom-left">
+      <div class="words-box">
+        <strong>Invoice Amount in Words:</strong><br/>
+        <em>${words}</em>
+      </div>
+
+      ${isWholesale && showBankDetails ? `
+        <div class="bank-box">
+          <div class="bank-title">BANK DETAILS FOR WIRE TRANSFER / NEFT:</div>
+          <div>Bank: <strong>${business.bankName || ''}</strong> | A/C No: <strong>${business.accountNumber || ''}</strong></div>
+          <div>IFSC: <strong>${business.ifscCode || ''}</strong> | Branch: <strong>${business.branch || ''}</strong></div>
+        </div>
+      ` : ''}
+
+      ${showTerms ? `
+        <div class="terms-box">
+          <strong>Terms & Conditions:</strong><br/>
+          1. Payment due upon receipt of invoice.<br/>
+          2. Goods once sold will not be returned or exchanged without original invoice.<br/>
+          3. All disputes subject to local court jurisdiction.
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="bottom-right">
+      <table class="totals-table">
+        <tr>
+          <td style="color: #64748b;">Subtotal:</td>
+          <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
+        </tr>
+        ${discount > 0 ? `
+          <tr>
+            <td style="color: #64748b;">Discount:</td>
+            <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        ${showTaxBreakdown && gst > 0 ? `
+          <tr>
+            <td style="color: #64748b;">CGST:</td>
+            <td style="text-align: right;">₹${cgstAmount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="color: #64748b;">SGST:</td>
+            <td style="text-align: right;">₹${sgstAmount.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        <tr class="grand-total-row">
+          <td style="color: #fff; font-weight: bold;">TOTAL AMOUNT:</td>
+          <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: bold;">₹${total.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td style="color: #64748b;">Amount Received:</td>
+          <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#059669'}; font-weight: bold;">₹${paid.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td style="color: #64748b;">Balance Due:</td>
+          <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
+        </tr>
+      </table>
+
+      ${showQrCode ? `
+        <div class="qr-inline">
+          ${qrSvg}
+          <div>
+            <div style="font-weight: bold; font-size: 8.5px;">Scan to Pay UPI</div>
+            <div style="font-size: 8px; color: #64748b;">${business.upiId || ''}</div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  </div>
+
+  ${showSignatures ? `
+    <div class="signatures-row">
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <div class="sign-label">Customer's Signature</div>
+      </div>
+      <div class="sign-box">
+        <div style="font-size: 8px; font-weight: bold; margin-bottom: 2px;">For ${business.businessName || ''}</div>
+        <div class="sign-line"></div>
+        <div class="sign-label">Authorized Signatory</div>
+      </div>
+    </div>
+  ` : ''}
+</body>
+</html>`;
 }
 
 export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> = ({
@@ -124,6 +745,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   data,
   initialFormat = '80mm',
   initialCustomerType,
+  initialColorMode,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isMobile = windowWidth < 768;
@@ -135,6 +757,19 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const [paperFormat, setPaperFormat] = useState<'80mm' | 'halfA4Landscape'>(
     initialFormat || (settings.paperSize === 'halfA4Landscape' ? 'halfA4Landscape' : '80mm')
   );
+
+  // Print color mode: 'bw' (Default) or 'color'
+  const [colorMode, setColorMode] = useState<'bw' | 'color'>(
+    initialColorMode || settings.printColorMode || 'bw'
+  );
+
+  useEffect(() => {
+    if (initialColorMode) {
+      setColorMode(initialColorMode);
+    } else if (settings.printColorMode) {
+      setColorMode(settings.printColorMode);
+    }
+  }, [initialColorMode, settings.printColorMode]);
 
   // Customer / Invoice Type: 'retail' or 'wholesale'
   const detectedCustomerType: 'retail' | 'wholesale' = useMemo(() => {
@@ -159,60 +794,26 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const [showSignatures, setShowSignatures] = useState(true);
   const [zoomScale, setZoomScale] = useState(1);
 
-  // Print execution handler for Web & Mobile
+  // Print execution handler for Web & Mobile using clean isolated HTML iframe
   const handlePrint = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
-        const isThermal = paperFormat === '80mm';
-        const styleId = 'receipt-print-custom-styles';
-        let styleTag = document.getElementById(styleId) as HTMLStyleElement | null;
-        if (!styleTag) {
-          styleTag = document.createElement('style');
-          styleTag.id = styleId;
-          document.head.appendChild(styleTag);
-        }
+        const htmlContent = generateReceiptHtml({
+          data,
+          business,
+          settings,
+          paperFormat,
+          customerType,
+          colorMode,
+          showBusinessInfo,
+          showTaxBreakdown,
+          showBankDetails,
+          showQrCode,
+          showTerms,
+          showSignatures,
+        });
 
-        // Exact print CSS:
-        // 80mm thermal: 80mm width, auto height, continuous roll
-        // Half A4 Landscape: 210mm x 148.5mm landscape (A5 continuous/half-sheet)
-        styleTag.innerHTML = `
-          @page {
-            size: ${isThermal ? '80mm auto' : '210mm 148.5mm landscape'};
-            margin: ${isThermal ? '2mm 3mm' : '4mm 6mm'};
-          }
-          @media print {
-            body {
-              visibility: hidden !important;
-              background: #fff !important;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-            #receipt-print-canvas, #receipt-print-canvas * {
-              visibility: visible !important;
-            }
-            #receipt-print-canvas {
-              position: fixed !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: ${isThermal ? '74mm' : '198mm'} !important;
-              max-width: ${isThermal ? '74mm' : '198mm'} !important;
-              padding: ${isThermal ? '2mm' : '3mm 4mm'} !important;
-              margin: 0 !important;
-              background: #ffffff !important;
-              color: #000000 !important;
-              box-shadow: none !important;
-              border: ${isThermal ? 'none' : '1px solid #333'} !important;
-              border-radius: 0 !important;
-              font-family: ${isThermal ? "'Courier New', Courier, monospace" : "'Inter', -apple-system, sans-serif"} !important;
-              z-index: 9999999 !important;
-            }
-            .hide-on-print {
-              display: none !important;
-            }
-          }
-        `;
-
-        window.print();
+        printHtmlViaIframe(htmlContent);
       } catch (err) {
         console.error('Print error:', err);
         Alert.alert('Print Error', 'Could not open browser print dialog.');
@@ -339,6 +940,30 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
               </View>
             </View>
 
+            {/* Color Mode Selector */}
+            <View style={styles.selectorGroup}>
+              <Text style={styles.controlLabel}>Color Mode:</Text>
+              <View style={styles.segmentedButtons}>
+                <TouchableOpacity
+                  style={[styles.segmentBtn, colorMode === 'bw' && styles.segmentBtnDarkActive]}
+                  onPress={() => setColorMode('bw')}
+                >
+                  <Text style={[styles.segmentText, colorMode === 'bw' && styles.segmentTextActive]}>
+                    ⚫ B&W (Default)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.segmentBtn, colorMode === 'color' && styles.segmentBtnActive]}
+                  onPress={() => setColorMode('color')}
+                >
+                  <Text style={[styles.segmentText, colorMode === 'color' && styles.segmentTextActive]}>
+                    🎨 Color
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* Quick toggles */}
             <View style={styles.togglesRow}>
               <TouchableOpacity
@@ -406,6 +1031,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                   {
                     transform: zoomScale !== 1 ? [{ scale: zoomScale }] : undefined,
                   },
+                  colorMode === 'bw' && Platform.OS === 'web' ? ({ filter: 'grayscale(100%)' } as any) : undefined,
                 ]}
               >
                 {isThermal ? (
@@ -595,7 +1221,9 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                       <View style={styles.lsSellerCol}>
                         <Text style={styles.lsStoreName}>{business.businessName}</Text>
                         {!!business.tagline && (
-                          <Text style={styles.lsTagline}>{business.tagline}</Text>
+                          <Text style={[styles.lsTagline, colorMode === 'bw' && { color: '#334155' }]}>
+                            {business.tagline}
+                          </Text>
                         )}
                         <Text style={styles.lsStoreAddress}>{business.address}</Text>
                         <View style={styles.lsContactRow}>
@@ -614,7 +1242,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                         <View
                           style={[
                             styles.lsInvoiceTypeBadge,
-                            isWholesale ? styles.lsBadgeWholesale : styles.lsBadgeRetail,
+                            colorMode === 'bw'
+                              ? styles.lsBadgeBw
+                              : isWholesale
+                              ? styles.lsBadgeWholesale
+                              : styles.lsBadgeRetail,
                           ]}
                         >
                           <Text style={styles.lsInvoiceTypeBadgeText}>
@@ -669,7 +1301,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                           <Text
                             style={[
                               styles.lsStatusVal,
-                              due === 0 ? { color: '#059669' } : { color: '#DC2626' },
+                              colorMode === 'bw'
+                                ? { color: '#000000' }
+                                : due === 0
+                                ? { color: '#059669' }
+                                : { color: '#DC2626' },
                             ]}
                           >
                             {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
@@ -759,8 +1395,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                         {/* Bank Details for Wholesale */}
                         {isWholesale && showBankDetails && (
-                          <View style={styles.lsBankBox}>
-                            <Text style={styles.lsBankTitle}>BANK DETAILS FOR WIRE TRANSFER / NEFT:</Text>
+                          <View style={[styles.lsBankBox, colorMode === 'bw' && styles.lsBankBoxBw]}>
+                            <Text style={[styles.lsBankTitle, colorMode === 'bw' && { color: '#000000' }]}>
+                              BANK DETAILS FOR WIRE TRANSFER / NEFT:
+                            </Text>
                             <View style={styles.lsBankGrid}>
                               <Text style={styles.lsBankText}>
                                 Bank: <Text style={styles.lsBoldText}>{business.bankName}</Text>
@@ -820,13 +1458,20 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               </View>
                             </>
                           )}
-                          <View style={styles.lsTotalRow}>
+                          <View style={[styles.lsTotalRow, colorMode === 'bw' && { backgroundColor: '#000000' }]}>
                             <Text style={styles.lsTotalKey}>TOTAL AMOUNT:</Text>
-                            <Text style={styles.lsTotalVal}>₹{total.toFixed(2)}</Text>
+                            <Text style={[styles.lsTotalVal, colorMode === 'bw' && { color: '#FFFFFF' }]}>
+                              ₹{total.toFixed(2)}
+                            </Text>
                           </View>
                           <View style={styles.lsSumRow}>
                             <Text style={styles.lsSumKey}>Amount Received:</Text>
-                            <Text style={[styles.lsSumVal, { color: '#059669', fontWeight: '700' }]}>
+                            <Text
+                              style={[
+                                styles.lsSumVal,
+                                { color: colorMode === 'bw' ? '#000000' : '#059669', fontWeight: '700' },
+                              ]}
+                            >
                               ₹{paid.toFixed(2)}
                             </Text>
                           </View>
@@ -835,7 +1480,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                             <Text
                               style={[
                                 styles.lsSumVal,
-                                { color: due > 0 ? '#DC2626' : '#64748B', fontWeight: '700' },
+                                {
+                                  color: colorMode === 'bw' ? '#000000' : (due > 0 ? '#DC2626' : '#64748B'),
+                                  fontWeight: '700',
+                                },
                               ]}
                             >
                               ₹{due.toFixed(2)}
@@ -1031,6 +1679,9 @@ const styles = StyleSheet.create({
   },
   segmentBtnActive: {
     backgroundColor: '#2563EB',
+  },
+  segmentBtnDarkActive: {
+    backgroundColor: '#334155',
   },
   segmentBtnGreenActive: {
     backgroundColor: '#059669',
@@ -1380,6 +2031,9 @@ const styles = StyleSheet.create({
   lsBadgeRetail: {
     backgroundColor: '#047857',
   },
+  lsBadgeBw: {
+    backgroundColor: '#000000',
+  },
   lsInvoiceTypeBadgeText: {
     color: '#FFFFFF',
     fontSize: 13,
@@ -1551,6 +2205,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#BBF7D0',
+  },
+  lsBankBoxBw: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
   },
   lsBankTitle: {
     fontSize: 8.5,

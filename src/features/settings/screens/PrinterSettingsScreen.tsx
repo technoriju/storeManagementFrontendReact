@@ -184,6 +184,65 @@ export const PrinterSettingsScreen = () => {
         </View>
       </View>
 
+      {/* Default Print Color Mode */}
+      <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Sliders size={20} color={theme.colors.primary} />
+          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Default Print Color Mode</Text>
+        </View>
+        <Text style={[styles.cardDesc, { color: theme.colors.textSecondary }]}>
+          Choose your default output mode. In Black & White mode, receipts print with high-contrast monochrome styles to save color ink.
+        </Text>
+
+        <View style={styles.formatOptionsGrid}>
+          {/* Black & White (Default) */}
+          <TouchableOpacity
+            style={[
+              styles.formatOptionBox,
+              settings.printColorMode === 'bw' && styles.formatOptionBoxActive,
+              { borderColor: settings.printColorMode === 'bw' ? theme.colors.primary : theme.colors.border },
+            ]}
+            onPress={() => updateSetting('printColorMode', 'bw')}
+          >
+            <View style={styles.formatBoxTop}>
+              <View style={[styles.formatIconCircle, { backgroundColor: '#F1F5F9' }]}>
+                <Printer size={20} color="#0F172A" />
+              </View>
+              {settings.printColorMode === 'bw' && (
+                <CheckCircle2 size={18} color="#2563EB" />
+              )}
+            </View>
+            <Text style={[styles.formatTitle, { color: theme.colors.text }]}>Black & White (Default)</Text>
+            <Text style={[styles.formatSubtitle, { color: theme.colors.textSecondary }]}>
+              Monochrome high-contrast print. Conserves colored ink/toner and ensures clean printing on all printers.
+            </Text>
+          </TouchableOpacity>
+
+          {/* Color Mode */}
+          <TouchableOpacity
+            style={[
+              styles.formatOptionBox,
+              settings.printColorMode === 'color' && styles.formatOptionBoxActive,
+              { borderColor: settings.printColorMode === 'color' ? theme.colors.primary : theme.colors.border },
+            ]}
+            onPress={() => updateSetting('printColorMode', 'color')}
+          >
+            <View style={styles.formatBoxTop}>
+              <View style={[styles.formatIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                <Sliders size={20} color="#D97706" />
+              </View>
+              {settings.printColorMode === 'color' && (
+                <CheckCircle2 size={18} color="#D97706" />
+              )}
+            </View>
+            <Text style={[styles.formatTitle, { color: theme.colors.text }]}>Full Color</Text>
+            <Text style={[styles.formatSubtitle, { color: theme.colors.textSecondary }]}>
+              Vibrant branded colors with colored badges, green/red payment tags, and golden total highlights.
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Live Print Preview Testing Section */}
       <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         <View style={styles.cardHeader}>
@@ -257,6 +316,7 @@ export const PrinterSettingsScreen = () => {
         data={previewData}
         initialFormat={previewFormat}
         initialCustomerType={previewCustomerType}
+        initialColorMode={settings.printColorMode}
         onClose={() => setShowPreviewModal(false)}
       />
     </ScrollView>

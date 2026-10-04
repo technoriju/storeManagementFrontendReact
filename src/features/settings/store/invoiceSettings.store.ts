@@ -40,6 +40,7 @@ export interface InvoiceSettings {
   showCustomerInfo: boolean;
   showBankDetails: boolean;
   showQrCode: boolean;
+  printColorMode: 'bw' | 'color';
   businessProfile: BusinessProfile;
 }
 
@@ -51,10 +52,10 @@ interface InvoiceSettingsState {
 }
 
 const defaultBusinessProfile: BusinessProfile = {
-  businessName: 'MAHA TRADING CO.',
+  businessName: 'Tarama Enterprise',
   tagline: 'Wholesale & Retail Distributors',
-  address: 'Shop No. 12, Market Yard, Station Road, Mumbai - 400001',
-  phone: '+91 98200 12345 / 022-23456789',
+  address: 'Hanidhara, Amta Udaynarayanpur Road, Howrah, West Bengal - 711401',
+  phone: '+91 9732513820 / 022-23456789',
   email: 'sales@mahatrading.com',
   gstin: '27AABCM1234F1Z8',
   pan: 'AABCM1234F',
@@ -87,6 +88,7 @@ const defaultSettings: InvoiceSettings = {
   showCustomerInfo: true,
   showBankDetails: true,
   showQrCode: true,
+  printColorMode: 'bw',
   businessProfile: defaultBusinessProfile,
 };
 
