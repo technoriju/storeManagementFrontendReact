@@ -130,7 +130,7 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'totalAmount', 
       title: 'Debit Amount', 
       width: 120,
-      render: (value: number) => <Text style={{ color: '#F97316', fontWeight: '600' }}>${value?.toFixed(2) || '0.00'}</Text>
+      render: (value: number) => <Text style={{ color: '#F97316', fontWeight: '600' }}>₹{value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'status', 
@@ -252,8 +252,8 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
                     {viewItem.items.map((i: any, idx: number) => (
                       <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
                         <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
-                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ${Number(i.unitPrice).toFixed(2)}</Text>
-                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${Number(i.total).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>₹{Number(i.total).toFixed(2)}</Text>
                       </View>
                     ))}
                   </View>
@@ -262,7 +262,7 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
                 <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Debit Note:</Text>
-                    <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 18 }}>${Number(viewItem.totalAmount).toFixed(2)}</Text>
+                    <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 18 }}>₹{Number(viewItem.totalAmount).toFixed(2)}</Text>
                   </View>
                 </View>
               </ScrollView>

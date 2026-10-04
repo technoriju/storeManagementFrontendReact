@@ -220,19 +220,19 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'grandTotal', 
       title: 'Grand Total', 
       width: 110,
-      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'paid', 
       title: 'Paid', 
       width: 90,
-      render: (value: number) => <Text style={{ color: '#10B981' }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: '#10B981' }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'due', 
       title: 'Due', 
       width: 90,
-      render: (value: number) => <Text style={{ color: value > 0 ? '#EF4444' : theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: value > 0 ? '#EF4444' : theme.colors.textSecondary }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'paymentStatus', 
@@ -331,8 +331,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                     {selectedOrder.items.map((i: any, idx: number) => (
                       <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
                         <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
-                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ${Number(i.unitPrice).toFixed(2)}</Text>
-                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>${Number(i.total).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>₹{Number(i.total).toFixed(2)}</Text>
                       </View>
                     ))}
                   </View>
@@ -341,15 +341,15 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                 <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10, gap: 4 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Grand Total:</Text>
-                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 16 }}>${Number(selectedOrder.grandTotal).toFixed(2)}</Text>
+                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 16 }}>₹{Number(selectedOrder.grandTotal).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: '#10B981', fontWeight: '500' }}>Paid:</Text>
-                    <Text style={{ color: '#10B981', fontWeight: '500' }}>${Number(selectedOrder.paid).toFixed(2)}</Text>
+                    <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(selectedOrder.paid).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: selectedOrder.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>Due:</Text>
-                    <Text style={{ color: selectedOrder.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>${Number(selectedOrder.due).toFixed(2)}</Text>
+                    <Text style={{ color: selectedOrder.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>₹{Number(selectedOrder.due).toFixed(2)}</Text>
                   </View>
                 </View>
               </ScrollView>

@@ -157,19 +157,19 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'total', 
       title: 'Total', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'paid', 
       title: 'Paid', 
       width: 100,
-      render: (value: number) => <Text style={{ color: '#10B981' }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: '#10B981' }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'due', 
       title: 'Due', 
       width: 100,
-      render: (value: number) => <Text style={{ color: value > 0 ? '#EF4444' : theme.colors.textSecondary }}>${value?.toFixed(2)}</Text>
+      render: (value: number) => <Text style={{ color: value > 0 ? '#EF4444' : theme.colors.textSecondary }}>₹{value?.toFixed(2)}</Text>
     },
     { 
       key: 'paymentStatus', 

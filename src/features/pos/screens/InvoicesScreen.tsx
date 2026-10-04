@@ -152,13 +152,13 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       key: 'total', 
       title: 'Amount', 
       width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>${value?.toFixed(2) || '0.00'}</Text>
+      render: (value: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'paid', 
       title: 'Paid', 
       width: 100,
-      render: (value: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>${value?.toFixed(2) || '0.00'}</Text>
+      render: (value: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'due', 
@@ -166,7 +166,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       width: 100,
       render: (value: number) => (
         <Text style={{ color: value > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: value > 0 ? '600' : 'normal' }}>
-          ${value?.toFixed(2) || '0.00'}
+          ₹{value?.toFixed(2) || '0.00'}
         </Text>
       )
     },
@@ -274,9 +274,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                       <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
                         <View style={{ flex: 2 }}>
                           <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{i.productName || `Product #${i.productId}`}</Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity}x @ ${Number(i.unitPrice).toFixed(2)}</Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
                         </View>
-                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>${Number(i.total).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(i.total).toFixed(2)}</Text>
                       </View>
                     ))}
                   </View>
@@ -286,27 +286,27 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                 <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10, gap: 6 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Subtotal:</Text>
-                    <Text style={{ color: theme.colors.text }}>${Number(viewInvoice.subtotal).toFixed(2)}</Text>
+                    <Text style={{ color: theme.colors.text }}>₹{Number(viewInvoice.subtotal).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Discount:</Text>
-                    <Text style={{ color: '#EF4444' }}>-${Number(viewInvoice.discount || 0).toFixed(2)}</Text>
+                    <Text style={{ color: '#EF4444' }}>-₹{Number(viewInvoice.discount || 0).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Taxes & GST:</Text>
-                    <Text style={{ color: theme.colors.text }}>${Number((viewInvoice.orderTax || 0) + (viewInvoice.gst || 0)).toFixed(2)}</Text>
+                    <Text style={{ color: theme.colors.text }}>₹{Number((viewInvoice.orderTax || 0) + (viewInvoice.gst || 0)).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
                     <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total:</Text>
-                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>${Number(viewInvoice.total).toFixed(2)}</Text>
+                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{Number(viewInvoice.total).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
-                    <Text style={{ color: '#10B981', fontWeight: '600' }}>${Number(viewInvoice.paid).toFixed(2)}</Text>
+                    <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>Balance Due:</Text>
-                    <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>${Number(viewInvoice.due).toFixed(2)}</Text>
+                    <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>₹{Number(viewInvoice.due).toFixed(2)}</Text>
                   </View>
                 </View>
               </ScrollView>

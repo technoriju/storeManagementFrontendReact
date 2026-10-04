@@ -75,7 +75,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={styles.label}>Total Amount</Text>
-                  <Text style={[styles.val, { color: '#F97316', fontWeight: '700' }]}>${purchase.total?.toFixed(2)}</Text>
+                  <Text style={[styles.val, { color: '#F97316', fontWeight: '700' }]}>₹{purchase.total?.toFixed(2)}</Text>
                 </View>
               </View>
 
@@ -98,10 +98,10 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                   <View style={styles.tableHeader}>
                     <Text style={[styles.th, { width: 200 }]}>Product</Text>
                     <Text style={[styles.th, { width: 80 }]}>Qty</Text>
-                    <Text style={[styles.th, { width: 100 }]}>Price</Text>
-                    <Text style={[styles.th, { width: 90 }]}>Discount</Text>
+                    <Text style={[styles.th, { width: 100 }]}>Price (₹)</Text>
+                    <Text style={[styles.th, { width: 90 }]}>Discount (₹)</Text>
                     <Text style={[styles.th, { width: 80 }]}>Tax</Text>
-                    <Text style={[styles.th, { width: 100 }]}>Total</Text>
+                    <Text style={[styles.th, { width: 100 }]}>Total (₹)</Text>
                   </View>
 
                   {(!purchase.items || purchase.items.length === 0) ? (
@@ -113,11 +113,11 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                           {item.productName || `Product #${item.productId}`}
                         </Text>
                         <Text style={[styles.td, { width: 80 }]}>{item.quantity}</Text>
-                        <Text style={[styles.td, { width: 100 }]}>${item.unitPrice?.toFixed(2)}</Text>
-                        <Text style={[styles.td, { width: 90 }]}>${item.discount?.toFixed(2)}</Text>
+                        <Text style={[styles.td, { width: 100 }]}>₹{item.unitPrice?.toFixed(2)}</Text>
+                        <Text style={[styles.td, { width: 90 }]}>₹{item.discount?.toFixed(2)}</Text>
                         <Text style={[styles.td, { width: 80 }]}>{item.gst}%</Text>
                         <Text style={[styles.td, { width: 100, fontWeight: '700', color: '#F97316' }]}>
-                          ${item.total?.toFixed(2)}
+                          ₹{item.total?.toFixed(2)}
                         </Text>
                       </View>
                     ))
@@ -131,23 +131,23 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
               <Text style={{ color: theme.colors.text, fontSize: 15, fontWeight: '700', marginBottom: 10 }}>Summary</Text>
               <View style={styles.summaryLine}>
                 <Text style={styles.label}>Subtotal</Text>
-                <Text style={[styles.val, { color: theme.colors.text }]}>${purchase.subtotal?.toFixed(2)}</Text>
+                <Text style={[styles.val, { color: theme.colors.text }]}>₹{purchase.subtotal?.toFixed(2)}</Text>
               </View>
               <View style={styles.summaryLine}>
                 <Text style={styles.label}>Discount</Text>
-                <Text style={[styles.val, { color: '#EF4444' }]}>-${purchase.discount?.toFixed(2)}</Text>
+                <Text style={[styles.val, { color: '#EF4444' }]}>-₹{purchase.discount?.toFixed(2)}</Text>
               </View>
               <View style={styles.summaryLine}>
                 <Text style={styles.label}>Tax</Text>
-                <Text style={[styles.val, { color: theme.colors.text }]}>+${(purchase.gst + (purchase.orderTax || 0)).toFixed(2)}</Text>
+                <Text style={[styles.val, { color: theme.colors.text }]}>+₹{(purchase.gst + (purchase.orderTax || 0)).toFixed(2)}</Text>
               </View>
               <View style={styles.summaryLine}>
                 <Text style={styles.label}>Shipping</Text>
-                <Text style={[styles.val, { color: theme.colors.text }]}>+${purchase.shipping?.toFixed(2)}</Text>
+                <Text style={[styles.val, { color: theme.colors.text }]}>+₹{purchase.shipping?.toFixed(2)}</Text>
               </View>
               <View style={[styles.summaryLine, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }]}>
                 <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total</Text>
-                <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 18 }}>${purchase.total?.toFixed(2)}</Text>
+                <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 18 }}>₹{purchase.total?.toFixed(2)}</Text>
               </View>
             </View>
           </View>

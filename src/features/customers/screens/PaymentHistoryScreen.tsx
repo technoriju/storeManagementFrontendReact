@@ -51,7 +51,7 @@ export const PaymentHistoryScreen = ({ route }: any) => {
                   <SyncBadge status={item.syncStatus || 'synced'} />
                 </View>
                 <Text style={[styles.amount, item.type === 'receive' ? styles.receive : styles.pay]}>
-                  ${item.amount.toFixed(2)}
+                  ₹{item.amount.toFixed(2)}
                 </Text>
               </View>
               <Text style={styles.details}>Method: {item.method}</Text>

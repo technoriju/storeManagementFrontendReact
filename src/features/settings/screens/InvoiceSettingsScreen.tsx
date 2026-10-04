@@ -197,7 +197,7 @@ export const InvoiceSettingsScreen = () => {
                 
                 <View style={styles.previewRow}>
                   <Text style={styles.previewText}>Total</Text>
-                  <Text style={styles.previewTextBold}>$0.00</Text>
+                  <Text style={styles.previewTextBold}>₹0.00</Text>
                 </View>
 
                 {settings.taxDisplay !== 'none' && (

@@ -78,7 +78,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
       const data = response.data?.data || response.data;
       if (Array.isArray(data)) {
         const normalized = await productRepository.saveRawProducts(data);
-        set({ products: normalized, isLoading: false });
+        set({ products: normalized as any, isLoading: false });
         return;
       }
     } catch (error: any) {

@@ -119,7 +119,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
       const matchSku = p.sku?.toLowerCase().includes(query);
       const matchBarcode = p.barcode?.toLowerCase().includes(query);
       return matchName || matchSku || matchBarcode;
-    }).slice(0, 8);
+    }).slice(0, 10);
   }, [searchQuery, products]);
 
   // Add Product to Table
@@ -383,7 +383,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
               </View>
 
               {/* Row 2: Live Product Search */}
-              <View style={{ zIndex: 10 }}>
+              <View style={{ zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
                 <Text style={{ color: theme.colors.text, marginBottom: 6, fontWeight: '500' }}>
                   Search & Add Product *
                 </Text>
@@ -426,34 +426,41 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                       },
                     ]}
                   >
-                    {filteredProducts.map((p) => {
-                      const cost = p.purchasePrice || p.cost || p.price || 0;
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          style={[
-                            styles.searchResultItem,
-                            { borderBottomColor: theme.colors.border },
-                          ]}
-                          onPress={() => handleAddProduct(p)}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>
-                              {p.name}
-                            </Text>
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>
-                              SKU: {p.sku || 'N/A'} | Tax: {p.gst || 0}% | In Stock: {p.stockQuantity}
-                            </Text>
-                          </View>
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
-                              ${Number(cost).toFixed(2)}
-                            </Text>
-                            <Text style={{ color: '#10B981', fontSize: 11 }}>+ Add Item</Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
+                    <ScrollView
+                      nestedScrollEnabled={true}
+                      keyboardShouldPersistTaps="handled"
+                      style={{ maxHeight: 260 }}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      {filteredProducts.map((p) => {
+                        const cost = p.purchasePrice || p.cost || p.price || 0;
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[
+                              styles.searchResultItem,
+                              { borderBottomColor: theme.colors.border },
+                            ]}
+                            onPress={() => handleAddProduct(p)}
+                          >
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
+                                {p.name}
+                              </Text>
+                              <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                                SKU: {p.sku || 'N/A'} | Tax: {p.gst || 0}% | In Stock: {p.stockQuantity}
+                              </Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                              <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
+                                ₹{Number(cost).toFixed(2)}
+                              </Text>
+                              <Text style={{ color: '#10B981', fontSize: 11 }}>+ Add Item</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
                   </View>
                 )}
                 {isSearching && searchQuery.trim().length > 0 && filteredProducts.length === 0 && (
@@ -638,21 +645,21 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                           {/* Tax Amount (Calculated) */}
                           <View style={{ width: 100, justifyContent: 'center' }}>
                             <Text style={{ color: theme.colors.text, fontSize: 13 }}>
-                              ${item.taxAmount.toFixed(2)}
+                              ₹{item.taxAmount.toFixed(2)}
                             </Text>
                           </View>
 
                           {/* Unit Cost (Calculated) */}
                           <View style={{ width: 100, justifyContent: 'center' }}>
                             <Text style={{ color: theme.colors.text, fontSize: 13 }}>
-                              ${item.unitCost.toFixed(2)}
+                              ₹{item.unitCost.toFixed(2)}
                             </Text>
                           </View>
 
                           {/* Total Cost (Calculated) */}
                           <View style={{ width: 100, justifyContent: 'center' }}>
                             <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
-                              ${item.total.toFixed(2)}
+                              ₹{item.total.toFixed(2)}
                             </Text>
                           </View>
 
@@ -673,7 +680,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
               <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
                 <View style={{ flex: 1 }}>
                   <AppInput
-                    label="Order Tax ($)"
+                    label="Order Tax (₹)"
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderTax}
@@ -682,7 +689,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppInput
-                    label="Order Discount ($)"
+                    label="Order Discount (₹)"
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderDiscount}
@@ -691,7 +698,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                 </View>
                 <View style={{ flex: 1 }}>
                   <AppInput
-                    label="Shipping ($)"
+                    label="Shipping (₹)"
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={shipping}
@@ -747,25 +754,25 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                   <View style={styles.summaryLine}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Items Subtotal</Text>
                     <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>
-                      ${itemsSubtotal.toFixed(2)}
+                      ₹{itemsSubtotal.toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.summaryLine}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Total Discount</Text>
                     <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>
-                      -${totalDiscount.toFixed(2)}
+                      -₹{totalDiscount.toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.summaryLine}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Tax (Items + Order)</Text>
                     <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>
-                      +${(itemsTax + orderTaxNum).toFixed(2)}
+                      +₹{(itemsTax + orderTaxNum).toFixed(2)}
                     </Text>
                   </View>
                   <View style={styles.summaryLine}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Shipping</Text>
                     <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>
-                      +${shippingNum.toFixed(2)}
+                      +₹{shippingNum.toFixed(2)}
                     </Text>
                   </View>
                   <View
@@ -783,7 +790,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                       Grand Total
                     </Text>
                     <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 17 }}>
-                      ${grandTotal.toFixed(2)}
+                      ₹{grandTotal.toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -858,19 +865,21 @@ const styles = StyleSheet.create({
     right: 0,
     borderWidth: 1,
     borderRadius: 6,
-    zIndex: 999,
-    maxHeight: 220,
-    elevation: 5,
+    zIndex: 9999,
+    maxHeight: 260,
+    overflow: 'hidden',
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowRadius: 8,
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    minHeight: 52,
     borderBottomWidth: 1,
   },
   tableContainer: { borderRadius: 8, overflow: 'hidden' },

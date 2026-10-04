@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
@@ -83,7 +84,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
   const saleOptions = useMemo(() => {
     return sales.map((s) => ({
-      label: `${s.invoiceNumber} - ${s.customerName || 'Customer'} ($${s.total})`,
+      label: `${s.invoiceNumber} - ${s.customerName || 'Customer'} (₹${s.total})`,
       value: String(s.id),
     }));
   }, [sales]);
@@ -104,7 +105,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
       const matchName = p.name?.toLowerCase().includes(q);
       const matchSku = p.sku?.toLowerCase().includes(q);
       return matchName || matchSku;
-    }).slice(0, 8);
+    }).slice(0, 10);
   }, [searchQuery, products]);
 
   const handleSelectProduct = (product: Product) => {
@@ -271,7 +272,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
             </View>
 
             {/* Product Search */}
-            <View style={{ marginTop: 12, zIndex: 10 }}>
+            <View style={{ marginTop: 12, zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
               <Text style={[styles.label, { color: theme.colors.text }]}>Add Returned Products *</Text>
               <View style={[styles.searchWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
                 <Search size={18} color={theme.colors.textSecondary} />
@@ -290,21 +291,28 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
               {isSearching && filteredProducts.length > 0 && (
                 <View style={[styles.searchDropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  {filteredProducts.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[styles.searchDropdownItem, { borderBottomColor: theme.colors.border }]}
-                      onPress={() => handleSelectProduct(p)}
-                    >
-                      <View>
-                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{p.name}</Text>
-                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
-                      </View>
-                      <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>
-                        ${Number(p.retailPrice || p.price || 0).toFixed(2)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  <ScrollView
+                    nestedScrollEnabled={true}
+                    keyboardShouldPersistTaps="handled"
+                    style={{ maxHeight: 260 }}
+                    showsVerticalScrollIndicator={true}
+                  >
+                    {filteredProducts.map((p) => (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.searchDropdownItem, { borderBottomColor: theme.colors.border }]}
+                        onPress={() => handleSelectProduct(p)}
+                      >
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ color: theme.colors.text, fontWeight: '500' }} numberOfLines={1}>{p.name}</Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }} numberOfLines={1}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
+                        </View>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '600', flexShrink: 0 }}>
+                          ₹{Number(p.retailPrice || p.price || 0).toFixed(2)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
             </View>
@@ -320,16 +328,16 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
                 <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
                   <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
                     <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Price</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Price (₹)</Text>
                     <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Refund Total</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Refund Total (₹)</Text>
                     <Text style={[styles.th, { width: 40 }]}></Text>
                   </View>
 
                   {items.map((row, idx) => (
                     <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
                       <Text style={{ flex: 2, color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
-                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>${row.unitPrice.toFixed(2)}</Text>
+                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
                           style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
@@ -345,7 +353,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
                           <Text style={{ color: theme.colors.text }}>+</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>${row.total.toFixed(2)}</Text>
+                      <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
                       <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
                         <Trash2 size={16} color="#EF4444" />
                       </TouchableOpacity>
@@ -360,7 +368,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
               <View style={[styles.totalsCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, width: isMobile ? '100%' : 300 }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Refund:</Text>
-                  <Text style={{ color: '#0EA5E9', fontWeight: '700', fontSize: 20 }}>${totalReturnAmount.toFixed(2)}</Text>
+                  <Text style={{ color: '#0EA5E9', fontWeight: '700', fontSize: 20 }}>₹{totalReturnAmount.toFixed(2)}</Text>
                 </View>
               </View>
             </View>
@@ -400,9 +408,30 @@ const styles = StyleSheet.create({
   formCol: { flex: 1 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   searchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, height: 40 },
-  searchInput: { flex: 1, fontSize: 14, height: 40 },
-  searchDropdown: { position: 'absolute', top: 68, left: 0, right: 0, borderWidth: 1, borderRadius: 8, elevation: 4, shadowOpacity: 0.1, zIndex: 100 },
-  searchDropdownItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1 },
+  searchInput: { flex: 1, height: '100%', fontSize: 13 },
+  searchDropdown: {
+    position: 'absolute',
+    top: 68,
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderRadius: 8,
+    elevation: 10,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 9999,
+    maxHeight: 260,
+    overflow: 'hidden',
+  },
+  searchDropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 52,
+    borderBottomWidth: 1,
+  },
   emptyBox: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 24, alignItems: 'center' },
   tableContainer: { borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
   tableHeader: { flexDirection: 'row', padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
