@@ -12,6 +12,8 @@ import { productRepository } from '../../../core/repositories/ProductRepository'
 import { categoryRepository } from '../../../core/repositories/CategoryRepository';
 import { brandRepository } from '../../../core/repositories/BrandRepository';
 import { unitRepository } from '../../../core/repositories/UnitRepository';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 
 interface Props {
   onNavigate: (screen: ProductScreenType) => void;
@@ -246,7 +248,12 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
   const handleImport = async () => {
     const validRows = parsedRows.filter((r) => r.isValid);
     if (validRows.length === 0) {
-      Alert.alert('No valid rows', 'There are no valid rows to import.');
+      if (Platform.OS === 'web') {
+        const win = (globalThis as any).window;
+        if (win && win.alert) win.alert('There are no valid rows to import.');
+      } else {
+        Alert.alert('No valid rows', 'There are no valid rows to import.');
+      }
       return;
     }
 
@@ -256,148 +263,104 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
     let successCount = 0;
     let failedCount = 0;
 
-    try {
-      // 1. Preload local categories, units, brands
-      const existingCategories = await categoryRepository.getAll();
-      const existingUnits = await unitRepository.getAll();
-      const existingBrands = await brandRepository.getAll();
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      try {
+        const rawSub = Number(row.subunitVal);
+        const conversionRate = !isNaN(rawSub) && rawSub > 0 ? rawSub : 1;
 
-      const catMap = new Map<string, ModelCategory>();
-      existingCategories.forEach((c) => catMap.set(c.name.trim().toLowerCase(), c));
+        const apiPayload: any = {
+          name: row.name,
+          sku: row.sku,
+          productCode: row.code || row.sku,
+          categoryName: row.categoryName || undefined,
+          brandName: row.brandName || undefined,
+          unit: row.unitName || undefined,
+          unitName: row.unitName || undefined,
+          baseUnitName: row.unitName || undefined,
+          subunit: row.subunitVal !== undefined && row.subunitVal !== null ? row.subunitVal : undefined,
+          conversionRate: conversionRate,
+          purchasePrice: Number(row.purchasePrice) || 0,
+          wholesalePrice: Number(row.wholesalePrice) || 0,
+          retailPrice: Number(row.retailPrice) || 0,
+          price: Number(row.retailPrice) || 0,
+          cost: Number(row.purchasePrice) || 0,
+          mrp: Number(row.mrp) || 0,
+          openingStock: Number(row.openingStock) || 0,
+          stockQuantity: Number(row.openingStock) || 0,
+          barcode: row.barcode || undefined,
+          hsn: row.hsn || undefined,
+          hsnCode: row.hsn || undefined,
+          gst: Number(row.gst) || 0,
+          description: row.description || undefined,
+        };
 
-      const unitMap = new Map<string, ModelUnit>();
-      existingUnits.forEach((u) => {
-        unitMap.set(u.name.trim().toLowerCase(), u);
-        if (u.shortName) unitMap.set(u.shortName.trim().toLowerCase(), u);
-      });
-
-      const brandMap = new Map<string, ModelBrand>();
-      existingBrands.forEach((b) => brandMap.set(b.name.trim().toLowerCase(), b));
-
-      for (let i = 0; i < validRows.length; i++) {
-        const row = validRows[i];
+        // 1. Direct API call to backend
+        let serverProduct: any = null;
         try {
-          // Auto-resolve or Auto-create Category
-          let categoryId: number | undefined = undefined;
-          if (row.categoryName) {
-            const normCat = row.categoryName.trim().toLowerCase();
-            if (catMap.has(normCat)) {
-              categoryId = catMap.get(normCat)!.id;
-            } else {
-              const newCat: ModelCategory = {
-                id: Math.floor(Math.random() * -1000000000),
-                name: row.categoryName.trim(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                syncStatus: 'pending_insert',
-              };
-              await categoryRepository.insert(newCat);
-              catMap.set(normCat, newCat);
-              addCategory(newCat as any);
-              categoryId = newCat.id;
-            }
-          }
-
-          // Auto-resolve or Auto-create Unit
-          let unitId: number | undefined = undefined;
-          if (row.unitName) {
-            const normUnit = row.unitName.trim().toLowerCase();
-            if (unitMap.has(normUnit)) {
-              unitId = unitMap.get(normUnit)!.id;
-            } else {
-              const uName = row.unitName.trim();
-              const newUnit: ModelUnit = {
-                id: Math.floor(Math.random() * -1000000000),
-                name: uName,
-                shortName: uName.length <= 10 ? uName.toLowerCase() : uName.substring(0, 10).toLowerCase(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                syncStatus: 'pending_insert',
-              };
-              await unitRepository.insert(newUnit);
-              unitMap.set(normUnit, newUnit);
-              addUnit(newUnit as any);
-              unitId = newUnit.id;
-            }
-          }
-
-          // Auto-resolve or Auto-create Brand
-          let brandId: number | undefined = undefined;
-          if (row.brandName) {
-            const normBrand = row.brandName.trim().toLowerCase();
-            if (brandMap.has(normBrand)) {
-              brandId = brandMap.get(normBrand)!.id;
-            } else {
-              const newBrand: ModelBrand = {
-                id: Math.floor(Math.random() * -1000000000),
-                name: row.brandName.trim(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                syncStatus: 'pending_insert',
-              };
-              await brandRepository.insert(newBrand);
-              brandMap.set(normBrand, newBrand);
-              addBrand(newBrand as any);
-              brandId = newBrand.id;
-            }
-          }
-
-          // Subunit conversion rate
-          const rawSub = Number(row.subunitVal);
-          const conversionRate = !isNaN(rawSub) && rawSub > 0 ? rawSub : 1;
-
-          // Assemble product entity
-          const newProduct: ModelProduct = {
-            id: Math.floor(Math.random() * -1000000000),
-            name: row.name,
-            sku: row.sku,
-            productCode: row.code || row.sku,
-            price: row.retailPrice,
-            cost: row.purchasePrice,
-            purchasePrice: row.purchasePrice,
-            wholesalePrice: row.wholesalePrice,
-            retailPrice: row.retailPrice,
-            mrp: row.mrp,
-            stockQuantity: row.openingStock,
-            openingStock: row.openingStock,
-            barcode: row.barcode,
-            hsn: row.hsn,
-            gst: row.gst,
-            description: row.description,
-            categoryId,
-            categoryName: row.categoryName,
-            brandId,
-            brandName: row.brandName,
-            unitId,
-            baseUnitId: unitId,
-            conversionRate,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            syncStatus: 'pending_insert',
-          };
-
-          // Save to local SQLite database (which automatically syncs to backend API)
-          await productRepository.insert(newProduct);
-          addProduct(newProduct as any);
-          successCount++;
-        } catch (rowErr) {
-          console.error(`Import failed at row ${row.row}:`, rowErr);
-          failedCount++;
+          const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
+          serverProduct = res.data?.data || res.data;
+        } catch (apiErr: any) {
+          console.warn(`API call error for row ${row.row} (${row.name}):`, apiErr.response?.data || apiErr.message);
         }
 
-        setImportProgress(Math.round(((i + 1) / validRows.length) * 100));
-        await new Promise<void>((resolve) => setTimeout(() => resolve(), 5));
+        const serverId = serverProduct?.id ? Number(serverProduct.id) : Math.floor(Math.random() * -1000000000);
+
+        // 2. Assemble product entity for local state and cache
+        const localProduct: any = {
+          id: serverId,
+          name: row.name,
+          sku: row.sku,
+          productCode: row.code || row.sku,
+          price: row.retailPrice,
+          cost: row.purchasePrice,
+          purchasePrice: row.purchasePrice,
+          wholesalePrice: row.wholesalePrice,
+          retailPrice: row.retailPrice,
+          mrp: row.mrp,
+          stockQuantity: row.openingStock,
+          openingStock: row.openingStock,
+          barcode: row.barcode,
+          hsn: row.hsn,
+          gst: row.gst,
+          description: row.description,
+          categoryId: serverProduct?.categoryId || undefined,
+          categoryName: row.categoryName,
+          brandId: serverProduct?.brandId || undefined,
+          brandName: row.brandName,
+          unitId: serverProduct?.baseUnitId || undefined,
+          baseUnitId: serverProduct?.baseUnitId || undefined,
+          conversionRate,
+          createdAt: serverProduct?.createdAt || new Date().toISOString(),
+          updatedAt: serverProduct?.updatedAt || new Date().toISOString(),
+          syncStatus: serverProduct ? 'synced' : 'pending_insert',
+        };
+
+        // 3. Save to local SQLite database if available
+        try {
+          await productRepository.insert(localProduct as any, false);
+        } catch (dbErr) {
+          // ignore SQLite cache warnings on web
+        }
+
+        // 4. Update Zustand store
+        addProduct(localProduct);
+        successCount++;
+      } catch (rowErr) {
+        console.error(`Import failed at row ${row.row}:`, rowErr);
+        failedCount++;
       }
 
-      try {
-        await fetchProducts();
-      } catch (_) {}
-    } catch (err) {
-      console.error('Import overall error:', err);
-    } finally {
-      setIsImporting(false);
-      setImportResult({ success: successCount, failed: failedCount });
+      setImportProgress(Math.round(((i + 1) / validRows.length) * 100));
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 10));
     }
+
+    try {
+      await fetchProducts();
+    } catch (_) {}
+
+    setIsImporting(false);
+    setImportResult({ success: successCount, failed: failedCount });
   };
 
   const validCount = parsedRows.filter((r) => r.isValid).length;
@@ -519,14 +482,24 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
                       title={`Import ${validCount} Valid Products`}
                       disabled={validCount === 0}
                       onPress={() => {
-                        Alert.alert(
-                          'Confirm Import',
-                          `Import ${validCount} products? Missing categories, units, and brands will be auto-created.`,
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Import Now', onPress: handleImport },
-                          ]
-                        );
+                        if (Platform.OS === 'web') {
+                          const win = (globalThis as any).window;
+                          const ok = win && win.confirm
+                            ? win.confirm(`Import ${validCount} valid products now? Missing categories, units, and brands will be auto-created.`)
+                            : true;
+                          if (ok) {
+                            handleImport();
+                          }
+                        } else {
+                          Alert.alert(
+                            'Confirm Import',
+                            `Import ${validCount} products? Missing categories, units, and brands will be auto-created.`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Import Now', onPress: handleImport },
+                            ]
+                          );
+                        }
                       }}
                     />
                   )}
