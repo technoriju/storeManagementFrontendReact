@@ -18,13 +18,17 @@ import { AppButton } from '../../../shared/components/inputs/AppButton';
 import {
   X,
   Plus,
+  Minus,
   Calendar,
   Search,
   Trash2,
   ShoppingCart,
   AlertCircle,
+  User,
 } from 'lucide-react-native';
-import { useCustomers } from '../../customers/api/useCustomer';
+import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
+import { useCustomerStore } from '../../customers/store/customerStore';
+import { Customer } from '../../../types/models';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
@@ -72,6 +76,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const { data: unitList = [] } = useUnits();
   const { data: subUnitList = [] } = useSubUnits();
   const createSaleMutation = useCreateSale();
+  const addCustomerMutation = useAddCustomer();
 
   // Form State
   const [customerId, setCustomerId] = useState<string>('');
@@ -85,6 +90,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const [biller, setBiller] = useState<string>('Admin');
   const [notes, setNotes] = useState<string>('');
   const [priceType, setPriceType] = useState<PriceType>('wholesale');
+
+  // Quick Add Customer State
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState<boolean>(false);
+  const [newCustomerName, setNewCustomerName] = useState<string>('');
+  const [customerModalError, setCustomerModalError] = useState<string | null>(null);
+  const [isSavingCustomer, setIsSavingCustomer] = useState<boolean>(false);
+  const [localAddedCustomers, setLocalAddedCustomers] = useState<Customer[]>([]);
 
   // Product Search & Items Table
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -104,6 +116,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       setReference(`SL-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
       setPriceType('wholesale');
+      setShowAddCustomerModal(false);
+      setNewCustomerName('');
+      setCustomerModalError(null);
     }
   }, [visible, products.length, fetchProducts]);
 
@@ -134,13 +149,53 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     );
   };
 
-  // Customer & Supplier Options
+  // Quick Add Customer Handler
+  const handleQuickAddCustomer = async () => {
+    const trimmed = newCustomerName.trim();
+    if (!trimmed) {
+      setCustomerModalError('Please enter customer name.');
+      return;
+    }
+
+    try {
+      setIsSavingCustomer(true);
+      setCustomerModalError(null);
+      const created = await addCustomerMutation.mutateAsync({
+        name: trimmed,
+      });
+
+      setLocalAddedCustomers((prev) => [...prev, created]);
+      try {
+        useCustomerStore.getState().addCustomer(created);
+      } catch (_) {}
+
+      setCustomerId(String(created.id));
+      setNewCustomerName('');
+      setShowAddCustomerModal(false);
+    } catch (err: any) {
+      setCustomerModalError(err?.message || 'Failed to add customer.');
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
+
+  // Merged Customer Options
+  const allCustomers = useMemo(() => {
+    const list = [...customers];
+    for (const c of localAddedCustomers) {
+      if (!list.some((existing) => String(existing.id) === String(c.id))) {
+        list.push(c);
+      }
+    }
+    return list;
+  }, [customers, localAddedCustomers]);
+
   const customerOptions = useMemo(() => {
-    return customers.map((c) => ({
+    return allCustomers.map((c) => ({
       label: c.name,
       value: String(c.id),
     }));
-  }, [customers]);
+  }, [allCustomers]);
 
   const supplierOptions = useMemo(() => {
     return suppliers.map((s) => ({
@@ -150,8 +205,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   }, [suppliers]);
 
   const selectedCustomer = useMemo(() => {
-    return customers.find((c) => String(c.id) === String(customerId));
-  }, [customers, customerId]);
+    return allCustomers.find((c) => String(c.id) === String(customerId));
+  }, [allCustomers, customerId]);
 
   const selectedSupplier = useMemo(() => {
     return suppliers.find((s) => String(s.id) === String(supplierId));
@@ -268,12 +323,14 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   // Calculated Line Items
   const calculatedItems = useMemo(() => {
     return items.map((item) => {
-      const rawSubtotal = item.quantity * item.unitPrice;
+      const effectiveQty = item.quantity > 0 ? item.quantity : 1;
+      const rawSubtotal = effectiveQty * item.unitPrice;
       const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
       const taxAmount = netSubtotal * ((item.gst || 0) / 100);
       const total = netSubtotal + taxAmount;
       return {
         ...item,
+        quantity: item.quantity,
         taxAmount,
         total,
       };
@@ -282,7 +339,10 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
 
   // Order Totals Calculations
   const itemsSubtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    return items.reduce((sum, item) => {
+      const effectiveQty = item.quantity > 0 ? item.quantity : 1;
+      return sum + effectiveQty * item.unitPrice;
+    }, 0);
   }, [items]);
 
   const itemsDiscount = useMemo(() => {
@@ -343,7 +403,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         items: calculatedItems.map((item) => ({
           productId: item.productId,
           productName: item.productName,
-          quantity: item.quantity,
+          quantity: Math.max(1, item.quantity || 1),
           unitPrice: item.unitPrice,
           discount: item.discount,
           gst: item.gst,
@@ -356,7 +416,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         })),
       });
 
-      const customerObj = customers.find((c) => String(c.id) === customerId);
+      const customerObj = allCustomers.find((c) => String(c.id) === customerId);
 
       const receiptData: ReceiptPrintData = {
         invoiceNumber: reference,
@@ -381,7 +441,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
           productId: item.productId,
           productName: item.productName,
           sku: item.sku,
-          quantity: item.quantity,
+          quantity: Math.max(1, item.quantity || 1),
           unitPrice: item.unitPrice,
           discount: item.discount,
           gst: item.gst,
@@ -453,7 +513,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                   <View style={{ flex: 1 }}>
                     <AppSelect
                       label="Customer Name *"
-                      placeholder={customers.length === 0 ? 'No customers available' : 'Select Customer'}
+                      placeholder={allCustomers.length === 0 ? 'No customers available' : 'Select Customer'}
                       options={customerOptions}
                       value={customerId}
                       onSelect={(val) => setCustomerId(String(val))}
@@ -463,15 +523,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                   <TouchableOpacity
                     style={[styles.plusBtn, { marginTop: 24 }]}
                     onPress={() => {
-                      Alert.alert(
-                        'Customer Info',
-                        customers.length === 0
-                          ? 'No customers found. Please add customer in Customers module first.'
-                          : `Total customers loaded: ${customers.length}`
-                      );
+                      setNewCustomerName('');
+                      setCustomerModalError(null);
+                      setShowAddCustomerModal(true);
                     }}
+                    activeOpacity={0.8}
                   >
-                    <Plus size={16} color="white" />
+                    <Plus size={18} color="white" />
                   </TouchableOpacity>
                 </View>
 
@@ -667,12 +725,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                 ]}
               >
                 <ScrollView horizontal showsHorizontalScrollIndicator>
-                  <View style={{ minWidth: 880 }}>
+                  <View style={{ minWidth: 915 }}>
                     {/* Table Header */}
                     <View style={styles.tableHeaderRow}>
                       <Text style={[styles.th, { width: 170 }]}>Product</Text>
                       <Text style={[styles.th, { width: 120 }]}>Unit</Text>
-                      <Text style={[styles.th, { width: 70 }]}>Qty</Text>
+                      <Text style={[styles.th, { width: 105 }]}>Qty</Text>
                       <Text style={[styles.th, { width: 105 }]}>{priceType === 'wholesale' ? 'Wholesale (₹)' : 'Retailer (₹)'}</Text>
                       <Text style={[styles.th, { width: 85 }]}>Discount (₹)</Text>
                       <Text style={[styles.th, { width: 75 }]}>Tax (%)</Text>
@@ -736,23 +794,70 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                           </View>
 
                           {/* Qty */}
-                          <View style={{ width: 70, paddingRight: 6 }}>
+                          <View style={{ width: 105, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <TouchableOpacity
+                              style={[
+                                styles.qtyStepperBtn,
+                                {
+                                  borderColor: theme.colors.border,
+                                  backgroundColor: theme.colors.background,
+                                },
+                              ]}
+                              onPress={() => {
+                                const current = item.quantity || 1;
+                                handleUpdateItem(index, 'quantity', Math.max(1, current - 1));
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Minus size={12} color={theme.colors.text} />
+                            </TouchableOpacity>
+
                             <TextInput
                               style={[
                                 styles.cellInput,
+                                styles.qtyInput,
                                 {
                                   borderColor: theme.colors.border,
                                   color: theme.colors.text,
                                   backgroundColor: theme.colors.surface,
                                 },
                               ]}
-                              keyboardType="numeric"
-                              value={String(item.quantity)}
+                              keyboardType="number-pad"
+                              selectTextOnFocus
+                              value={item.quantity === 0 ? '' : String(item.quantity)}
+                              placeholder="1"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(1, parseInt(v, 10) || 1);
-                                handleUpdateItem(index, 'quantity', val);
+                                const clean = v.replace(/[^0-9]/g, '');
+                                if (clean === '') {
+                                  handleUpdateItem(index, 'quantity', 0);
+                                } else {
+                                  handleUpdateItem(index, 'quantity', parseInt(clean, 10));
+                                }
+                              }}
+                              onBlur={() => {
+                                if (!item.quantity || item.quantity < 1) {
+                                  handleUpdateItem(index, 'quantity', 1);
+                                }
                               }}
                             />
+
+                            <TouchableOpacity
+                              style={[
+                                styles.qtyStepperBtn,
+                                {
+                                  borderColor: theme.colors.border,
+                                  backgroundColor: theme.colors.background,
+                                },
+                              ]}
+                              onPress={() => {
+                                const current = item.quantity || 0;
+                                handleUpdateItem(index, 'quantity', current + 1);
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Plus size={12} color={theme.colors.text} />
+                            </TouchableOpacity>
                           </View>
 
                           {/* Sale Price */}
@@ -767,6 +872,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 },
                               ]}
                               keyboardType="decimal-pad"
+                              selectTextOnFocus
                               value={String(item.unitPrice)}
                               onChangeText={(v) => {
                                 const val = Math.max(0, parseFloat(v) || 0);
@@ -787,6 +893,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 },
                               ]}
                               keyboardType="decimal-pad"
+                              selectTextOnFocus
                               value={String(item.discount)}
                               onChangeText={(v) => {
                                 const val = Math.max(0, parseFloat(v) || 0);
@@ -807,6 +914,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 },
                               ]}
                               keyboardType="decimal-pad"
+                              selectTextOnFocus
                               value={String(item.gst)}
                               onChangeText={(v) => {
                                 const val = Math.max(0, parseFloat(v) || 0);
@@ -1002,6 +1110,122 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       </View>
     </Modal>
 
+    {/* Quick Add Customer Modal */}
+    <Modal
+      visible={showAddCustomerModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (!isSavingCustomer) {
+          setShowAddCustomerModal(false);
+          setNewCustomerName('');
+          setCustomerModalError(null);
+        }
+      }}
+    >
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+        <View
+          style={[
+            styles.quickCustomerModal,
+            {
+              backgroundColor: theme.colors.surface,
+              borderRadius: theme.borderRadius.lg,
+              width: isMobile ? '92%' : 440,
+            },
+          ]}
+        >
+          {/* Modal Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <User size={18} color="#F97316" />
+              <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>
+                Add Customer
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setShowAddCustomerModal(false);
+                setNewCustomerName('');
+                setCustomerModalError(null);
+              }}
+              style={styles.closeBtn}
+              disabled={isSavingCustomer}
+            >
+              <X size={16} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Modal Body */}
+          <View style={{ padding: 20, gap: 16 }}>
+            {customerModalError && (
+              <View style={styles.errorBanner}>
+                <AlertCircle size={14} color="#DC2626" />
+                <Text style={[styles.errorText, { fontSize: 12 }]}>{customerModalError}</Text>
+              </View>
+            )}
+
+            <View>
+              <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+                Customer Name *
+              </Text>
+              <TextInput
+                style={[
+                  styles.customerInput,
+                  {
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+                placeholder="Enter customer name"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newCustomerName}
+                onChangeText={(val) => {
+                  setNewCustomerName(val);
+                  if (customerModalError) setCustomerModalError(null);
+                }}
+                autoFocus
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                ]}
+                onPress={() => {
+                  setShowAddCustomerModal(false);
+                  setNewCustomerName('');
+                  setCustomerModalError(null);
+                }}
+                disabled={isSavingCustomer}
+              >
+                <Text style={{ color: theme.colors.textSecondary, fontWeight: '600', fontSize: 13 }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveBtn,
+                  { backgroundColor: '#F97316' },
+                  isSavingCustomer && { opacity: 0.7 },
+                ]}
+                onPress={handleQuickAddCustomer}
+                disabled={isSavingCustomer}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>
+                  {isSavingCustomer ? 'Saving...' : 'Add Customer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+
     <ReceiptPrintPreviewModal
       visible={showPrintModal}
       data={printData}
@@ -1172,5 +1396,45 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     gap: 12,
+  },
+  qtyStepperBtn: {
+    width: 24,
+    height: 32,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyInput: {
+    flex: 1,
+    textAlign: 'center',
+    paddingHorizontal: 2,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  quickCustomerModal: {
+    overflow: 'hidden',
+  },
+  customerInput: {
+    borderWidth: 1,
+    borderRadius: 6,
+    height: 42,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
