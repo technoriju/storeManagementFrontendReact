@@ -60,7 +60,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="primary"
           title="Total Sales"
-          value={`$48,988,078`}
+          value={`₹48,988,078`}
           icon={<FileText size={20} color="#F89B29" />}
           trend="+22%"
           trendUp={true}
@@ -69,7 +69,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="primary"
           title="Total Sales Return"
-          value={`$16,478,145`}
+          value={`₹16,478,145`}
           icon={<RefreshCcw size={20} color="#1C2E46" />}
           trend="-22%"
           trendUp={false}
@@ -78,7 +78,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="primary"
           title="Total Purchase"
-          value={`$24,145,789`}
+          value={`₹24,145,789`}
           icon={<Gift size={20} color="#1E9B85" />}
           trend="+22%"
           trendUp={true}
@@ -87,7 +87,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="primary"
           title="Total Purchase Return"
-          value={`$18,458,747`}
+          value={`₹18,458,747`}
           icon={<Shield size={20} color="#2664FF" />}
           trend="+22%"
           trendUp={true}
@@ -99,7 +99,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="secondary"
           title="Profit"
-          value={`$8,458,798`}
+          value={`₹8,458,798`}
           icon={<Layers size={16} color="#00C49F" />}
           trend="35%"
           trendUp={true}
@@ -109,7 +109,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="secondary"
           title="Invoice Due"
-          value={`$48,988,78`}
+          value={`₹48,988,78`}
           icon={<Clock size={16} color="#00C49F" />}
           trend="35%"
           trendUp={true}
@@ -119,7 +119,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="secondary"
           title="Total Expenses"
-          value={`$8,980,097`}
+          value={`₹8,980,097`}
           icon={<Target size={16} color="#FF4560" />}
           trend="41%"
           trendUp={true}
@@ -129,7 +129,7 @@ export const DashboardScreen = () => {
         <DashboardCard
           variant="secondary"
           title="Total Payment Returns"
-          value={`$78,458,798`}
+          value={`₹78,458,798`}
           icon={<Hash size={16} color="#8A2BE2" />}
           trend="20%"
           trendUp={false}

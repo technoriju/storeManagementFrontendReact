@@ -1,0 +1,92 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { purchaseReturnRepository } from '../../../core/repositories/PurchaseReturnRepository';
+import { PurchaseReturn, PurchaseReturnItem } from '../../../types/models';
+
+export const PURCHASE_RETURN_QUERY_KEY = ['purchase_returns'] as const;
+
+export const usePurchaseReturns = () => {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: PURCHASE_RETURN_QUERY_KEY,
+    queryFn: async () => {
+      const local = await purchaseReturnRepository.getAll();
+      void purchaseReturnRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await purchaseReturnRepository.getAll();
+          queryClient.setQueryData(PURCHASE_RETURN_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[usePurchaseReturns] fetchFromApi error (offline):', err);
+        });
+      return local;
+    },
+    refetchOnMount: 'always',
+    staleTime: 0,
+  });
+};
+
+export const usePurchaseReturn = (id: number | null | undefined) => {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: [...PURCHASE_RETURN_QUERY_KEY, id],
+    queryFn: async () => {
+      if (!id) return null;
+      const local = await purchaseReturnRepository.getById(id);
+      if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+        void purchaseReturnRepository
+          .fetchByIdFromApi(id)
+          .then((fresh) => {
+            if (fresh) {
+              queryClient.setQueryData([...PURCHASE_RETURN_QUERY_KEY, id], fresh);
+            }
+          })
+          .catch(() => undefined);
+      }
+      return local;
+    },
+    enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
+  });
+};
+
+export const useCreatePurchaseReturn = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      purchaseReturn,
+      items,
+    }: {
+      purchaseReturn: Omit<PurchaseReturn, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>;
+      items: Array<Omit<PurchaseReturnItem, 'id' | 'purchaseReturnId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>;
+    }) => {
+      return await purchaseReturnRepository.createPurchaseReturnWithItems(purchaseReturn, items);
+    },
+    onSuccess: (newReturn) => {
+      queryClient.setQueryData(PURCHASE_RETURN_QUERY_KEY, (old: PurchaseReturn[] | undefined) => {
+        return old ? [newReturn, ...old] : [newReturn];
+      });
+      queryClient.invalidateQueries({ queryKey: PURCHASE_RETURN_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+};
+
+export const useDeletePurchaseReturn = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await purchaseReturnRepository.delete(id);
+      return id;
+    },
+    onSuccess: (deletedId) => {
+      queryClient.setQueryData(PURCHASE_RETURN_QUERY_KEY, (old: PurchaseReturn[] | undefined) => {
+        return old ? old.filter((item) => item.id !== deletedId) : [];
+      });
+      queryClient.invalidateQueries({ queryKey: PURCHASE_RETURN_QUERY_KEY });
+    },
+  });
+};

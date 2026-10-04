@@ -14,8 +14,8 @@ export const InventoryModule = () => {
   const [currentScreen, setCurrentScreen] = useState<InventoryScreenType>('dashboard');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const navigateTo = (screen: InventoryScreenType, id?: string) => {
-    setSelectedId(id || null);
+  const navigateTo = (screen: InventoryScreenType, id?: string | number) => {
+    setSelectedId(id ? Number(id) : null);
     setCurrentScreen(screen);
   };
 

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useBrands, useAddBrand, useUpdateBrand, useDeleteBrand, Brand } from '../api/useBrand';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -20,6 +22,13 @@ import {
 export const BrandListScreen = () => {
   const theme = useTheme();
   const { data: brands = [], isLoading, refetch } = useBrands();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
   const addMutation = useAddBrand();
   const updateMutation = useUpdateBrand();
   const deleteMutation = useDeleteBrand();
@@ -61,6 +70,12 @@ export const BrandListScreen = () => {
           <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>• {value}</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

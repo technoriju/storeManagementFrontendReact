@@ -1,22 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, StyleSheet, Text, Pressable, Image, Alert } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { ImportProductModal } from '../components/ImportProductModal';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
+import { categoryRepository } from '../../../core/repositories/CategoryRepository';
+import { brandRepository } from '../../../core/repositories/BrandRepository';
 import { 
   FileText, 
   FileSpreadsheet, 
   RefreshCw, 
   ChevronUp, 
   PlusCircle, 
-  Download,
-  Eye,
-  Edit,
-  Trash2,
-  ChevronDown
+  Download, 
+  Eye, 
+  Edit, 
+  Trash2, 
+  ChevronDown 
 } from 'lucide-react-native';
 
 interface Props {
@@ -25,23 +31,88 @@ interface Props {
 
 export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { products, isLoading, error, fetchProducts } = useProductStore();
+  const { products, isLoading, error, fetchProducts, deleteProduct } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
+  const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
+  const [brandMap, setBrandMap] = useState<Record<string, string>>({});
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
+  useEffect(() => {
+    if (lastSyncedAt) {
+      fetchProducts();
+    }
+  }, [lastSyncedAt, fetchProducts]);
+
+  useEffect(() => {
+    const loadLookups = async () => {
+      try {
+        const localCats = await categoryRepository.getAll();
+        if (localCats.length > 0) {
+          const cMap: Record<string, string> = {};
+          localCats.forEach((c: any) => {
+            if (c.id && c.name) cMap[String(c.id)] = c.name;
+          });
+          setCategoryMap(cMap);
+        } else {
+          const catRes = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
+          const catList = catRes.data?.data || catRes.data || [];
+          if (Array.isArray(catList)) {
+            const cMap: Record<string, string> = {};
+            catList.forEach((c: any) => {
+              if (c.id && c.name) cMap[String(c.id)] = c.name;
+            });
+            setCategoryMap(cMap);
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const localBrands = await brandRepository.getAll();
+        if (localBrands.length > 0) {
+          const bMap: Record<string, string> = {};
+          localBrands.forEach((b: any) => {
+            if (b.id && b.name) bMap[String(b.id)] = b.name;
+          });
+          setBrandMap(bMap);
+        } else {
+          const brRes = await apiClient.get(API_ENDPOINTS.BRANDS.BASE);
+          const brList = brRes.data?.data || brRes.data || [];
+          if (Array.isArray(brList)) {
+            const bMap: Record<string, string> = {};
+            brList.forEach((b: any) => {
+              if (b.id && b.name) bMap[String(b.id)] = b.name;
+            });
+            setBrandMap(bMap);
+          }
+        }
+      } catch (_) {}
+    };
+
+    loadLookups();
+  }, []);
+
+  const getCategoryName = (item: any) => {
+    return item.category?.name || item.categoryName || categoryMap[String(item.categoryId)] || (item.categoryId ? `Category #${item.categoryId}` : 'N/A');
+  };
+
+  const getBrandName = (item: any) => {
+    return item.brand?.name || item.brandName || brandMap[String(item.brandId)] || (item.brandId ? `Brand #${item.brandId}` : 'N/A');
+  };
+
   const columns = [
-    { key: 'sku', title: 'SKU', width: 100 },
+    { key: 'sku', title: 'SKU', width: 110 },
     { 
       key: 'name', 
       title: 'Product Name', 
       flex: 2,
-      minWidth: 200,
+      minWidth: 180,
       render: (value: string, item: any) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           {item.imageUrl ? (
             <Image source={{ uri: item.imageUrl }} style={{ width: 32, height: 32, borderRadius: 4, backgroundColor: theme.colors.background }} />
           ) : (
@@ -49,52 +120,105 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
               <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>IMG</Text>
             </View>
           )}
-          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
+          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value || item.name}</Text>
         </View>
       )
     },
     { 
-      key: 'categoryId', 
+      key: 'category', 
       title: 'Category', 
       flex: 1,
-      minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value || 'N/A'}</Text>
+      minWidth: 130,
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.textSecondary }}>{getCategoryName(item)}</Text>
+      )
     },
     { 
-      key: 'brandId', 
+      key: 'brand', 
       title: 'Brand', 
       flex: 1,
       minWidth: 120,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value || 'N/A'}</Text>
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.textSecondary }}>{getBrandName(item)}</Text>
+      )
     },
     { 
-      key: 'price', 
-      title: 'Price (₹)', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{value?.toFixed(2) || '0.00'}</Text>
+      key: 'purchasePrice', 
+      title: 'Purchase (₹)', 
+      width: 120,
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.textSecondary }}>
+          ₹{Number(item.purchasePrice ?? item.cost ?? 0).toFixed(2)}
+        </Text>
+      )
     },
     { 
-      key: 'unitId', 
+      key: 'wholesalePrice', 
+      title: 'Wholesale (₹)', 
+      width: 125,
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.textSecondary }}>
+          ₹{Number(item.wholesalePrice ?? 0).toFixed(2)}
+        </Text>
+      )
+    },
+    { 
+      key: 'retailPrice', 
+      title: 'Retail (₹)', 
+      width: 120,
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>
+          ₹{Number(item.retailPrice ?? item.price ?? 0).toFixed(2)}
+        </Text>
+      )
+    },
+    { 
+      key: 'unit', 
       title: 'Unit', 
       width: 80,
-      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value || 'Pc'}</Text> // Defaulting to Pc for demo
+      render: (_: any, item: any) => (
+        <Text style={{ color: theme.colors.textSecondary }}>
+          {item.baseUnit?.shortName || item.unit || item.baseUnit?.name || 'Pc'}
+        </Text>
+      )
     },
-    { key: 'stockQuantity', title: 'Qty', width: 80 },
+    { 
+      key: 'stockQuantity', 
+      title: 'Qty', 
+      width: 85,
+      render: (_: any, item: any) => {
+        const qty = Number(item.stockQuantity ?? item.openingStock ?? 0);
+        return (
+          <Text style={{ 
+            color: qty > 0 ? theme.colors.text : '#EF4444', 
+            fontWeight: '700' 
+          }}>
+            {qty}
+          </Text>
+        );
+      }
+    },
     { 
       key: 'createdBy', 
       title: 'Created By', 
-      flex: 1.5,
-      minWidth: 150,
-      render: (value: string, item: any) => (
+      flex: 1.2,
+      minWidth: 130,
+      render: (_: string, item: any) => (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: theme.colors.primaryLight, justifyContent: 'center', alignItems: 'center' }}>
             <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
               {item.name ? item.name.substring(0, 1).toUpperCase() : 'A'}
             </Text>
           </View>
-          <Text style={{ color: theme.colors.textSecondary }}>Admin User</Text>
+          <Text style={{ color: theme.colors.textSecondary }}>Admin</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 95,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     },
   ];
 
@@ -106,7 +230,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+      <Pressable 
+        style={[styles.iconButton, { borderColor: theme.colors.border }]}
+        onPress={() => fetchProducts()}
+      >
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -121,7 +248,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       </Pressable>
       <Pressable 
         style={[styles.primaryActionBtn, { backgroundColor: '#1E3A8A' }]} 
-        onPress={() => setIsImportModalVisible(true)}
+        onPress={() => onNavigate('import')}
       >
         <Download size={16} color="white" />
         <Text style={styles.primaryActionText}>Import Product</Text>
@@ -142,6 +269,21 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     </>
   );
 
+  const handleDeleteProduct = (item: any) => {
+    Alert.alert(
+      'Delete Product',
+      `Are you sure you want to delete "${item.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => deleteProduct(Number(item.id)) 
+        }
+      ]
+    );
+  };
+
   const renderRowActions = (item: any) => (
     <>
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
@@ -150,11 +292,23 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('form', item.id)}>
         <Edit size={16} color={theme.colors.textSecondary} />
       </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
+      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => handleDeleteProduct(item)}>
+        <Trash2 size={16} color="#EF4444" />
       </Pressable>
     </>
   );
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const q = searchQuery.toLowerCase().trim();
+    return products.filter((p: any) => {
+      const name = (p.name || '').toLowerCase();
+      const sku = (p.sku || p.productCode || '').toLowerCase();
+      const catName = getCategoryName(p).toLowerCase();
+      const brandName = getBrandName(p).toLowerCase();
+      return name.includes(q) || sku.includes(q) || catName.includes(q) || brandName.includes(q);
+    });
+  }, [products, searchQuery, categoryMap, brandMap]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -163,7 +317,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         subtitle="Manage your products"
         headerActions={headerActions}
         columns={columns}
-        data={products}
+        data={filteredProducts}
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
@@ -173,9 +327,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       <ImportProductModal 
         visible={isImportModalVisible} 
         onClose={() => setIsImportModalVisible(false)} 
+        onOpenImportScreen={() => onNavigate('import')}
         onSubmit={() => {
-          // TODO: Implement actual import logic when modal API is ready
           setIsImportModalVisible(false);
+          onNavigate('import');
         }} 
       />
     </View>

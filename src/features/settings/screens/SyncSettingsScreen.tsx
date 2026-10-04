@@ -107,7 +107,7 @@ export const SyncSettingsScreen = () => {
                 <View style={styles.cell}><Text style={[styles.badge, { color: statusColor.text, backgroundColor: statusColor.background }]}>{item.status}</Text></View>
                 <Cell text={item.operation} width={110} />
                 <Cell text={item.entityType} width={130} />
-                <Cell text={item.entityId} width={150} />
+                <Cell text={String(item.entityId)} width={150} />
                 <Cell text={String(item.retryCount)} width={80} />
                 <Cell text={formatDate(item.createdAt)} width={190} />
                 <View style={[styles.cell, { width: 90 }]}>

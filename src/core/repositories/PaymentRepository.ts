@@ -56,7 +56,7 @@ export class PaymentRepository extends BaseRepository<Payment> {
     try {
       if (operation !== 'delete' && entity.syncStatus !== 'synced') {
         entity.syncStatus = 'synced';
-        await this.update(entity);
+        await this.update(entity, false);
       }
     } catch (error) {
       console.error(`Failed to sync payment ${entity.id} with API:`, error);

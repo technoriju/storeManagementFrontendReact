@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -15,6 +17,13 @@ export const SubCategoryListScreen = () => {
   
   const { data: subCategories = [], refetch, isLoading } = useSubCategories();
   const { data: categories = [] } = useCategories();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
   
   const addMutation = useAddSubCategory();
   const updateMutation = useUpdateSubCategory();
@@ -45,7 +54,7 @@ export const SubCategoryListScreen = () => {
       flex: 2,
       minWidth: 150,
       render: (val: number) => {
-        const cat = categories.find(c => c.id === val);
+        const cat = categories.find(c => Number(c.id) === Number(val) || (c.backendId && Number(c.backendId) === Number(val)));
         return <Text style={{ color: theme.colors.textSecondary }}>{cat ? cat.name : 'Unknown'}</Text>;
       }
     },
@@ -78,35 +87,7 @@ export const SubCategoryListScreen = () => {
       key: 'syncStatus', 
       title: 'Sync', 
       width: 100,
-      render: (value: string | undefined) => {
-        const isOnline = value === 'synced';
-        return (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            backgroundColor: isOnline ? '#DCFCE7' : '#FEF3C7',
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 12,
-            alignSelf: 'flex-start'
-          }}>
-            <View style={{ 
-              width: 6, 
-              height: 6, 
-              borderRadius: 3, 
-              backgroundColor: isOnline ? '#16A34A' : '#D97706',
-              marginRight: 6 
-            }} />
-            <Text style={{ 
-              color: isOnline ? '#16A34A' : '#D97706',
-              fontSize: 12,
-              fontWeight: '500'
-            }}>
-              {isOnline ? 'Online' : 'Offline'}
-            </Text>
-          </View>
-        );
-      }
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

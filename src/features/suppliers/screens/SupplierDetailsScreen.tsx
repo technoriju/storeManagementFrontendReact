@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
 import { Supplier } from '../../../types/models';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
 export const SupplierDetailsScreen = ({ route, navigation }: any) => {
   const { id } = route.params || {};
@@ -40,12 +41,15 @@ export const SupplierDetailsScreen = ({ route, navigation }: any) => {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>{supplier.name}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={styles.title}>{supplier.name}</Text>
+          <SyncBadge status={supplier.syncStatus || 'synced'} />
+        </View>
         <Text style={styles.label}>Contact Person: <Text style={styles.value}>{supplier.contactName || 'N/A'}</Text></Text>
         <Text style={styles.label}>Email: <Text style={styles.value}>{supplier.email || 'N/A'}</Text></Text>
         <Text style={styles.label}>Phone: <Text style={styles.value}>{supplier.phone || 'N/A'}</Text></Text>
         <Text style={styles.label}>Address: <Text style={styles.value}>{supplier.address || 'N/A'}</Text></Text>
-        <Text style={styles.label}>Outstanding Balance: <Text style={styles.balance}>${supplier.outstandingBalance || 0}</Text></Text>
+        <Text style={styles.label}>Outstanding Balance: <Text style={styles.balance}>₹{supplier.outstandingBalance || 0}</Text></Text>
       </View>
 
       <TouchableOpacity 

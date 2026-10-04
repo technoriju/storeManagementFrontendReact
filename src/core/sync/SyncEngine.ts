@@ -10,6 +10,13 @@ import { unitRepository } from '../repositories/UnitRepository';
 import { subUnitRepository } from '../repositories/SubUnitRepository';
 import { customerRepository } from '../repositories/CustomerRepository';
 import { supplierRepository } from '../repositories/SupplierRepository';
+import { productRepository } from '../repositories/ProductRepository';
+import { saleRepository } from '../repositories/SaleRepository';
+import { purchaseRepository } from '../repositories/PurchaseRepository';
+import { purchaseReturnRepository } from '../repositories/PurchaseReturnRepository';
+import { saleReturnRepository } from '../repositories/SaleReturnRepository';
+import { purchaseOrderRepository } from '../repositories/PurchaseOrderRepository';
+import { quotationRepository } from '../repositories/QuotationRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -42,23 +49,26 @@ class SyncEngine {
     if (this.syncInterval) clearInterval(this.syncInterval);
   }
 
-  private handleConnectivityChange(state: NetInfoState) {
+  private async handleConnectivityChange(state: NetInfoState) {
     this.isOnline = !!state.isConnected && !!state.isInternetReachable;
-    const store = useSyncStore.getState();
     
     if (this.isOnline) {
-      if (store.status === 'offline') {
-        this.updateSyncStatus();
+      await this.updatePendingCount();
+      const count = await outboxRepo.getPendingCount();
+      if (count > 0) {
+        await this.syncNow();
       }
-      this.syncNow();
     } else {
       useSyncStore.getState().setStatus('offline');
     }
   }
 
-  private handleAppStateChange(nextAppState: AppStateStatus) {
+  private async handleAppStateChange(nextAppState: AppStateStatus) {
     if (nextAppState === 'active' && this.isOnline) {
-      this.syncNow();
+      const count = await outboxRepo.getPendingCount();
+      if (count > 0) {
+        await this.syncNow();
+      }
     }
   }
   
@@ -88,7 +98,7 @@ class SyncEngine {
     }
   }
 
-  async syncNow() {
+  async syncNow(options?: { pullServer?: boolean }) {
     if (this.isSyncing || !this.isOnline) return;
 
     this.isSyncing = true;
@@ -96,13 +106,9 @@ class SyncEngine {
 
     try {
       await this.processOutbox();
-
-
-
-
-
-
-
+      if (options?.pullServer) {
+        await this.pullServerChanges();
+      }
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -119,7 +125,20 @@ class SyncEngine {
     // Clear stale jobs for deleted local records with non-server IDs.
     await outboxRepo.removeDeletedInvalidIds('categories');
     await outboxRepo.removeDeletedInvalidIds('sub_categories');
-    for (const entityType of ['brands', 'units', 'sub_units', 'customers', 'suppliers']) {
+    for (const entityType of [
+      'brands',
+      'units',
+      'sub_units',
+      'customers',
+      'suppliers',
+      'products',
+      'sales',
+      'purchases',
+      'purchase_returns',
+      'sale_returns',
+      'purchase_orders',
+      'quotations',
+    ]) {
       await outboxRepo.removeDeletedInvalidIds(entityType);
     }
     const pendingItems = await outboxRepo.getPendingItems();
@@ -151,18 +170,50 @@ class SyncEngine {
         } else if (item.entityType === 'suppliers') {
           await supplierRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'sales') {
+          await saleRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'purchases') {
+          await purchaseRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'purchase_returns') {
+          await purchaseReturnRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'sale_returns') {
+          await saleReturnRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);
         }
-      } catch {
+      } catch (err) {
+        console.warn(`[SyncEngine] Outbox sync error for ${item.entityType} ${item.id}:`, err);
         await outboxRepo.incrementRetry(item.id);
       }
     }
     await this.updatePendingCount();
   }
 
-  private async pullServerChanges() {
-
+  public async pullServerChanges() {
+    try {
+      await Promise.allSettled([
+        categoryRepository.fetchFromApi(),
+        subCategoryRepository.fetchFromApi(),
+        brandRepository.fetchFromApi(),
+        unitRepository.fetchFromApi(),
+        subUnitRepository.fetchFromApi(),
+        customerRepository.fetchFromApi(),
+        supplierRepository.fetchFromApi(),
+        productRepository.fetchFromApi(),
+        purchaseRepository.fetchFromApi(),
+        purchaseReturnRepository.fetchFromApi(),
+        saleRepository.fetchFromApi(),
+        saleReturnRepository.fetchFromApi(),
+        purchaseOrderRepository.fetchFromApi(),
+        quotationRepository.fetchFromApi(),
+      ]);
+    } catch (e) {
+      console.warn('[SyncEngine] pullServerChanges error:', e);
+    }
   }
 
   private async applyServerChange(entityType: string, item: any) {

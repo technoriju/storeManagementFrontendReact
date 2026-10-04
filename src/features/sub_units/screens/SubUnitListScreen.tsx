@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useSubUnits, useAddSubUnit, useUpdateSubUnit, useDeleteSubUnit, SubUnit } from '../api/useSubUnit';
 import { useUnits as useUnitList } from '../../units/api/useUnit';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -14,9 +16,9 @@ import {
   RefreshCw, 
   ChevronUp, 
   PlusCircle, 
-  Edit,
-  Trash2,
-  ChevronDown
+  Edit, 
+  Trash2, 
+  ChevronDown 
 } from 'lucide-react-native';
 
 const formatDate = (value?: string) => {
@@ -33,6 +35,13 @@ export const SubUnitListScreen = () => {
   const theme = useTheme();
   const { data: subUnits = [], isLoading: isLoadingSubUnits, refetch } = useSubUnits();
   const { data: units = [] } = useUnitList();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
   const addMutation = useAddSubUnit();
   const updateMutation = useUpdateSubUnit();
   const deleteMutation = useDeleteSubUnit();
@@ -101,6 +110,12 @@ export const SubUnitListScreen = () => {
           </View>
         );
       }
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

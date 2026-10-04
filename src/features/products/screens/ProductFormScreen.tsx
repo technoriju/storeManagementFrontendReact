@@ -580,6 +580,10 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       const rPrice = parseFloat(retailPrice) || 0;
       const cRate = parseFloat(conversionRate) || 1;
 
+      const selectedCatObj = categories.find(c => String(c.value) === String(selectedCategory));
+      const selectedBrandObj = brands.find(b => String(b.value) === String(selectedBrand));
+      const stockQty = parseFloat(quantity) || 0;
+
       const productData: Product = {
         id: productId ? (isNaN(Number(productId)) ? Math.floor(Math.random() * -1000000000) : Number(productId)) : Math.floor(Math.random() * -1000000000),
         name: productName.trim(),
@@ -595,11 +599,17 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         categoryId: selectedCategory || undefined,
         subCategoryId: selectedSubCategory || undefined,
         brandId: selectedBrand || undefined,
+        categoryName: selectedCatObj?.label,
+        brandName: selectedBrandObj?.label,
+        category: selectedCatObj ? { id: Number(selectedCatObj.value), name: selectedCatObj.label } : undefined,
+        brand: selectedBrandObj ? { id: Number(selectedBrandObj.value), name: selectedBrandObj.label } : undefined,
         unitId: selectedUnit || undefined,
         baseUnitId: selectedUnit ? Number(selectedUnit) : 1,
         subUnitId: selectedSubUnit || undefined,
+        subunitId: selectedSubUnit ? Number(selectedSubUnit) : undefined,
         conversionRate: cRate,
-        stockQuantity: parseFloat(quantity) || 0,
+        openingStock: stockQty,
+        stockQuantity: stockQty,
         lowStockThreshold: parseFloat(quantityAlert) || 5,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -630,6 +640,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           sku: productData.sku,
           productCode: productData.sku,
           baseUnitId: productData.baseUnitId || (productData.unitId ? Number(productData.unitId) : 1),
+          subUnitId: productData.subUnitId ? Number(productData.subUnitId) : null,
+          subunitId: productData.subUnitId ? Number(productData.subUnitId) : null,
+          conversionRate: productData.conversionRate ? Number(productData.conversionRate) : 1,
           categoryId: productData.categoryId ? Number(productData.categoryId) : null,
           subCategoryId: productData.subCategoryId ? Number(productData.subCategoryId) : null,
           brandId: productData.brandId ? Number(productData.brandId) : null,
@@ -639,9 +652,19 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           barcode: productData.barcode || null,
           description: productData.description || null,
           lowStockLevel: productData.lowStockThreshold !== undefined ? Number(productData.lowStockThreshold) : null,
+          openingStock: productData.stockQuantity,
+          stockQuantity: productData.stockQuantity,
         };
         if (productId) {
           await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
+        } else {
+          const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
+          const serverData = res.data?.data || res.data;
+          if (serverData?.id) {
+            productData.id = Number(serverData.id);
+            productData.syncStatus = 'synced';
+            await productRepository.update(productData as any);
+          }
         }
       } catch (apiErr) {
         console.warn('API sync warning:', apiErr);

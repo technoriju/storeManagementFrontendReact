@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { Customer } from '../../../types/models';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
 export const CustomerDetailsScreen = ({ route, navigation }: any) => {
   const { id } = route.params || {};
@@ -40,7 +41,10 @@ export const CustomerDetailsScreen = ({ route, navigation }: any) => {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>{customer.name}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={styles.title}>{customer.name}</Text>
+          <SyncBadge status={customer.syncStatus || 'synced'} />
+        </View>
         <Text style={styles.label}>Email: <Text style={styles.value}>{customer.email || 'N/A'}</Text></Text>
         <Text style={styles.label}>Phone: <Text style={styles.value}>{customer.phone || 'N/A'}</Text></Text>
         <Text style={styles.label}>Address: <Text style={styles.value}>{customer.address || 'N/A'}</Text></Text>

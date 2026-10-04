@@ -109,8 +109,9 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       } = entity as any;
       
       // Send only fields accepted by the subcategory API.
-      // Local/API records can contain deviceId and other read-only fields.
-      const apiPayload = { name, description, categoryId, status };
+      // Ensure categoryId is a valid number for NestJS validator.
+      const numericCategoryId = Number(categoryId) || 1;
+      const apiPayload = { name, description, categoryId: numericCategoryId, status: status || 'active' };
       
       let syncSuccess = false;
 
@@ -119,12 +120,18 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
         const responseData = response.data?.data || response.data;
         const serverId = responseData?.id || responseData?._id || responseData?.subcategoryId || responseData?.sub_category_id;
         if (serverId && serverId.toString() !== entity.id.toString()) {
-           const newId = serverId.toString();
+           const newId = Number(serverId);
            await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [newId, newId, entity.id]);
            await outboxRepo.rebaseEntity(this.tableName, entity.id, newId, newId);
+           entity.id = newId;
+           entity.backendId = newId;
+           entity.syncStatus = 'synced';
            syncSuccess = true;
         } else if (response.status >= 200 && response.status < 300) {
-           await db.execute(`UPDATE ${this.tableName} SET backendId = ?, syncStatus = 'synced' WHERE id = ?`, [serverId?.toString() || entity.backendId || entity.id, entity.id]);
+           const bId = serverId ? Number(serverId) : (entity.backendId || entity.id);
+           await db.execute(`UPDATE ${this.tableName} SET backendId = ?, syncStatus = 'synced' WHERE id = ?`, [bId, entity.id]);
+           entity.backendId = bId;
+           entity.syncStatus = 'synced';
            syncSuccess = true;
         }
       } else if (operation === 'update') {
@@ -212,7 +219,7 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
           item.id = Number(item.id || item.backendId || Math.floor(Math.random() * -1000000000));
           item.name = item.name || item.subCategoryName || item.sub_category_name || item.subCategory || item.subcategory || item.sub_category || item.title || 'Unnamed SubCategory';
           item.description = item.description || null;
-          item.categoryId = String(item.categoryId || item.category_id || item.category?._id || item.category?.id || (typeof item.category === 'string' ? item.category : ''));
+          item.categoryId = Number(item.categoryId || item.category_id || item.category?._id || item.category?.id || (typeof item.category === 'string' ? item.category : 0)) || 0;
           item.status = item.status || (item.isActive === false ? 'inactive' : 'active');
           item.syncStatus = 'synced';
           item.createdAt = item.createdAt || new Date().toISOString();

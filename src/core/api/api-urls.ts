@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   PRODUCTS: {
     BASE: '/products',
     BY_ID: (id: string | number) => `/products/${id}`,
+    BULK_IMPORT: '/products/bulk-import',
   },
   SETTINGS: {
     BASE: '/settings',
@@ -39,6 +40,30 @@ export const API_ENDPOINTS = {
   UNITS: {
     BASE: '/units',
     BY_ID: (id: string | number) => `/units/${id}`,
+  },
+  SALES: {
+    BASE: '/sales',
+    BY_ID: (id: string | number) => `/sales/${id}`,
+  },
+  PURCHASES: {
+    BASE: '/purchases',
+    BY_ID: (id: string | number) => `/purchases/${id}`,
+  },
+  QUOTATIONS: {
+    BASE: '/quotations',
+    BY_ID: (id: string | number) => `/quotations/${id}`,
+  },
+  PURCHASE_ORDERS: {
+    BASE: '/purchase-orders',
+    BY_ID: (id: string | number) => `/purchase-orders/${id}`,
+  },
+  SALES_RETURNS: {
+    BASE: '/sale-returns',
+    BY_ID: (id: string | number) => `/sale-returns/${id}`,
+  },
+  PURCHASE_RETURNS: {
+    BASE: '/purchase-returns',
+    BY_ID: (id: string | number) => `/purchase-returns/${id}`,
   },
   USERS: {
     BASE: '/users',

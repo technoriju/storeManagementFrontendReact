@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { CustomerScreenType } from '../CustomersModule';
 import { useCustomers, useAddCustomer, useUpdateCustomer, useDeleteCustomer } from '../api/useCustomer';
 import { Customer } from '../../../types/models';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -24,6 +26,13 @@ interface Props {
 export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const { data: customers = [], isLoading, refetch } = useCustomers();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      refetch();
+    }
+  }, [lastSyncedAt, refetch]);
   const addMutation = useAddCustomer();
   const updateMutation = useUpdateCustomer();
   const deleteMutation = useDeleteCustomer();
@@ -82,6 +91,12 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
           <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>Active</Text>
         </View>
       )
+    },
+    { 
+      key: 'syncStatus', 
+      title: 'Sync', 
+      width: 100,
+      render: (value: string | undefined) => <SyncBadge status={value} />
     }
   ];
 

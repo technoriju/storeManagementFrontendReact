@@ -74,9 +74,9 @@ export class UserRepository extends BaseRepository<User> {
         item.syncStatus = 'synced';
         const existing = await this.getById(item.id);
         if (existing) {
-          await this.update(item);
+          await this.update(item, false);
         } else {
-          await this.insert(item);
+          await this.insert(item, false);
         }
       }
     } catch (error) {

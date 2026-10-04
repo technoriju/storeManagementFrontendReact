@@ -66,7 +66,7 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     if (!shouldSync) return;
     await tombstoneRepo.add(this.config.entityType, id);
     await outboxRepo.removeForEntity(this.config.entityType, id);
-    if (/^\d+$/.test(Number((entity as any).backendId || entity.id))) {
+    if (/^\d+$/.test(String((entity as any).backendId || entity.id))) {
       await outboxRepo.add(this.config.entityType, id, 'DELETE', entity);
       this.requestSync();
     }

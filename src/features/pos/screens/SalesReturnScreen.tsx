@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Text, Pressable, Image } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { AddSalesReturnModal } from '../components/AddSalesReturnModal';
+import { useSalesReturns, useDeleteSaleReturn } from '../api/useSalesReturns';
+import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { 
-  ChevronDown,
-  Edit,
-  Trash2,
-  FileText,
-  FileSpreadsheet,
-  RefreshCw,
-  ChevronUp,
-  PlusCircle
+  RotateCcw, 
+  RefreshCw, 
+  PlusCircle, 
+  Trash2, 
+  Eye, 
+  X,
+  User,
 } from 'lucide-react-native';
 
 interface Props {
@@ -21,19 +24,72 @@ interface Props {
 export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewItem, setViewItem] = useState<any | null>(null);
 
-  const salesReturns = [
-    { id: '1', productName: 'Lenovo IdeaPad 3', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Carl Evans', avatar: 'https://i.pravatar.cc/150?u=1', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid' },
-    { id: '2', productName: 'Apple tablet', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Minerva Rameriz', avatar: 'https://i.pravatar.cc/150?u=2', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid' },
-    { id: '3', productName: 'Headphone', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Robert Lamon', avatar: 'https://i.pravatar.cc/150?u=3', status: 'Received', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue' },
-    { id: '4', productName: 'Nike Jordan', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', status: 'Received', total: 1500, paid: 1500, due: 0, paymentStatus: 'Paid' },
-    { id: '5', productName: 'Macbook Pro', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Patricia Lewis', avatar: 'https://i.pravatar.cc/150?u=4', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid' },
-    { id: '6', productName: 'Red Premium Satchel', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Marsha Betts', avatar: 'https://i.pravatar.cc/150?u=6', status: 'Pending', total: 750, paid: 0, due: 750, paymentStatus: 'Unpaid' },
-    { id: '7', productName: 'Apple Earpods', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Daniel Jude', avatar: 'https://i.pravatar.cc/150?u=7', status: 'Received', total: 1300, paid: 1300, due: 0, paymentStatus: 'Paid' },
-    { id: '8', productName: 'Iphone 14 Pro', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Emma Bates', avatar: 'https://i.pravatar.cc/150?u=8', status: 'Received', total: 1100, paid: 1100, due: 0, paymentStatus: 'Paid' },
-    { id: '9', productName: 'Gaming Chair', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Richard Fralick', avatar: 'https://i.pravatar.cc/150?u=9', status: 'Pending', total: 2300, paid: 2300, due: 0, paymentStatus: 'Paid' },
-    { id: '10', productName: 'Borealis Backpack', productImg: 'https://via.placeholder.com/24', date: '19 Nov 2022', customerName: 'Michelle Robison', avatar: 'https://i.pravatar.cc/150?u=10', status: 'Pending', total: 1700, paid: 1700, due: 0, paymentStatus: 'Paid' },
-  ];
+  const { data: dbReturns = [], isLoading, refetch } = useSalesReturns();
+  const deleteReturnMutation = useDeleteSaleReturn();
+  const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  useEffect(() => {
+    refetch();
+  }, [lastSyncedAt, refetch]);
+
+  const fallbackReturns = useMemo(() => [
+    { id: 1, returnNumber: 'SRT-001', customerName: 'Carl Evans', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Defective speaker', syncStatus: 'synced' },
+    { id: 2, returnNumber: 'SRT-002', customerName: 'Minerva Rameriz', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong color', syncStatus: 'synced' },
+    { id: 3, returnNumber: 'SRT-003', customerName: 'Robert Lamon', date: '2024-11-20', status: 'Received', totalAmount: 2000, reason: 'Customer changed mind', syncStatus: 'synced' },
+    { id: 4, returnNumber: 'SRT-004', customerName: 'Mark Joslyn', date: '2024-11-15', status: 'Received', totalAmount: 800, reason: 'Damaged packaging', syncStatus: 'synced' },
+  ], []);
+
+  const allReturns = useMemo(() => {
+    if (dbReturns && dbReturns.length > 0) {
+      return dbReturns.map((r) => ({
+        id: r.id,
+        returnNumber: r.returnNumber,
+        customerName: r.customerName || 'Walk-in Customer',
+        date: r.date,
+        totalAmount: Number(r.totalAmount || 0),
+        status: r.status || 'Received',
+        syncStatus: (r as any).syncStatus || 'synced',
+        reason: r.reason,
+        items: r.items || [],
+      }));
+    }
+    return fallbackReturns;
+  }, [dbReturns, fallbackReturns]);
+
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return allReturns;
+    const q = searchQuery.toLowerCase().trim();
+    return allReturns.filter((item) =>
+      item.returnNumber?.toLowerCase().includes(q) ||
+      item.customerName?.toLowerCase().includes(q) ||
+      item.status?.toLowerCase().includes(q) ||
+      item.reason?.toLowerCase().includes(q)
+    );
+  }, [allReturns, searchQuery]);
+
+  const handleDelete = (item: any) => {
+    Alert.alert(
+      'Delete Sales Return',
+      `Are you sure you want to delete return record ${item.returnNumber}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteReturnMutation.mutateAsync(item.id);
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -43,25 +99,23 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
     }
   };
 
-  const getPaymentStatusStyle = (status: string) => {
-    switch (status) {
-      case 'Paid': return { bg: '#ECFDF5', text: '#10B981', dot: '#10B981' };
-      case 'Unpaid': return { bg: '#FEF2F2', text: '#EF4444', dot: '#EF4444' };
-      case 'Overdue': return { bg: '#FFFBEB', text: '#F59E0B', dot: '#F59E0B' };
-      default: return { bg: theme.colors.background, text: theme.colors.textSecondary, dot: 'transparent' };
-    }
-  };
-
   const columns = [
     { 
-      key: 'product', 
-      title: 'Product', 
+      key: 'returnNumber', 
+      title: 'Return No', 
+      flex: 1.2,
+      minWidth: 120,
+      render: (value: string) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{value}</Text>
+    },
+    { 
+      key: 'customerName', 
+      title: 'Customer', 
       flex: 1.5,
       minWidth: 150,
-      render: (_: any, item: any) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Image source={{ uri: item.productImg }} style={{ width: 24, height: 24, borderRadius: 4 }} />
-          <Text style={{ color: theme.colors.textSecondary }}>{item.productName}</Text>
+      render: (value: string) => (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <User size={14} color={theme.colors.textSecondary} />
+          <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
         </View>
       )
     },
@@ -73,21 +127,15 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       render: (value: string) => <Text style={{ color: theme.colors.textSecondary }}>{value}</Text>
     },
     { 
-      key: 'customer', 
-      title: 'Customer', 
-      flex: 1.5,
-      minWidth: 150,
-      render: (_: any, item: any) => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Image source={{ uri: item.avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} />
-          <Text style={{ color: theme.colors.textSecondary }}>{item.customerName}</Text>
-        </View>
-      )
+      key: 'totalAmount', 
+      title: 'Refund Amount', 
+      width: 120,
+      render: (value: number) => <Text style={{ color: '#0EA5E9', fontWeight: '600' }}>₹{value?.toFixed(2) || '0.00'}</Text>
     },
     { 
       key: 'status', 
       title: 'Status', 
-      width: 100,
+      width: 110,
       render: (value: string) => {
         const colors = getStatusColor(value);
         return (
@@ -98,149 +146,145 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     },
     { 
-      key: 'total', 
-      title: 'Total', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
+      key: 'reason', 
+      title: 'Reason', 
+      flex: 1.5,
+      minWidth: 130,
+      render: (value: string) => <Text style={{ color: theme.colors.textSecondary }} numberOfLines={1}>{value || '-'}</Text>
     },
-    { 
-      key: 'paid', 
-      title: 'Paid', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
+    {
+      key: 'syncStatus',
+      title: 'Sync',
+      width: 90,
+      render: (value: string) => <SyncBadge status={value} />,
     },
-    { 
-      key: 'due', 
-      title: 'Due', 
-      width: 100,
-      render: (value: number) => <Text style={{ color: theme.colors.textSecondary }}>${value?.toFixed(2) || '0.00'}</Text>
-    },
-    { 
-      key: 'paymentStatus', 
-      title: 'Payment Status', 
-      width: 130,
-      render: (value: string) => {
-        const style = getPaymentStatusStyle(value);
-        return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: style.bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: style.dot }} />
-            <Text style={{ color: style.text, fontSize: 12, fontWeight: '500' }}>{value}</Text>
-          </View>
-        );
-      }
-    },
+    {
+      key: 'actions',
+      title: 'Actions',
+      width: 80,
+      render: (_: any, item: any) => (
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable onPress={() => setViewItem(item)} style={{ padding: 4 }}>
+            <Eye size={16} color={theme.colors.textSecondary} />
+          </Pressable>
+          <Pressable onPress={() => handleDelete(item)} style={{ padding: 4 }}>
+            <Trash2 size={16} color="#EF4444" />
+          </Pressable>
+        </View>
+      )
+    }
   ];
-
-  const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <ChevronUp size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]}>
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Sales Return</Text>
-      </Pressable>
-    </>
-  );
-
-  const filters = (
-    <>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Customer</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Status</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Payment Status</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Sort By : Last 7 Days</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-    </>
-  );
-
-  const renderRowActions = (item: any) => (
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <Pressable style={styles.actionIcon}>
-        <Edit size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={styles.actionIcon}>
-        <Trash2 size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-    </View>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AdvancedTable
-        title="Sales Return"
-        subtitle="Manage your returns"
-        headerActions={headerActions}
-        columns={columns}
-        data={salesReturns}
-        onSearch={setSearchQuery}
-        filters={filters}
-        renderRowActions={renderRowActions}
-        isLoading={false}
+      {/* Header bar */}
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Sales Return</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Manage customer product returns and inventory restock</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable 
+            style={[styles.iconButton, { borderColor: theme.colors.border }]}
+            onPress={() => refetch()}
+          >
+            <RefreshCw size={16} color={theme.colors.textSecondary} />
+          </Pressable>
+
+          <Pressable 
+            style={[styles.addButton, { backgroundColor: '#0EA5E9' }]}
+            onPress={() => setShowAddModal(true)}
+          >
+            <PlusCircle size={16} color="white" />
+            <Text style={styles.addButtonText}>Add Sales Return</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Advanced Table */}
+      <View style={styles.tableCard}>
+        <AdvancedTable
+          data={filteredData}
+          columns={columns}
+          onSearch={setSearchQuery}
+          searchPlaceholder="Search return no, customer, reason..."
+          isLoading={isLoading}
+          hasCheckbox={false}
+        />
+      </View>
+
+      {/* Add Sales Return Modal */}
+      <AddSalesReturnModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
       />
+
+      {/* View Return Details Modal */}
+      {viewItem && (
+        <Modal visible={!!viewItem} transparent animationType="fade">
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Return #{viewItem.returnNumber}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Customer: {viewItem.customerName}</Text>
+                </View>
+                <Pressable onPress={() => setViewItem(null)}>
+                  <X size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ padding: 16, maxHeight: 400 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Date: {viewItem.date}</Text>
+                  <Text style={{ color: theme.colors.textSecondary }}>Status: {viewItem.status}</Text>
+                </View>
+                {viewItem.reason && (
+                  <Text style={{ color: theme.colors.textSecondary, marginBottom: 8 }}>
+                    Reason: <Text style={{ color: theme.colors.text }}>{viewItem.reason}</Text>
+                  </Text>
+                )}
+
+                {viewItem.items && viewItem.items.length > 0 && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 6 }}>Returned Products:</Text>
+                    {viewItem.items.map((i: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>₹{Number(i.total).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Refund:</Text>
+                    <Text style={{ color: '#0EA5E9', fontWeight: '700', fontSize: 18 }}>₹{Number(viewItem.totalAmount).toFixed(2)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
-  },
-  primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 36,
-    borderRadius: 6,
-    gap: 8,
-  },
-  primaryActionText: {
-    color: 'white',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  filterDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    height: 40,
-    backgroundColor: 'white',
-    marginRight: 8,
-  },
-  actionIcon: {
-    padding: 4,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 4,
-  }
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 20, fontWeight: 'bold' },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  iconButton: { padding: 8, borderWidth: 1, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  addButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  addButtonText: { color: 'white', fontWeight: '600', fontSize: 13 },
+  tableCard: { flex: 1 },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold' },
 });
-
-

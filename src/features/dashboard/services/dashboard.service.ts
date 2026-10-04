@@ -49,10 +49,16 @@ export class DashboardService {
     `);
     const expenses = Number(expRes.rows[0]?.total || 0);
 
-    // 6. Profit (Simplified: Today Sales - (Cost of goods sold for today's sales) - Expenses)
-    // This is a rough estimation. For actual profit we need COGS.
+    // 6. Profit: Today Sales - (Cost of goods sold for today's sales) - Expenses
     const cogsRes = await db.execute(`
-      SELECT SUM(si.quantity * p.cost) as total 
+      SELECT SUM(
+        si.quantity * CASE 
+          WHEN si.unitCost IS NOT NULL AND si.unitCost > 0 THEN si.unitCost
+          WHEN si.unitType = 'sub' AND si.conversionRate > 0 THEN (p.cost / si.conversionRate)
+          WHEN p.conversionRate > 1 AND si.unitType = 'sub' THEN (p.cost / p.conversionRate)
+          ELSE p.cost
+        END
+      ) as total 
       FROM sale_items si
       JOIN products p ON si.productId = p.id
       JOIN sales s ON si.saleId = s.id

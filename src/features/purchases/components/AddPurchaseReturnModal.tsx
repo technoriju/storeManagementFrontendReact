@@ -1,10 +1,42 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Text, Modal, ScrollView, Pressable, Platform, TouchableOpacity, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  Alert,
+  Platform,
+} from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
-import { X, Calendar, Search, ScanLine, Bold, Italic, Underline, Link2, List, ListOrdered, Type } from 'lucide-react-native';
+import {
+  X,
+  Search,
+  Trash2,
+  RotateCcw,
+  AlertCircle,
+} from 'lucide-react-native';
+import { useSuppliers } from '../../suppliers/api/useSupplier';
+import { usePurchases } from '../api/usePurchases';
+import { useProductStore } from '../../products/store/productStore';
+import { useCreatePurchaseReturn } from '../api/usePurchaseReturns';
+import { Product } from '../../products/types';
+
+interface ReturnItemRow {
+  productId: number;
+  productName: string;
+  sku?: string;
+  quantity: number;
+  unitPrice: number;
+  taxAmount: number;
+  total: number;
+}
 
 interface Props {
   visible: boolean;
@@ -13,163 +45,349 @@ interface Props {
 
 export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  
-  const [supplier, setSupplier] = useState('');
-  const [date, setDate] = useState('');
-  const [reference, setReference] = useState('');
-  const [searchProduct, setSearchProduct] = useState('');
-  const [orderTax, setOrderTax] = useState('0');
-  const [discount, setDiscount] = useState('0');
-  const [shipping, setShipping] = useState('0');
-  const [status, setStatus] = useState('');
-  const [description, setDescription] = useState('');
+  const { isMobile } = useResponsive();
 
-  const supplierOptions = [{ label: 'Supplier 1', value: '1' }, { label: 'Supplier 2', value: '2' }];
-  const statusOptions = [{ label: 'Pending', value: 'pending' }, { label: 'Completed', value: 'completed' }];
+  const { data: suppliers = [] } = useSuppliers();
+  const { data: purchases = [] } = usePurchases();
+  const { products, fetchProducts } = useProductStore();
+  const createPurchaseReturnMutation = useCreatePurchaseReturn();
+
+  const [supplierId, setSupplierId] = useState<string>('');
+  const [purchaseId, setPurchaseId] = useState<string>('');
+  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [returnNumber, setReturnNumber] = useState<string>(() => `PRT-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [reason, setReason] = useState<string>('');
+  const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
+
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [items, setItems] = useState<ReturnItemRow[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      if (products.length === 0) {
+        fetchProducts().catch(() => {});
+      }
+      setDate(new Date().toISOString().split('T')[0]);
+      setReturnNumber(`PRT-${Math.floor(100000 + Math.random() * 900000)}`);
+      setErrorMessage(null);
+    }
+  }, [visible, products.length, fetchProducts]);
+
+  const supplierOptions = useMemo(() => {
+    return suppliers.map((s) => ({
+      label: s.name,
+      value: String(s.id),
+    }));
+  }, [suppliers]);
+
+  const purchaseOptions = useMemo(() => {
+    return purchases.map((p) => ({
+      label: `${p.invoiceNumber} - ${p.supplierName || 'Supplier'} (₹${p.total})`,
+      value: String(p.id),
+    }));
+  }, [purchases]);
+
+  const selectedSupplier = useMemo(() => {
+    return suppliers.find((s) => String(s.id) === String(supplierId));
+  }, [suppliers, supplierId]);
+
+  const statusOptions = [
+    { label: 'Received / Returned (Deduct from inventory)', value: 'Received' },
+    { label: 'Pending Approval', value: 'Pending' },
+  ];
+
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase().trim();
+    return products.filter((p) => {
+      const matchName = p.name?.toLowerCase().includes(q);
+      const matchSku = p.sku?.toLowerCase().includes(q);
+      return matchName || matchSku;
+    }).slice(0, 10);
+  }, [searchQuery, products]);
+
+  const handleSelectProduct = (product: Product) => {
+    const existingIndex = items.findIndex((i) => i.productId === product.id);
+    const unitPrice = Number(product.purchasePrice || product.cost || 0);
+
+    if (existingIndex >= 0) {
+      const updated = [...items];
+      updated[existingIndex].quantity += 1;
+      updated[existingIndex].total = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      setItems(updated);
+    } else {
+      setItems((prev) => [
+        ...prev,
+        {
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          quantity: 1,
+          unitPrice,
+          taxAmount: 0,
+          total: unitPrice,
+        },
+      ]);
+    }
+    setSearchQuery('');
+    setIsSearching(false);
+  };
+
+  const handleUpdateQuantity = (index: number, qty: number) => {
+    if (qty <= 0) return;
+    const updated = [...items];
+    updated[index].quantity = qty;
+    updated[index].total = qty * updated[index].unitPrice;
+    setItems(updated);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const totalReturnAmount = useMemo(() => {
+    return items.reduce((acc, row) => acc + row.total, 0);
+  }, [items]);
+
+  const handleSubmit = async () => {
+    if (items.length === 0) {
+      setErrorMessage('Please add at least one product to return.');
+      return;
+    }
+
+    try {
+      await createPurchaseReturnMutation.mutateAsync({
+        purchaseReturn: {
+          purchaseId: purchaseId ? Number(purchaseId) : undefined,
+          returnNumber: returnNumber || `PRT-${Date.now().toString().slice(-6)}`,
+          reference: returnNumber,
+          supplierId: supplierId ? Number(supplierId) : undefined,
+          supplierName: selectedSupplier?.name || 'Supplier',
+          date: date || new Date().toISOString().split('T')[0],
+          subtotal: totalReturnAmount,
+          taxTotal: 0,
+          discountTotal: 0,
+          totalAmount: totalReturnAmount,
+          status,
+          reason,
+        },
+        items: items.map((i) => ({
+          productId: i.productId,
+          productName: i.productName,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          taxAmount: i.taxAmount,
+          total: i.total,
+        })),
+      });
+
+      Alert.alert('Success', 'Purchase return created and inventory updated!');
+      setItems([]);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to create purchase return');
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '95%' : '80%', maxWidth: 1000 }]}>
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '95%' : '80%', maxWidth: 850 }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Add Purchase Return</Text>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
-              <View style={styles.closeIconBg}>
-                <X size={14} color="white" />
-              </View>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <RotateCcw size={20} color="#F97316" />
+              <Text style={[styles.title, { color: theme.colors.text }]}>Add Purchase Return</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X size={20} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={{ padding: 20 }}>
-            {/* Row 1 */}
-            <View style={[styles.row, isMobile && styles.col]}>
-              <View style={styles.flex1}>
-                <View style={styles.inputWithBtn}>
-                  <AppSelect 
-                    label="Supplier Name *" 
-                    placeholder="Select" 
-                    options={supplierOptions} 
-                    value={supplier} 
-                    onSelect={setSupplier} 
-                    containerStyle={{ flex: 1, marginBottom: 0 }} 
-                  />
-                  <Pressable style={styles.addBtn}>
-                    <Text style={styles.addBtnText}>+</Text>
-                  </Pressable>
-                </View>
+            {errorMessage && (
+              <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
+                <AlertCircle size={16} color="#DC2626" />
+                <Text style={{ color: '#DC2626', fontSize: 13, flex: 1 }}>{errorMessage}</Text>
               </View>
-              <View style={styles.flex1}>
-                <View style={styles.inputContainer}>
-                  <Text style={[styles.label, { color: theme.colors.text }]}>Date <Text style={styles.required}>*</Text></Text>
-                  <View style={[styles.inputWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-                    <AppInput 
-                      placeholder="dd/mm/yyyy" 
-                      value={date} 
-                      onChangeText={setDate} 
-                      containerStyle={{ marginBottom: 0, flex: 1 }} 
-                      style={{ borderWidth: 0, height: 38 }}
-                    />
-                    <Calendar size={18} color={theme.colors.textSecondary} style={styles.inputIcon} />
-                  </View>
-                </View>
+            )}
+
+            {/* Row 1: Purchase Reference, Supplier, Return No */}
+            <View style={[styles.formRow, isMobile && styles.formRowCol]}>
+              <View style={styles.formCol}>
+                <AppSelect
+                  label="Select Purchase Order/Bill"
+                  placeholder="Choose Purchase (optional)"
+                  options={purchaseOptions}
+                  value={purchaseId}
+                  onSelect={setPurchaseId}
+                />
               </View>
-              <View style={styles.flex1}>
-                <AppInput 
-                  label="Reference *" 
-                  value={reference} 
-                  onChangeText={setReference} 
-                  containerStyle={{ marginBottom: 0 }}
+              <View style={styles.formCol}>
+                <AppSelect
+                  label="Supplier"
+                  placeholder="Select Supplier"
+                  options={supplierOptions}
+                  value={supplierId}
+                  onSelect={setSupplierId}
+                />
+              </View>
+              <View style={styles.formCol}>
+                <AppInput
+                  label="Return Reference *"
+                  value={returnNumber}
+                  onChangeText={setReturnNumber}
                 />
               </View>
             </View>
 
-            {/* Row 2 */}
-            <View style={{ marginTop: 16 }}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>Product <Text style={styles.required}>*</Text></Text>
-                <View style={[styles.inputWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-                  <AppInput 
-                    placeholder="Search Product" 
-                    value={searchProduct} 
-                    onChangeText={setSearchProduct} 
-                    containerStyle={{ marginBottom: 0, flex: 1 }} 
-                    style={{ borderWidth: 0, height: 38 }}
-                  />
-                  <ScanLine size={18} color={theme.colors.textSecondary} style={styles.inputIcon} />
-                </View>
+            {/* Row 2: Date, Status, Reason */}
+            <View style={[styles.formRow, isMobile && styles.formRowCol]}>
+              <View style={styles.formCol}>
+                <AppInput
+                  label="Return Date *"
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                />
+              </View>
+              <View style={styles.formCol}>
+                <AppSelect
+                  label="Status"
+                  options={statusOptions}
+                  value={status}
+                  onSelect={(v: any) => setStatus(v)}
+                />
+              </View>
+              <View style={styles.formCol}>
+                <AppInput
+                  label="Return Reason"
+                  value={reason}
+                  onChangeText={setReason}
+                  placeholder="e.g. Damaged batch, Expired"
+                />
               </View>
             </View>
 
-            {/* Table Area */}
-            <View style={[styles.tableContainer, { backgroundColor: theme.colors.background, marginTop: 24 }]}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View>
-                  <View style={styles.tableHeader}>
-                    {['Image', 'Date', 'Supplier', 'Reference', 'Status', 'Total ($)', 'Paid ($)', 'Due ($)', 'Payment Status'].map((col, idx) => (
-                      <Text key={idx} style={[styles.th, { color: theme.colors.text }]}>{col}</Text>
+            {/* Product Search */}
+            <View style={{ marginTop: 12, zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
+              <Text style={[styles.label, { color: theme.colors.text }]}>Add Products to Return *</Text>
+              <View style={[styles.searchWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                <Search size={18} color={theme.colors.textSecondary} />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                  placeholder="Scan barcode or type product name/sku..."
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={searchQuery}
+                  onChangeText={(text) => {
+                    setSearchQuery(text);
+                    setIsSearching(true);
+                  }}
+                  onFocus={() => setIsSearching(true)}
+                />
+              </View>
+
+              {isSearching && filteredProducts.length > 0 && (
+                <View style={[styles.searchDropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                  <ScrollView
+                    nestedScrollEnabled={true}
+                    keyboardShouldPersistTaps="handled"
+                    style={{ maxHeight: 260 }}
+                    showsVerticalScrollIndicator={true}
+                  >
+                    {filteredProducts.map((p) => (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[styles.searchDropdownItem, { borderBottomColor: theme.colors.border }]}
+                        onPress={() => handleSelectProduct(p)}
+                      >
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ color: theme.colors.text, fontWeight: '500' }} numberOfLines={1}>{p.name}</Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }} numberOfLines={1}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
+                        </View>
+                        <Text style={{ color: '#F97316', fontWeight: '600', flexShrink: 0 }}>
+                          ₹{Number(p.purchasePrice || p.cost || 0).toFixed(2)}
+                        </Text>
+                      </TouchableOpacity>
                     ))}
-                  </View>
-                  {/* Empty state or rows go here */}
-                  <View style={styles.tableRowEmpty}>
-                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', padding: 20 }}>No products selected</Text>
-                  </View>
+                  </ScrollView>
                 </View>
-              </ScrollView>
+              )}
             </View>
 
-            {/* Row 3 */}
-            <View style={[styles.row, isMobile && styles.col, { marginTop: 24 }]}>
-              <View style={styles.flex1}>
-                <AppInput label="Order Tax *" value={orderTax} onChangeText={setOrderTax} />
-              </View>
-              <View style={styles.flex1}>
-                <AppInput label="Discount *" value={discount} onChangeText={setDiscount} />
-              </View>
-              <View style={styles.flex1}>
-                <AppInput label="Shipping *" value={shipping} onChangeText={setShipping} />
-              </View>
-              <View style={styles.flex1}>
-                <AppSelect label="Status *" placeholder="Select" options={statusOptions} value={status} onSelect={setStatus} />
-              </View>
-            </View>
-
-            {/* Row 4 */}
+            {/* Items Table */}
             <View style={{ marginTop: 16 }}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Description</Text>
-              <View style={[styles.editorContainer, { borderColor: theme.colors.border }]}>
-                <View style={[styles.editorToolbar, { borderBottomColor: theme.colors.border }]}>
-                  <Text style={{ fontSize: 13, marginRight: 16 }}>Normal</Text>
-                  <View style={styles.toolbarDivider} />
-                  <Bold size={14} color="#666" style={styles.toolbarIcon} />
-                  <Italic size={14} color="#666" style={styles.toolbarIcon} />
-                  <Underline size={14} color="#666" style={styles.toolbarIcon} />
-                  <Link2 size={14} color="#666" style={styles.toolbarIcon} />
-                  <List size={14} color="#666" style={styles.toolbarIcon} />
-                  <ListOrdered size={14} color="#666" style={styles.toolbarIcon} />
-                  <Type size={14} color="#666" style={styles.toolbarIcon} />
+              <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Returned Items</Text>
+              {items.length === 0 ? (
+                <View style={[styles.emptyBox, { borderColor: theme.colors.border }]}>
+                  <Text style={{ color: theme.colors.textSecondary }}>No products added yet</Text>
                 </View>
-                <AppInput 
-                  placeholder="Type your message" 
-                  value={description} 
-                  onChangeText={setDescription} 
-                  multiline 
-                  numberOfLines={4}
-                  containerStyle={{ marginBottom: 0 }} 
-                  style={{ borderWidth: 0, height: 100, textAlignVertical: 'top' }}
-                />
-              </View>
-              <Text style={styles.editorFooter}>Maximum 60 Words</Text>
+              ) : (
+                <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
+                  <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
+                    <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Cost (₹)</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
+                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Debit Total (₹)</Text>
+                    <Text style={[styles.th, { width: 40 }]}></Text>
+                  </View>
+
+                  {items.map((row, idx) => (
+                    <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
+                      <Text style={{ flex: 2, color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
+                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                          onPress={() => handleUpdateQuantity(idx, row.quantity - 1)}
+                        >
+                          <Text style={{ color: theme.colors.text }}>-</Text>
+                        </TouchableOpacity>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{row.quantity}</Text>
+                        <TouchableOpacity
+                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                          onPress={() => handleUpdateQuantity(idx, row.quantity + 1)}
+                        >
+                          <Text style={{ color: theme.colors.text }}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
+                      <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
+                        <Trash2 size={16} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
+            {/* Total Debit Summary */}
+            <View style={{ marginTop: 16, alignItems: 'flex-end' }}>
+              <View style={[styles.totalsCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border, width: isMobile ? '100%' : 300 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Debit Note:</Text>
+                  <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 20 }}>₹{totalReturnAmount.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
           </ScrollView>
 
           {/* Footer */}
           <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
-            <AppButton title="Cancel" variant="outline" onPress={onClose} style={styles.cancelBtn} textStyle={{ color: 'white' }} />
-            <AppButton title="Submit" onPress={() => {}} style={styles.submitBtn} />
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={onClose}
+              style={{ minWidth: 100 }}
+            />
+            <AppButton
+              title={createPurchaseReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
+              onPress={handleSubmit}
+              disabled={createPurchaseReturnMutation.isPending}
+              style={{ minWidth: 140, backgroundColor: '#F97316' }}
+            />
           </View>
         </View>
       </View>
@@ -178,160 +396,48 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20
-  },
-  dialog: {
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  dialog: { borderRadius: 12, maxHeight: '90%', overflow: 'hidden' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  title: { fontSize: 18, fontWeight: 'bold' },
+  closeBtn: { padding: 4 },
+  body: { flex: 1 },
+  errorBox: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 6, borderWidth: 1, marginBottom: 12 },
+  formRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  formRowCol: { flexDirection: 'column', gap: 8 },
+  formCol: { flex: 1 },
+  label: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
+  searchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, height: 40 },
+  searchInput: { flex: 1, height: '100%', fontSize: 13 },
+  searchDropdown: {
+    position: 'absolute',
+    top: 68,
+    left: 0,
+    right: 0,
+    borderWidth: 1,
     borderRadius: 8,
-    maxHeight: '90%',
-    display: 'flex',
-    flexDirection: 'column'
+    elevation: 10,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 9999,
+    maxHeight: 260,
+    overflow: 'hidden',
   },
-  header: {
+  searchDropdownItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600'
-  },
-  closeBtn: {
-    padding: 4
-  },
-  closeIconBg: {
-    backgroundColor: '#EF4444',
-    borderRadius: 12,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  body: {
-    flex: 1
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 16,
-    zIndex: 1
-  },
-  col: {
-    flexDirection: 'column'
-  },
-  flex1: {
-    flex: 1,
-    zIndex: 2
-  },
-  inputWithBtn: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    zIndex: 3
-  },
-  addBtn: {
-    backgroundColor: '#1E3A8A',
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 0
-  },
-  addBtnText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: '300'
-  },
-  label: {
-    fontSize: 14,
-    marginBottom: 6,
-    fontWeight: '500'
-  },
-  required: {
-    color: '#EF4444'
-  },
-  inputContainer: {
-    flex: 1
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 6
-  },
-  inputIcon: {
-    marginRight: 12
-  },
-  tableContainer: {
-    borderRadius: 8,
-    padding: 16,
-    minHeight: 100
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingBottom: 12
-  },
-  th: {
-    fontWeight: '600',
-    width: 100,
-    marginRight: 16,
-    fontSize: 13
-  },
-  tableRowEmpty: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 60
-  },
-  editorContainer: {
-    borderWidth: 1,
-    borderRadius: 6,
-    overflow: 'hidden'
-  },
-  editorToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
+    minHeight: 52,
     borderBottomWidth: 1,
-    backgroundColor: '#FAFAFA'
   },
-  toolbarDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E5E7EB',
-    marginRight: 12
-  },
-  toolbarIcon: {
-    marginRight: 12
-  },
-  editorFooter: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 16,
-    borderTopWidth: 1,
-    gap: 12
-  },
-  cancelBtn: {
-    backgroundColor: '#1E3A8A', // Dark blue in screenshot
-    borderWidth: 0
-  },
-  submitBtn: {
-    backgroundColor: '#F97316', // Orange
-    borderWidth: 0
-  }
+  emptyBox: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 24, alignItems: 'center' },
+  tableContainer: { borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  tableHeader: { flexDirection: 'row', padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  th: { fontSize: 12, fontWeight: '600' },
+  tableRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1 },
+  qtyBtn: { width: 24, height: 24, borderWidth: 1, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
+  totalsCard: { borderWidth: 1, borderRadius: 8, padding: 16 },
+  footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, padding: 16, borderTopWidth: 1 },
 });
-
-
