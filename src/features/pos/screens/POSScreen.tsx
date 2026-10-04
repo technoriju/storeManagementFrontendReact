@@ -43,6 +43,7 @@ export const POSScreen = () => {
   const [isReturnMode, setIsReturnMode] = useState(false);
   const [printReceiptData, setPrintReceiptData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   useEffect(() => {
@@ -71,12 +72,14 @@ export const POSScreen = () => {
   };
 
   const handleCompleteSale = async () => {
+    if (isSubmitting || createSaleMutation.isPending) return;
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to cart first.');
       return;
     }
 
     try {
+      setIsSubmitting(true);
       const invNum = `POS-${Date.now().toString().slice(-6)}`;
       const sub = getSubtotal();
       const disc = getTotalDiscount();
@@ -152,6 +155,8 @@ export const POSScreen = () => {
       fetchProducts().catch(() => {});
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to complete sale');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -394,8 +399,14 @@ export const POSScreen = () => {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.checkoutBtn} onPress={handleCompleteSale}>
-          <Text style={styles.checkoutBtnText}>Checkout (F12)</Text>
+        <TouchableOpacity
+          style={[styles.checkoutBtn, (isSubmitting || createSaleMutation.isPending) && { opacity: 0.6 }]}
+          onPress={handleCompleteSale}
+          disabled={isSubmitting || createSaleMutation.isPending}
+        >
+          <Text style={styles.checkoutBtnText}>
+            {isSubmitting || createSaleMutation.isPending ? 'Processing...' : 'Checkout (F12)'}
+          </Text>
         </TouchableOpacity>
       </View>
 

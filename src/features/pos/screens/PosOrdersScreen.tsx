@@ -7,6 +7,7 @@ import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddSalesModal } from '../components/AddSalesModal';
 import { useSales, useDeleteSale } from '../api/useSales';
+import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -119,12 +120,24 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const handleOpenPrintPreview = (order: any) => {
+  const handleOpenPrintPreview = async (order: any) => {
     if (!order) return;
-    const ordItems = order.items && order.items.length > 0
-      ? order.items.map((i: any) => ({
+    let ordItems = order.items && order.items.length > 0 ? order.items : [];
+    if (ordItems.length === 0 && order.id) {
+      ordItems = await saleRepository.getItemsForSale(Number(order.id));
+      if ((!ordItems || ordItems.length === 0) && /^\d+$/.test(String(order.id))) {
+        const serverSale = await saleRepository.fetchByIdFromApi(Number(order.id));
+        if (serverSale?.items?.length) {
+          ordItems = serverSale.items;
+        }
+      }
+    }
+
+    const itemsForPrint = ordItems && ordItems.length > 0
+      ? ordItems.map((i: any) => ({
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
+          sku: i.sku,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
@@ -138,10 +151,10 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           {
             productName: 'General Goods / Services',
             quantity: 1,
-            unitPrice: Number(order.grandTotal || 0),
+            unitPrice: Number(order.grandTotal || order.total || 0),
             discount: 0,
             gst: 0,
-            total: Number(order.grandTotal || 0),
+            total: Number(order.grandTotal || order.total || 0),
             unit: 'Unit',
           },
         ];
@@ -159,15 +172,30 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       subtotal: Number(order.subtotal || order.grandTotal || 0),
       discount: Number(order.discount || 0),
       gst: Number(order.gst || 0),
-      total: Number(order.grandTotal || 0),
-      paid: Number(order.paid !== undefined ? order.paid : order.grandTotal || 0),
+      total: Number(order.grandTotal || order.total || 0),
+      paid: Number(order.paid !== undefined ? order.paid : (order.grandTotal || order.total || 0)),
       due: Number(order.due !== undefined ? order.due : 0),
       paymentMethod: order.paymentMethod || 'Cash',
-      items: ordItems,
+      items: itemsForPrint,
     };
 
     setPrintOrderData(rData);
     setShowPrintModal(true);
+  };
+
+  const handleViewOrder = async (order: any) => {
+    if (!order) return;
+    let ordItems = order.items && order.items.length > 0 ? order.items : [];
+    if (ordItems.length === 0 && order.id) {
+      ordItems = await saleRepository.getItemsForSale(Number(order.id));
+      if ((!ordItems || ordItems.length === 0) && /^\d+$/.test(String(order.id))) {
+        const serverSale = await saleRepository.fetchByIdFromApi(Number(order.id));
+        if (serverSale?.items?.length) {
+          ordItems = serverSale.items;
+        }
+      }
+    }
+    setSelectedOrder({ ...order, items: ordItems });
   };
 
   // Initial demo orders if DB has no sales yet
@@ -181,21 +209,38 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const allOrders = useMemo(() => {
     if (dbSales && dbSales.length > 0) {
-      return dbSales.map((s) => ({
-        id: String(s.id),
-        customerName: s.customerName || 'Walk-in Customer',
-        avatar: `https://i.pravatar.cc/150?u=${s.id}`,
-        reference: s.reference || s.invoiceNumber || `SL-${s.id}`,
-        date: s.date || s.createdAt?.split('T')[0] || '',
-        status: s.status || 'Completed',
-        grandTotal: Number(s.total || 0),
-        paid: Number(s.paid || 0),
-        due: Number(s.due || 0),
-        paymentStatus: s.paymentStatus || 'Unpaid',
-        biller: s.biller || 'Admin',
-        items: s.items || [],
-        syncStatus: s.syncStatus || 'synced',
-      }));
+      const seen = new Set<string>();
+      const list: any[] = [];
+      for (const s of dbSales) {
+        const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
+        if (invNum && seen.has(invNum)) continue;
+        if (invNum) seen.add(invNum);
+
+        list.push({
+          id: String(s.id),
+          customerName: s.customerName || 'Walk-in Customer',
+          customerPhone: (s as any).customerPhone || '',
+          customerAddress: (s as any).customerAddress || '',
+          customerGstin: (s as any).customerGstin || '',
+          avatar: `https://i.pravatar.cc/150?u=${s.id}`,
+          reference: s.reference || s.invoiceNumber || `SL-${s.id}`,
+          date: s.date || s.createdAt?.split('T')[0] || '',
+          subtotal: Number(s.subtotal || 0),
+          discount: Number(s.discount || 0),
+          gst: Number((s.orderTax || 0) + (s.gst || 0)),
+          orderTax: Number(s.orderTax || 0),
+          shipping: Number(s.shipping || 0),
+          status: s.status || 'Completed',
+          grandTotal: Number(s.total || 0),
+          paid: Number(s.paid || 0),
+          due: Number(s.due || 0),
+          paymentStatus: s.paymentStatus || 'Unpaid',
+          biller: s.biller || 'Admin',
+          items: s.items || [],
+          syncStatus: s.syncStatus || 'synced',
+        });
+      }
+      return list;
     }
     return fallbackOrders;
   }, [dbSales, fallbackOrders]);
@@ -366,7 +411,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       item={item}
       theme={theme}
       onDelete={handleDelete}
-      onView={setSelectedOrder}
+      onView={handleViewOrder}
       onPrint={handleOpenPrintPreview}
     />
   );

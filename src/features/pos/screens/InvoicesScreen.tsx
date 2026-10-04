@@ -6,6 +6,7 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { useSales, useDeleteSale } from '../api/useSales';
+import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { 
   FileText, 
   RefreshCw, 
@@ -50,7 +51,13 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const allInvoices = useMemo(() => {
     if (dbSales && dbSales.length > 0) {
-      return dbSales.map((s) => {
+      const seen = new Set<string>();
+      const list: any[] = [];
+      for (const s of dbSales) {
+        const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
+        if (invNum && seen.has(invNum)) continue;
+        if (invNum) seen.add(invNum);
+
         const total = Number(s.total || 0);
         const paid = Number(s.paid || 0);
         const due = Number(s.due !== undefined ? s.due : Math.max(0, total - paid));
@@ -60,16 +67,19 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           else if (paid > 0) payStatus = 'Partial';
           else payStatus = 'Unpaid';
         }
-        return {
+        list.push({
           id: s.id,
           invoiceNumber: s.invoiceNumber || `INV-${s.id}`,
           reference: s.reference,
           customerName: s.customerName || 'Walk-in Customer',
+          customerPhone: (s as any).customerPhone || '',
+          customerAddress: (s as any).customerAddress || '',
+          customerGstin: (s as any).customerGstin || '',
           date: s.date || (s.createdAt ? s.createdAt.split('T')[0] : ''),
           subtotal: Number(s.subtotal || 0),
           discount: Number(s.discount || 0),
           orderTax: Number(s.orderTax || 0),
-          gst: Number(s.gst || 0),
+          gst: Number((s.orderTax || 0) + (s.gst || 0)),
           shipping: Number(s.shipping || 0),
           total,
           paid,
@@ -80,8 +90,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           notes: s.notes,
           items: s.items || [],
           syncStatus: s.syncStatus || 'synced',
-        };
-      });
+        });
+      }
+      return list;
     }
     return fallbackInvoices;
   }, [dbSales, fallbackInvoices]);
@@ -117,12 +128,24 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     );
   };
 
-  const handleOpenPrintPreview = (invoice: any) => {
+  const handleOpenPrintPreview = async (invoice: any) => {
     if (!invoice) return;
-    const invItems = invoice.items && invoice.items.length > 0
-      ? invoice.items.map((i: any) => ({
+    let invItems = invoice.items && invoice.items.length > 0 ? invoice.items : [];
+    if (invItems.length === 0 && invoice.id) {
+      invItems = await saleRepository.getItemsForSale(Number(invoice.id));
+      if ((!invItems || invItems.length === 0) && /^\d+$/.test(String(invoice.id))) {
+        const serverSale = await saleRepository.fetchByIdFromApi(Number(invoice.id));
+        if (serverSale?.items?.length) {
+          invItems = serverSale.items;
+        }
+      }
+    }
+
+    const itemsForPrint = invItems && invItems.length > 0
+      ? invItems.map((i: any) => ({
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
+          sku: i.sku,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
@@ -161,11 +184,26 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       paid: Number(invoice.paid !== undefined ? invoice.paid : invoice.total || 0),
       due: Number(invoice.due !== undefined ? invoice.due : 0),
       paymentMethod: invoice.paymentMethod || 'Cash',
-      items: invItems,
+      items: itemsForPrint,
     };
 
     setPrintData(rData);
     setShowPrintModal(true);
+  };
+
+  const handleViewInvoice = async (invoice: any) => {
+    if (!invoice) return;
+    let invItems = invoice.items && invoice.items.length > 0 ? invoice.items : [];
+    if (invItems.length === 0 && invoice.id) {
+      invItems = await saleRepository.getItemsForSale(Number(invoice.id));
+      if ((!invItems || invItems.length === 0) && /^\d+$/.test(String(invoice.id))) {
+        const serverSale = await saleRepository.fetchByIdFromApi(Number(invoice.id));
+        if (serverSale?.items?.length) {
+          invItems = serverSale.items;
+        }
+      }
+    }
+    setViewInvoice({ ...invoice, items: invItems });
   };
 
   const getStatusStyle = (status: string) => {
@@ -256,7 +294,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           <Pressable onPress={() => handleOpenPrintPreview(item)} style={{ padding: 4 }}>
             <Printer size={16} color={theme.colors.primary} />
           </Pressable>
-          <Pressable onPress={() => setViewInvoice(item)} style={{ padding: 4 }}>
+          <Pressable onPress={() => handleViewInvoice(item)} style={{ padding: 4 }}>
             <Eye size={16} color={theme.colors.textSecondary} />
           </Pressable>
           <Pressable onPress={() => handleDelete(item)} style={{ padding: 4 }}>

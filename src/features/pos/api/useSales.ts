@@ -66,7 +66,14 @@ export const useCreateSale = () => {
     },
     onSuccess: (newSale) => {
       queryClient.setQueryData(SALE_QUERY_KEY, (old: Sale[] | undefined) => {
-        return old ? [newSale, ...old] : [newSale];
+        if (!old) return [newSale];
+        const filtered = old.filter(
+          (item) =>
+            item.id !== newSale.id &&
+            item.invoiceNumber !== newSale.invoiceNumber &&
+            (!newSale.reference || item.reference !== newSale.reference)
+        );
+        return [newSale, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
     },

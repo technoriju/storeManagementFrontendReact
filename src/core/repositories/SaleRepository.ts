@@ -79,7 +79,11 @@ export class SaleRepository extends BaseRepository<Sale> {
   public async getItemsForSale(saleId: number): Promise<SaleItem[]> {
     try {
       const res = await db.execute(
-        'SELECT * FROM sale_items WHERE saleId = ?',
+        `SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+         FROM sale_items si
+         LEFT JOIN products p ON si.productId = p.id
+         WHERE si.saleId = ?
+         ORDER BY si.id ASC`,
         [saleId]
       );
       const items: SaleItem[] = [];
@@ -101,7 +105,7 @@ export class SaleRepository extends BaseRepository<Sale> {
             id: Number(row.id),
             saleId: Number(row.saleId),
             productId: Number(row.productId),
-            productName: row.productName ? String(row.productName) : undefined,
+            productName: row.productName || row.fallbackProductName || `Product #${row.productId}`,
             quantity: Number(row.quantity || 1),
             unitPrice: Number(row.unitPrice || 0),
             discount: Number(row.discount || 0),
@@ -134,8 +138,47 @@ export class SaleRepository extends BaseRepository<Sale> {
 
   public override async getAll(): Promise<Sale[]> {
     try {
+      // Clean up duplicate sales with matching invoiceNumber in SQLite
+      try {
+        const dupRows = await db.execute(`
+          SELECT invoiceNumber, COUNT(*) as cnt 
+          FROM sales 
+          WHERE invoiceNumber IS NOT NULL AND invoiceNumber != ''
+          GROUP BY invoiceNumber 
+          HAVING cnt > 1
+        `);
+        let dups: any[] = [];
+        if (dupRows.rows && Array.isArray(dupRows.rows)) dups = dupRows.rows;
+        else if (dupRows.rows && typeof dupRows.rows === 'object' && '_array' in dupRows.rows) dups = (dupRows.rows as any)._array;
+
+        for (const d of dups) {
+          if (!d?.invoiceNumber) continue;
+          const matchesRes = await db.execute(
+            `SELECT id, syncStatus FROM sales WHERE invoiceNumber = ? ORDER BY id ASC`,
+            [d.invoiceNumber]
+          );
+          let matches: any[] = [];
+          if (matchesRes.rows && Array.isArray(matchesRes.rows)) matches = matchesRes.rows;
+          else if (matchesRes.rows && typeof matchesRes.rows === 'object' && '_array' in matchesRes.rows) matches = (matchesRes.rows as any)._array;
+
+          if (matches.length > 1) {
+            const serverMatch = matches.find((m) => Number(m.id) < 1000000000000);
+            const keepId = serverMatch ? Number(serverMatch.id) : Number(matches[matches.length - 1].id);
+            const deleteIds = matches.map((m) => Number(m.id)).filter((id) => id !== keepId);
+
+            if (deleteIds.length > 0) {
+              const placeholders = deleteIds.map(() => '?').join(',');
+              await db.execute(`DELETE FROM sale_items WHERE saleId IN (${placeholders})`, deleteIds);
+              await db.execute(`DELETE FROM sales WHERE id IN (${placeholders})`, deleteIds);
+            }
+          }
+        }
+      } catch (dupErr) {
+        console.warn('Error during sales deduplication:', dupErr);
+      }
+
       const res = await db.execute(`SELECT * FROM ${this.tableName} ORDER BY id DESC`);
-      const items: Sale[] = [];
+      const sales: Sale[] = [];
       let rawRows: any[] = [];
       if (res.rows && Array.isArray(res.rows)) {
         rawRows = res.rows;
@@ -149,9 +192,74 @@ export class SaleRepository extends BaseRepository<Sale> {
         }
       }
       for (const row of rawRows) {
-        if (row) items.push(this.fromRow(row));
+        if (row) sales.push(this.fromRow(row));
       }
-      return items;
+
+      // Batch load items for all sales
+      try {
+        const itemsRes = await db.execute(`
+          SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+          FROM sale_items si
+          LEFT JOIN products p ON si.productId = p.id
+          ORDER BY si.id ASC
+        `);
+        let itemRows: any[] = [];
+        if (itemsRes.rows && Array.isArray(itemsRes.rows)) {
+          itemRows = itemsRes.rows;
+        } else if (itemsRes.rows && typeof itemsRes.rows === 'object') {
+          if ('_array' in itemsRes.rows && Array.isArray((itemsRes.rows as any)._array)) {
+            itemRows = (itemsRes.rows as any)._array;
+          } else if ('item' in itemsRes.rows && typeof (itemsRes.rows as any).length === 'number') {
+            for (let i = 0; i < (itemsRes.rows as any).length; i++) {
+              itemRows.push((itemsRes.rows as any).item(i));
+            }
+          }
+        }
+
+        const itemsBySaleId: Record<number, SaleItem[]> = {};
+        for (const r of itemRows) {
+          if (!r) continue;
+          const sId = Number(r.saleId);
+          if (!itemsBySaleId[sId]) itemsBySaleId[sId] = [];
+          itemsBySaleId[sId].push({
+            id: Number(r.id),
+            saleId: sId,
+            productId: Number(r.productId),
+            productName: r.productName || r.fallbackProductName || `Product #${r.productId}`,
+            quantity: Number(r.quantity || 1),
+            unitPrice: Number(r.unitPrice || 0),
+            discount: Number(r.discount || 0),
+            gst: Number(r.gst || 0),
+            taxAmount: Number(r.taxAmount || 0),
+            unitCost: Number(r.unitCost || 0),
+            unit: r.unit ? String(r.unit) : undefined,
+            unitType: r.unitType || 'sub',
+            conversionRate: r.conversionRate ? Number(r.conversionRate) : 1,
+            total: Number(r.total || 0),
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+            syncStatus: r.syncStatus,
+          });
+        }
+
+        for (const sale of sales) {
+          sale.items = itemsBySaleId[sale.id] || [];
+        }
+      } catch (itemsErr) {
+        console.warn('Failed to load items in getAll():', itemsErr);
+      }
+
+      // Memory deduplication by invoiceNumber/reference
+      const seen = new Set<string>();
+      const uniqueSales: Sale[] = [];
+      for (const s of sales) {
+        const key = (s.invoiceNumber || s.reference || String(s.id)).trim();
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        uniqueSales.push(s);
+      }
+
+      return uniqueSales;
     } catch (error) {
       console.error('Failed to get all sales:', error);
       return [];
@@ -198,8 +306,16 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       const response = await apiClient.post(API_ENDPOINTS.SALES.BASE, apiPayload);
       if (response.status >= 200 && response.status < 300) {
-        await db.execute(`UPDATE sales SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
-        await db.execute(`UPDATE sale_items SET syncStatus = 'synced' WHERE saleId = ?`, [entity.id]);
+        const body = response?.data?.data || response?.data || {};
+        const returnedId = Number(body.id || body._id);
+        if (returnedId && returnedId !== entity.id) {
+          await db.execute(`UPDATE sales SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
+          await db.execute(`UPDATE sale_items SET saleId = ?, syncStatus = 'synced' WHERE saleId = ?`, [returnedId, entity.id]);
+          await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
+        } else {
+          await db.execute(`UPDATE sales SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
+          await db.execute(`UPDATE sale_items SET syncStatus = 'synced' WHERE saleId = ?`, [entity.id]);
+        }
       }
     } catch (error) {
       console.error(`Failed to sync sale ${entity.id} with API:`, error);
@@ -350,7 +466,29 @@ export class SaleRepository extends BaseRepository<Sale> {
         if (!raw.id) continue;
         const { sale, items } = this.normalizeApiSale(raw);
 
-        const existing = await super.getById(sale.id);
+        // Check if existing locally by server ID first
+        let existing = await super.getById(sale.id);
+
+        // If not found by server ID, check if a local row exists with the same invoiceNumber or reference
+        if (!existing && (sale.invoiceNumber || sale.reference)) {
+          const matchRes = await db.execute(
+            `SELECT id FROM sales WHERE invoiceNumber = ? OR (reference IS NOT NULL AND reference = ?)`,
+            [sale.invoiceNumber, sale.invoiceNumber]
+          );
+          let matchedRows: any[] = [];
+          if (matchRes.rows && Array.isArray(matchRes.rows)) matchedRows = matchRes.rows;
+          else if (matchRes.rows && typeof matchRes.rows === 'object' && '_array' in matchRes.rows) matchedRows = (matchRes.rows as any)._array;
+
+          for (const m of matchedRows) {
+            const oldId = Number(m.id);
+            if (oldId && oldId !== sale.id) {
+              await db.execute(`DELETE FROM sale_items WHERE saleId = ?`, [oldId]);
+              await db.execute(`DELETE FROM sales WHERE id = ?`, [oldId]);
+              await outboxRepo.removeForEntity(this.tableName, oldId);
+            }
+          }
+        }
+
         if (existing && existing.syncStatus !== 'synced') {
           // Do not overwrite local pending changes
           continue;

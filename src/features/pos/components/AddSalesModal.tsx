@@ -93,6 +93,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     if (visible) {
@@ -304,6 +305,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
 
   // Submit Handler
   const handleSubmit = async () => {
+    if (isSubmitting || createSaleMutation.isPending) return;
     setErrorMessage(null);
     if (!customerId) {
       setErrorMessage('Please select a customer.');
@@ -315,6 +317,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     }
 
     try {
+      setIsSubmitting(true);
       await createSaleMutation.mutateAsync({
         sale: {
           invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
@@ -400,6 +403,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       setShowPrintModal(true);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to save sale.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -987,9 +992,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
               textStyle={{ color: 'white' }}
             />
             <AppButton
-              title={createSaleMutation.isPending ? 'Saving...' : 'Submit Sale'}
+              title={isSubmitting || createSaleMutation.isPending ? 'Saving...' : 'Submit Sale'}
               onPress={handleSubmit}
-              disabled={createSaleMutation.isPending}
+              disabled={isSubmitting || createSaleMutation.isPending}
               style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: 140 }}
             />
           </View>
