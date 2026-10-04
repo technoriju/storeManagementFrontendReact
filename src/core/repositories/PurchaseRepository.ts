@@ -231,8 +231,239 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     await this.syncWithApi(purchase, 'insert');
   }
 
-  public async fetchFromApi(): Promise<void> {
-    // API logic when backend purchase endpoint is ready
+  private extractList(data: any): any[] {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    for (const key of ['data', 'items', 'results', 'rows', 'records']) {
+      if (data[key]) {
+        const found = this.extractList(data[key]);
+        if (found.length) return found;
+      }
+    }
+    for (const val of Object.values(data)) {
+      if (Array.isArray(val)) return val;
+    }
+    return [];
+  }
+
+  private normalizeApiPurchase(p: any): { purchase: Purchase; items: PurchaseItem[] } {
+    const purchaseId = Number(p.id);
+    const total = Number(p.grandTotal ?? p.total ?? 0);
+    const paid = Number(
+      p.paymentAmount ??
+        p.paid ??
+        (Array.isArray(p.payments)
+          ? p.payments.reduce((sum: number, pay: any) => sum + Number(pay.amount || pay.payment?.amount || 0), 0)
+          : 0)
+    );
+    const due = Number(p.due ?? Math.max(0, total - paid));
+    let paymentStatus = p.paymentStatus;
+    if (!paymentStatus) {
+      if (paid >= total && total > 0) paymentStatus = 'Paid';
+      else if (paid > 0) paymentStatus = 'Partial';
+      else paymentStatus = 'Unpaid';
+    }
+
+    const dateStr = p.purchaseDate
+      ? String(p.purchaseDate).slice(0, 10)
+      : p.date
+      ? String(p.date).slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const purchase: Purchase = {
+      id: purchaseId,
+      invoiceNumber: String(p.invoiceNumber || `PO-${purchaseId}`),
+      reference: p.reference ? String(p.reference) : String(p.invoiceNumber || `PO-${purchaseId}`),
+      supplierId: Number(p.supplierId || p.supplier?.id || 0),
+      supplierName: p.supplier?.name || p.supplierName || 'Unknown Supplier',
+      date: dateStr,
+      subtotal: Number(p.subTotal ?? p.subtotal ?? 0),
+      discount: Number(p.discountTotal ?? p.discount ?? 0),
+      orderTax: Number(p.taxTotal ?? p.orderTax ?? 0),
+      shipping: Number(p.shipping ?? 0),
+      gst: Number(p.gst ?? 0),
+      total,
+      paid,
+      due,
+      status: (p.status === 'COMPLETED' ? 'Received' : p.status || 'Received') as any,
+      paymentStatus: paymentStatus as any,
+      notes: p.notes ? String(p.notes) : undefined,
+      createdAt: p.createdAt ? String(p.createdAt) : new Date().toISOString(),
+      updatedAt: p.updatedAt ? String(p.updatedAt) : new Date().toISOString(),
+      syncStatus: 'synced',
+    };
+
+    const items: PurchaseItem[] = [];
+    if (Array.isArray(p.items)) {
+      for (const it of p.items) {
+        const itemId = Number(it.id || Date.now() + Math.floor(Math.random() * 10000));
+        const conversionRate = Number(it.conversionRate || it.productUnit?.conversionFactor || 1);
+        const unitType = it.unitType || 'base';
+        const unitPrice = Number(it.unitPrice || 0);
+        const quantity = Number(it.quantity || 1);
+        const discount = Number(it.discount || 0);
+        const taxAmount = Number(it.taxAmount || 0);
+        const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
+        const productName = it.product?.name || it.productName || undefined;
+
+        items.push({
+          id: itemId,
+          purchaseId,
+          productId: Number(it.productId),
+          productName,
+          quantity,
+          unitPrice,
+          discount,
+          gst: Number(it.gst || 0),
+          taxAmount,
+          unitCost: Number(it.unitCost || unitPrice),
+          unit: it.unit ? String(it.unit) : undefined,
+          unitType,
+          conversionRate,
+          total: itemTotal,
+          createdAt: it.createdAt ? String(it.createdAt) : purchase.createdAt,
+          updatedAt: it.updatedAt ? String(it.updatedAt) : purchase.updatedAt,
+          syncStatus: 'synced',
+        });
+      }
+    }
+
+    return { purchase, items };
+  }
+
+  public async fetchFromApi(): Promise<Purchase[]> {
+    try {
+      const response = await apiClient.get<any>(API_ENDPOINTS.PURCHASES.BASE);
+      const rawList = this.extractList(response.data);
+      if (!Array.isArray(rawList)) return await this.getAll();
+
+      for (const raw of rawList) {
+        if (!raw.id) continue;
+        const { purchase, items } = this.normalizeApiPurchase(raw);
+
+        const existing = await super.getById(purchase.id);
+        if (existing && existing.syncStatus !== 'synced') {
+          // Do not overwrite local pending modifications
+          continue;
+        }
+
+        if (existing) {
+          await super.update(purchase, false);
+        } else {
+          await super.insert(purchase, false);
+        }
+
+        if (items.length > 0) {
+          await db.execute(
+            'DELETE FROM purchase_items WHERE purchaseId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            [purchase.id]
+          );
+
+          for (const it of items) {
+            await db.execute(
+              `INSERT INTO purchase_items (
+                id, purchaseId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                it.id,
+                it.purchaseId,
+                it.productId,
+                it.productName || null,
+                it.quantity,
+                it.unitPrice,
+                it.discount,
+                it.gst,
+                it.taxAmount,
+                it.unitCost || 0,
+                it.unit || null,
+                it.unitType || 'base',
+                it.conversionRate || 1,
+                it.total,
+                it.createdAt,
+                it.updatedAt,
+                'synced',
+              ]
+            );
+          }
+        }
+      }
+
+      // Cleanup local records deleted from server
+      const serverIds = rawList.map((x: any) => Number(x.id)).filter((id: number) => !isNaN(id) && id > 0);
+      if (serverIds.length > 0) {
+        const placeholders = serverIds.map(() => '?').join(',');
+        await db.execute(
+          `DELETE FROM purchase_items WHERE purchaseId IN (SELECT id FROM purchases WHERE syncStatus = 'synced' AND id NOT IN (${placeholders}))`,
+          serverIds
+        );
+        await db.execute(
+          `DELETE FROM purchases WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+          serverIds
+        );
+      }
+
+      return await this.getAll();
+    } catch (error) {
+      console.warn('[PurchaseRepository] fetchFromApi error (offline):', error);
+      return await this.getAll();
+    }
+  }
+
+  public async fetchByIdFromApi(id: number): Promise<Purchase | null> {
+    try {
+      const response = await apiClient.get<any>(API_ENDPOINTS.PURCHASES.BY_ID(id));
+      const raw = response.data?.data || response.data;
+      if (!raw || !raw.id) return await this.getById(id);
+
+      const { purchase, items } = this.normalizeApiPurchase(raw);
+      const existing = await super.getById(purchase.id);
+      if (!existing || existing.syncStatus === 'synced') {
+        if (existing) {
+          await super.update(purchase, false);
+        } else {
+          await super.insert(purchase, false);
+        }
+
+        if (items.length > 0) {
+          await db.execute(
+            'DELETE FROM purchase_items WHERE purchaseId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            [purchase.id]
+          );
+
+          for (const it of items) {
+            await db.execute(
+              `INSERT INTO purchase_items (
+                id, purchaseId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                it.id,
+                it.purchaseId,
+                it.productId,
+                it.productName || null,
+                it.quantity,
+                it.unitPrice,
+                it.discount,
+                it.gst,
+                it.taxAmount,
+                it.unitCost || 0,
+                it.unit || null,
+                it.unitType || 'base',
+                it.conversionRate || 1,
+                it.total,
+                it.createdAt,
+                it.updatedAt,
+                'synced',
+              ]
+            );
+          }
+        }
+      }
+
+      return await this.getById(id);
+    } catch (e) {
+      console.warn(`[PurchaseRepository] fetchByIdFromApi(${id}) error:`, e);
+      return await this.getById(id);
+    }
   }
 
   public async createPurchaseWithItems(

@@ -5,23 +5,49 @@ import { Purchase, PurchaseItem } from '../../../types/models';
 export const PURCHASE_QUERY_KEY = ['purchases'] as const;
 
 export const usePurchases = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: PURCHASE_QUERY_KEY,
     queryFn: async () => {
-      const items = await purchaseRepository.getAll();
-      return items;
+      const local = await purchaseRepository.getAll();
+      void purchaseRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await purchaseRepository.getAll();
+          queryClient.setQueryData(PURCHASE_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[usePurchases] fetchFromApi error (offline):', err);
+        });
+      return local;
     },
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 
 export const usePurchase = (id: number | null | undefined) => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: [...PURCHASE_QUERY_KEY, id],
     queryFn: async () => {
       if (!id) return null;
-      return await purchaseRepository.getById(id);
+      const local = await purchaseRepository.getById(id);
+      if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+        void purchaseRepository
+          .fetchByIdFromApi(id)
+          .then((fresh) => {
+            if (fresh) {
+              queryClient.setQueryData([...PURCHASE_QUERY_KEY, id], fresh);
+            }
+          })
+          .catch(() => undefined);
+      }
+      return local;
     },
     enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 

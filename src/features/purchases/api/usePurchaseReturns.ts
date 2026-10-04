@@ -5,23 +5,49 @@ import { PurchaseReturn, PurchaseReturnItem } from '../../../types/models';
 export const PURCHASE_RETURN_QUERY_KEY = ['purchase_returns'] as const;
 
 export const usePurchaseReturns = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: PURCHASE_RETURN_QUERY_KEY,
     queryFn: async () => {
-      const items = await purchaseReturnRepository.getAll();
-      return items;
+      const local = await purchaseReturnRepository.getAll();
+      void purchaseReturnRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await purchaseReturnRepository.getAll();
+          queryClient.setQueryData(PURCHASE_RETURN_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[usePurchaseReturns] fetchFromApi error (offline):', err);
+        });
+      return local;
     },
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 
 export const usePurchaseReturn = (id: number | null | undefined) => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: [...PURCHASE_RETURN_QUERY_KEY, id],
     queryFn: async () => {
       if (!id) return null;
-      return await purchaseReturnRepository.getById(id);
+      const local = await purchaseReturnRepository.getById(id);
+      if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+        void purchaseReturnRepository
+          .fetchByIdFromApi(id)
+          .then((fresh) => {
+            if (fresh) {
+              queryClient.setQueryData([...PURCHASE_RETURN_QUERY_KEY, id], fresh);
+            }
+          })
+          .catch(() => undefined);
+      }
+      return local;
     },
     enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 

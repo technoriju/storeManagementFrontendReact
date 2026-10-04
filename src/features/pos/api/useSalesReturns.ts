@@ -5,23 +5,49 @@ import { SaleReturn, SaleReturnItem } from '../../../types/models';
 export const SALE_RETURN_QUERY_KEY = ['sale_returns'] as const;
 
 export const useSalesReturns = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: SALE_RETURN_QUERY_KEY,
     queryFn: async () => {
-      const items = await saleReturnRepository.getAll();
-      return items;
+      const local = await saleReturnRepository.getAll();
+      void saleReturnRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await saleReturnRepository.getAll();
+          queryClient.setQueryData(SALE_RETURN_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[useSalesReturns] fetchFromApi error (offline):', err);
+        });
+      return local;
     },
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 
 export const useSaleReturn = (id: number | null | undefined) => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: [...SALE_RETURN_QUERY_KEY, id],
     queryFn: async () => {
       if (!id) return null;
-      return await saleReturnRepository.getById(id);
+      const local = await saleReturnRepository.getById(id);
+      if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+        void saleReturnRepository
+          .fetchByIdFromApi(id)
+          .then((fresh) => {
+            if (fresh) {
+              queryClient.setQueryData([...SALE_RETURN_QUERY_KEY, id], fresh);
+            }
+          })
+          .catch(() => undefined);
+      }
+      return local;
     },
     enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 

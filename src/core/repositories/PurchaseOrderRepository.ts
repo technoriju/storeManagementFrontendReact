@@ -149,37 +149,54 @@ export class PurchaseOrderRepository extends BaseRepository<PurchaseOrder> {
     }
   }
 
-  public async fetchFromApi(): Promise<void> {
+  public async fetchFromApi(): Promise<PurchaseOrder[]> {
     try {
       const response = await apiClient.get<any>(API_ENDPOINTS.PURCHASE_ORDERS.BASE);
       const data = response.data?.data || response.data || [];
       if (Array.isArray(data)) {
         for (const item of data) {
           const existing = await this.getById(item.id);
-          if (!existing) {
-            await this.insert({
-              id: item.id,
-              orderNumber: item.orderNumber,
-              supplierId: item.supplierId,
-              supplierName: item.supplier?.name,
-              orderDate: item.orderDate ? item.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
-              expectedDate: item.expectedDate ? item.expectedDate.slice(0, 10) : undefined,
-              subtotal: Number(item.subTotal || 0),
-              discount: Number(item.discountTotal || 0),
-              taxTotal: Number(item.taxTotal || 0),
-              shipping: Number(item.shipping || 0),
-              grandTotal: Number(item.grandTotal || 0),
-              status: item.status || 'Ordered',
-              notes: item.notes,
-              createdAt: item.createdAt || new Date().toISOString(),
-              updatedAt: item.updatedAt || new Date().toISOString(),
-              syncStatus: 'synced',
-            }, false);
+          if (existing && existing.syncStatus !== 'synced') continue;
+
+          const order: PurchaseOrder = {
+            id: Number(item.id),
+            orderNumber: item.orderNumber,
+            supplierId: item.supplierId,
+            supplierName: item.supplier?.name || item.supplierName || 'Unknown Supplier',
+            orderDate: item.orderDate ? item.orderDate.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            expectedDate: item.expectedDate ? item.expectedDate.slice(0, 10) : undefined,
+            subtotal: Number(item.subTotal ?? item.subtotal ?? 0),
+            discount: Number(item.discountTotal ?? item.discount ?? 0),
+            taxTotal: Number(item.taxTotal ?? 0),
+            shipping: Number(item.shipping ?? 0),
+            grandTotal: Number(item.grandTotal ?? 0),
+            status: item.status || 'Ordered',
+            notes: item.notes,
+            createdAt: item.createdAt || new Date().toISOString(),
+            updatedAt: item.updatedAt || new Date().toISOString(),
+            syncStatus: 'synced',
+          };
+
+          if (existing) {
+            await this.update(order, false);
+          } else {
+            await this.insert(order, false);
           }
         }
+
+        const serverIds = data.map((x: any) => Number(x.id)).filter(Boolean);
+        if (serverIds.length > 0) {
+          const placeholders = serverIds.map(() => '?').join(',');
+          await db.execute(
+            `DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+            serverIds
+          );
+        }
       }
+      return await this.getAll();
     } catch (e) {
-      // offline
+      console.warn('[PurchaseOrderRepository] fetchFromApi error (offline):', e);
+      return await this.getAll();
     }
   }
 

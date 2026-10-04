@@ -149,37 +149,54 @@ export class QuotationRepository extends BaseRepository<Quotation> {
     }
   }
 
-  public async fetchFromApi(): Promise<void> {
+  public async fetchFromApi(): Promise<Quotation[]> {
     try {
       const response = await apiClient.get<any>(API_ENDPOINTS.QUOTATIONS.BASE);
       const data = response.data?.data || response.data || [];
       if (Array.isArray(data)) {
         for (const item of data) {
           const existing = await this.getById(item.id);
-          if (!existing) {
-            await this.insert({
-              id: item.id,
-              quotationNumber: item.quotationNumber,
-              customerId: item.customerId,
-              customerName: item.customer?.name,
-              date: item.date ? item.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-              expiryDate: item.expiryDate ? item.expiryDate.slice(0, 10) : undefined,
-              subtotal: Number(item.subTotal || 0),
-              discount: Number(item.discountTotal || 0),
-              taxTotal: Number(item.taxTotal || 0),
-              shipping: Number(item.shipping || 0),
-              grandTotal: Number(item.grandTotal || 0),
-              status: item.status || 'Sent',
-              notes: item.notes,
-              createdAt: item.createdAt || new Date().toISOString(),
-              updatedAt: item.updatedAt || new Date().toISOString(),
-              syncStatus: 'synced',
-            }, false);
+          if (existing && existing.syncStatus !== 'synced') continue;
+
+          const quotation: Quotation = {
+            id: Number(item.id),
+            quotationNumber: item.quotationNumber,
+            customerId: item.customerId,
+            customerName: item.customer?.name || item.customerName || 'Unknown Customer',
+            date: item.date ? item.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            expiryDate: item.expiryDate ? item.expiryDate.slice(0, 10) : undefined,
+            subtotal: Number(item.subTotal ?? item.subtotal ?? 0),
+            discount: Number(item.discountTotal ?? item.discount ?? 0),
+            taxTotal: Number(item.taxTotal ?? 0),
+            shipping: Number(item.shipping ?? 0),
+            grandTotal: Number(item.grandTotal ?? 0),
+            status: item.status || 'Sent',
+            notes: item.notes,
+            createdAt: item.createdAt || new Date().toISOString(),
+            updatedAt: item.updatedAt || new Date().toISOString(),
+            syncStatus: 'synced',
+          };
+
+          if (existing) {
+            await this.update(quotation, false);
+          } else {
+            await this.insert(quotation, false);
           }
         }
+
+        const serverIds = data.map((x: any) => Number(x.id)).filter(Boolean);
+        if (serverIds.length > 0) {
+          const placeholders = serverIds.map(() => '?').join(',');
+          await db.execute(
+            `DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+            serverIds
+          );
+        }
       }
+      return await this.getAll();
     } catch (e) {
-      // offline
+      console.warn('[QuotationRepository] fetchFromApi error (offline):', e);
+      return await this.getAll();
     }
   }
 

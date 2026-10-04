@@ -68,8 +68,14 @@ export interface Product extends BaseEntity {
   categoryId?: number;
   subCategoryId?: number;
   brandId?: number;
+  categoryName?: string;
+  brandName?: string;
+  category?: { id?: number; name?: string };
+  brand?: { id?: number; name?: string };
   unitId?: number;
   baseUnitId?: number;
+  baseUnit?: { id?: number; name?: string; shortName?: string };
+  subUnit?: { id?: number; name?: string };
   subunitId?: number;
   subUnitId?: number | string;
   conversionRate?: number;

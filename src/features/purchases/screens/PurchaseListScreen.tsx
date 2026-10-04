@@ -35,9 +35,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
-    if (lastSyncedAt) {
-      refetch();
-    }
+    refetch();
   }, [lastSyncedAt, refetch]);
 
   // Initial seed demo purchases shown if database is fresh

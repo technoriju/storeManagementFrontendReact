@@ -5,12 +5,24 @@ import { PurchaseOrder, PurchaseOrderItem } from '../../../types/models';
 export const PURCHASE_ORDER_QUERY_KEY = ['purchase_orders'] as const;
 
 export const usePurchaseOrders = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: PURCHASE_ORDER_QUERY_KEY,
     queryFn: async () => {
-      const items = await purchaseOrderRepository.getAll();
-      return items;
+      const local = await purchaseOrderRepository.getAll();
+      void purchaseOrderRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await purchaseOrderRepository.getAll();
+          queryClient.setQueryData(PURCHASE_ORDER_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[usePurchaseOrders] fetchFromApi error (offline):', err);
+        });
+      return local;
     },
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 
@@ -22,6 +34,8 @@ export const usePurchaseOrder = (id: number | null | undefined) => {
       return await purchaseOrderRepository.getById(id);
     },
     enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 

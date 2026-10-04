@@ -54,18 +54,18 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
           
           <InfoRow label="SKU" value={product.sku || (product as any).productCode} />
           <InfoRow label="Barcode" value={product.barcode} />
+          <InfoRow label="Category" value={product.category?.name || product.categoryName || (product.categoryId ? `Category #${product.categoryId}` : '-')} />
+          <InfoRow label="Brand" value={product.brand?.name || product.brandName || (product.brandId ? `Brand #${product.brandId}` : '-')} />
           <InfoRow label="HSN Code" value={product.hsn || (product as any).hsnCode} />
           <InfoRow label="GST (%)" value={product.gst} />
           
-          <InfoRow label="Cost" value={product.cost !== undefined && product.cost !== null ? `₹${Number(product.cost).toFixed(2)}` : (product.purchasePrice !== undefined ? `₹${Number(product.purchasePrice).toFixed(2)}` : '-')} />
-          <InfoRow label="Selling Price" value={product.price !== undefined && product.price !== null ? `₹${Number(product.price).toFixed(2)}` : (product.retailPrice !== undefined ? `₹${Number(product.retailPrice).toFixed(2)}` : '-')} />
-          <InfoRow label="Purchase Price" value={product.purchasePrice !== undefined && product.purchasePrice !== null ? `₹${Number(product.purchasePrice).toFixed(2)}` : '-'} />
-          <InfoRow label="Wholesale Price" value={product.wholesalePrice !== undefined && product.wholesalePrice !== null ? `₹${Number(product.wholesalePrice).toFixed(2)}` : '-'} />
-          <InfoRow label="Retail Price" value={product.retailPrice !== undefined && product.retailPrice !== null ? `₹${Number(product.retailPrice).toFixed(2)}` : '-'} />
+          <InfoRow label="Purchase Price" value={`₹${Number(product.purchasePrice ?? product.cost ?? 0).toFixed(2)}`} />
+          <InfoRow label="Wholesale Price" value={`₹${Number(product.wholesalePrice ?? 0).toFixed(2)}`} />
+          <InfoRow label="Retail Price" value={`₹${Number(product.retailPrice ?? product.price ?? 0).toFixed(2)}`} />
           <InfoRow label="MRP" value={product.mrp !== undefined && product.mrp !== null ? `₹${Number(product.mrp).toFixed(2)}` : '-'} />
           
-          <InfoRow label="Current Stock" value={product.stockQuantity} />
-          <InfoRow label="Opening Stock" value={product.openingStock} />
+          <InfoRow label="Current Stock" value={Number(product.stockQuantity ?? product.openingStock ?? 0)} />
+          <InfoRow label="Opening Stock" value={product.openingStock !== undefined ? Number(product.openingStock) : '-'} />
         </View>
 
         <View style={styles.actions}>

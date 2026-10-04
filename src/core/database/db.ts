@@ -199,6 +199,8 @@ export const initializeDatabase = () => {
       'ALTER TABLE sale_return_items ADD COLUMN syncStatus TEXT DEFAULT \'synced\'',
       'ALTER TABLE purchase_returns ADD COLUMN syncStatus TEXT DEFAULT \'synced\'',
       'ALTER TABLE purchase_return_items ADD COLUMN syncStatus TEXT DEFAULT \'synced\'',
+      'ALTER TABLE products ADD COLUMN categoryName TEXT',
+      'ALTER TABLE products ADD COLUMN brandName TEXT',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -235,6 +237,8 @@ export const initializeDatabase = () => {
         categoryId INTEGER,
         subCategoryId INTEGER,
         brandId INTEGER,
+        categoryName TEXT,
+        brandName TEXT,
         unitId INTEGER,
         subunitId INTEGER,
         conversionRate REAL,

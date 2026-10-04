@@ -237,8 +237,242 @@ export class SaleRepository extends BaseRepository<Sale> {
     await this.syncWithApi(sale, 'insert');
   }
 
-  public async fetchFromApi(): Promise<void> {
-    // API sync logic when backend endpoint is ready
+  private extractList(data: any): any[] {
+    if (Array.isArray(data)) return data;
+    if (!data || typeof data !== 'object') return [];
+    for (const key of ['data', 'items', 'results', 'rows', 'records']) {
+      if (data[key]) {
+        const found = this.extractList(data[key]);
+        if (found.length) return found;
+      }
+    }
+    for (const val of Object.values(data)) {
+      if (Array.isArray(val)) return val;
+    }
+    return [];
+  }
+
+  private normalizeApiSale(s: any): { sale: Sale; items: SaleItem[] } {
+    const saleId = Number(s.id);
+    const total = Number(s.grandTotal ?? s.total ?? 0);
+    const paid = Number(
+      s.paymentAmount ??
+        s.paid ??
+        (Array.isArray(s.payments)
+          ? s.payments.reduce((sum: number, pay: any) => sum + Number(pay.amount || pay.payment?.amount || 0), 0)
+          : 0)
+    );
+    const due = Number(s.due ?? Math.max(0, total - paid));
+    let paymentStatus = s.paymentStatus;
+    if (!paymentStatus) {
+      if (paid >= total && total > 0) paymentStatus = 'Paid';
+      else if (paid > 0) paymentStatus = 'Partial';
+      else paymentStatus = 'Unpaid';
+    }
+
+    const dateStr = s.saleDate
+      ? String(s.saleDate).slice(0, 10)
+      : s.date
+      ? String(s.date).slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const sale: Sale = {
+      id: saleId,
+      invoiceNumber: String(s.invoiceNumber || `INV-${saleId}`),
+      reference: s.reference ? String(s.reference) : String(s.invoiceNumber || `INV-${saleId}`),
+      customerId: Number(s.customerId || s.customer?.id || 0),
+      customerName: s.customer?.name || s.customerName || 'Walk-in Customer',
+      supplierId: s.supplierId ? Number(s.supplierId) : undefined,
+      supplierName: s.supplier?.name || s.supplierName,
+      date: dateStr,
+      subtotal: Number(s.subTotal ?? s.subtotal ?? 0),
+      discount: Number(s.discountTotal ?? s.discount ?? 0),
+      orderTax: Number(s.taxTotal ?? s.orderTax ?? 0),
+      shipping: Number(s.shipping ?? 0),
+      gst: Number(s.gst ?? 0),
+      total,
+      paid,
+      due,
+      status: (s.status === 'COMPLETED' ? 'Completed' : s.status || 'Completed') as any,
+      paymentStatus: paymentStatus as any,
+      biller: s.biller || 'Admin',
+      notes: s.notes ? String(s.notes) : undefined,
+      createdAt: s.createdAt ? String(s.createdAt) : new Date().toISOString(),
+      updatedAt: s.updatedAt ? String(s.updatedAt) : new Date().toISOString(),
+      syncStatus: 'synced',
+    };
+
+    const items: SaleItem[] = [];
+    if (Array.isArray(s.items)) {
+      for (const it of s.items) {
+        const itemId = Number(it.id || Date.now() + Math.floor(Math.random() * 10000));
+        const conversionRate = Number(it.conversionRate || it.productUnit?.conversionFactor || 1);
+        const unitType = it.unitType || 'sub';
+        const unitPrice = Number(it.unitPrice || 0);
+        const quantity = Number(it.quantity || 1);
+        const discount = Number(it.discount || 0);
+        const taxAmount = Number(it.taxAmount || 0);
+        const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
+        const productName = it.product?.name || it.productName || undefined;
+
+        items.push({
+          id: itemId,
+          saleId,
+          productId: Number(it.productId),
+          productName,
+          quantity,
+          unitPrice,
+          discount,
+          gst: Number(it.gst || 0),
+          taxAmount,
+          unitCost: Number(it.unitCost || 0),
+          unit: it.unit ? String(it.unit) : undefined,
+          unitType,
+          conversionRate,
+          total: itemTotal,
+          createdAt: it.createdAt ? String(it.createdAt) : sale.createdAt,
+          updatedAt: it.updatedAt ? String(it.updatedAt) : sale.updatedAt,
+          syncStatus: 'synced',
+        });
+      }
+    }
+
+    return { sale, items };
+  }
+
+  public async fetchFromApi(): Promise<Sale[]> {
+    try {
+      const response = await apiClient.get<any>(API_ENDPOINTS.SALES.BASE);
+      const rawList = this.extractList(response.data);
+      if (!Array.isArray(rawList)) return await this.getAll();
+
+      for (const raw of rawList) {
+        if (!raw.id) continue;
+        const { sale, items } = this.normalizeApiSale(raw);
+
+        const existing = await super.getById(sale.id);
+        if (existing && existing.syncStatus !== 'synced') {
+          // Do not overwrite local pending changes
+          continue;
+        }
+
+        if (existing) {
+          await super.update(sale, false);
+        } else {
+          await super.insert(sale, false);
+        }
+
+        if (items.length > 0) {
+          await db.execute(
+            'DELETE FROM sale_items WHERE saleId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            [sale.id]
+          );
+
+          for (const it of items) {
+            await db.execute(
+              `INSERT INTO sale_items (
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                it.id,
+                it.saleId,
+                it.productId,
+                it.productName || null,
+                it.quantity,
+                it.unitPrice,
+                it.discount,
+                it.gst,
+                it.taxAmount,
+                it.unitCost || 0,
+                it.unit || null,
+                it.unitType || 'sub',
+                it.conversionRate || 1,
+                it.total,
+                it.createdAt,
+                it.updatedAt,
+                'synced',
+              ]
+            );
+          }
+        }
+      }
+
+      // Cleanup local records deleted from server
+      const serverIds = rawList.map((x: any) => Number(x.id)).filter((id: number) => !isNaN(id) && id > 0);
+      if (serverIds.length > 0) {
+        const placeholders = serverIds.map(() => '?').join(',');
+        await db.execute(
+          `DELETE FROM sale_items WHERE saleId IN (SELECT id FROM sales WHERE syncStatus = 'synced' AND id NOT IN (${placeholders}))`,
+          serverIds
+        );
+        await db.execute(
+          `DELETE FROM sales WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+          serverIds
+        );
+      }
+
+      return await this.getAll();
+    } catch (error) {
+      console.warn('[SaleRepository] fetchFromApi error (offline):', error);
+      return await this.getAll();
+    }
+  }
+
+  public async fetchByIdFromApi(id: number): Promise<Sale | null> {
+    try {
+      const response = await apiClient.get<any>(API_ENDPOINTS.SALES.BY_ID(id));
+      const raw = response.data?.data || response.data;
+      if (!raw || !raw.id) return await this.getById(id);
+
+      const { sale, items } = this.normalizeApiSale(raw);
+      const existing = await super.getById(sale.id);
+      if (!existing || existing.syncStatus === 'synced') {
+        if (existing) {
+          await super.update(sale, false);
+        } else {
+          await super.insert(sale, false);
+        }
+
+        if (items.length > 0) {
+          await db.execute(
+            'DELETE FROM sale_items WHERE saleId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            [sale.id]
+          );
+
+          for (const it of items) {
+            await db.execute(
+              `INSERT INTO sale_items (
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                it.id,
+                it.saleId,
+                it.productId,
+                it.productName || null,
+                it.quantity,
+                it.unitPrice,
+                it.discount,
+                it.gst,
+                it.taxAmount,
+                it.unitCost || 0,
+                it.unit || null,
+                it.unitType || 'sub',
+                it.conversionRate || 1,
+                it.total,
+                it.createdAt,
+                it.updatedAt,
+                'synced',
+              ]
+            );
+          }
+        }
+      }
+
+      return await this.getById(id);
+    } catch (e) {
+      console.warn(`[SaleRepository] fetchByIdFromApi(${id}) error:`, e);
+      return await this.getById(id);
+    }
   }
 
   public async createSaleWithItems(

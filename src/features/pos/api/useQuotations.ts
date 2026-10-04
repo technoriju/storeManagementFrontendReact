@@ -5,12 +5,24 @@ import { Quotation, QuotationItem } from '../../../types/models';
 export const QUOTATION_QUERY_KEY = ['quotations'] as const;
 
 export const useQuotations = () => {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: QUOTATION_QUERY_KEY,
     queryFn: async () => {
-      const items = await quotationRepository.getAll();
-      return items;
+      const local = await quotationRepository.getAll();
+      void quotationRepository
+        .fetchFromApi()
+        .then(async () => {
+          const fresh = await quotationRepository.getAll();
+          queryClient.setQueryData(QUOTATION_QUERY_KEY, fresh);
+        })
+        .catch((err) => {
+          console.warn('[useQuotations] fetchFromApi error (offline):', err);
+        });
+      return local;
     },
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 
@@ -22,6 +34,8 @@ export const useQuotation = (id: number | null | undefined) => {
       return await quotationRepository.getById(id);
     },
     enabled: !!id,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 };
 

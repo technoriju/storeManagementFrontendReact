@@ -92,9 +92,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
-    if (lastSyncedAt) {
-      refetch();
-    }
+    refetch();
   }, [lastSyncedAt, refetch]);
 
   // Initial demo orders if DB has no sales yet

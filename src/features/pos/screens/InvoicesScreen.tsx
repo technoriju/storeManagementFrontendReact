@@ -31,9 +31,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
   useEffect(() => {
-    if (lastSyncedAt) {
-      refetch();
-    }
+    refetch();
   }, [lastSyncedAt, refetch]);
 
   const fallbackInvoices = useMemo(() => [
