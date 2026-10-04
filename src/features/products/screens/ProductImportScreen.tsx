@@ -262,97 +262,125 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
 
     let successCount = 0;
     let failedCount = 0;
+    const allErrors: string[] = [];
 
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
-      try {
+    const BATCH_SIZE = 100;
+    const totalBatches = Math.ceil(validRows.length / BATCH_SIZE);
+
+    for (let b = 0; b < totalBatches; b++) {
+      const batchRows = validRows.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+
+      const items = batchRows.map((row) => {
         const rawSub = Number(row.subunitVal);
         const conversionRate = !isNaN(rawSub) && rawSub > 0 ? rawSub : 1;
 
-        const apiPayload: any = {
-          name: row.name,
-          sku: row.sku,
-          productCode: row.code || row.sku,
-          categoryName: row.categoryName || undefined,
-          brandName: row.brandName || undefined,
-          unit: row.unitName || undefined,
-          unitName: row.unitName || undefined,
-          baseUnitName: row.unitName || undefined,
-          subunit: row.subunitVal !== undefined && row.subunitVal !== null ? row.subunitVal : undefined,
-          conversionRate: conversionRate,
-          purchasePrice: Number(row.purchasePrice) || 0,
-          wholesalePrice: Number(row.wholesalePrice) || 0,
-          retailPrice: Number(row.retailPrice) || 0,
-          price: Number(row.retailPrice) || 0,
-          cost: Number(row.purchasePrice) || 0,
-          mrp: Number(row.mrp) || 0,
-          openingStock: Number(row.openingStock) || 0,
-          stockQuantity: Number(row.openingStock) || 0,
-          barcode: row.barcode || undefined,
-          hsn: row.hsn || undefined,
-          hsnCode: row.hsn || undefined,
-          gst: Number(row.gst) || 0,
-          description: row.description || undefined,
-        };
+        // Blank numbers -> 0
+        const purchasePrice = Number(row.purchasePrice) || 0;
+        const wholesalePrice = Number(row.wholesalePrice) || 0;
+        const retailPrice = Number(row.retailPrice) || 0;
+        const mrp = Number(row.mrp) || 0;
+        const openingStock = Number(row.openingStock) || 0;
+        const gst = Number(row.gst) || 0;
 
-        // 1. Direct API call to backend
-        let serverProduct: any = null;
-        try {
-          const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
-          serverProduct = res.data?.data || res.data;
-        } catch (apiErr: any) {
-          console.warn(`API call error for row ${row.row} (${row.name}):`, apiErr.response?.data || apiErr.message);
-        }
+        // Blank strings -> null
+        const sku = row.sku ? row.sku.trim() : null;
+        const productCode = row.code ? row.code.trim() : sku;
+        const categoryName = row.categoryName && row.categoryName.trim() ? row.categoryName.trim() : null;
+        const brandName = row.brandName && row.brandName.trim() ? row.brandName.trim() : null;
+        const unitName = row.unitName && row.unitName.trim() ? row.unitName.trim() : null;
+        const barcode = row.barcode && row.barcode.trim() ? row.barcode.trim() : null;
+        const hsn = row.hsn && row.hsn.trim() ? row.hsn.trim() : null;
+        const description = row.description && row.description.trim() ? row.description.trim() : null;
 
-        const serverId = serverProduct?.id ? Number(serverProduct.id) : Math.floor(Math.random() * -1000000000);
-
-        // 2. Assemble product entity for local state and cache
-        const localProduct: any = {
-          id: serverId,
-          name: row.name,
-          sku: row.sku,
-          productCode: row.code || row.sku,
-          price: row.retailPrice,
-          cost: row.purchasePrice,
-          purchasePrice: row.purchasePrice,
-          wholesalePrice: row.wholesalePrice,
-          retailPrice: row.retailPrice,
-          mrp: row.mrp,
-          stockQuantity: row.openingStock,
-          openingStock: row.openingStock,
-          barcode: row.barcode,
-          hsn: row.hsn,
-          gst: row.gst,
-          description: row.description,
-          categoryId: serverProduct?.categoryId || undefined,
-          categoryName: row.categoryName,
-          brandId: serverProduct?.brandId || undefined,
-          brandName: row.brandName,
-          unitId: serverProduct?.baseUnitId || undefined,
-          baseUnitId: serverProduct?.baseUnitId || undefined,
+        return {
+          name: row.name.trim(),
+          sku,
+          productCode,
+          categoryName,
+          brandName,
+          unitName,
+          baseUnitName: unitName,
+          unit: unitName,
+          subunit: row.subunitVal !== undefined && row.subunitVal !== null && row.subunitVal !== '' ? row.subunitVal : null,
           conversionRate,
-          createdAt: serverProduct?.createdAt || new Date().toISOString(),
-          updatedAt: serverProduct?.updatedAt || new Date().toISOString(),
-          syncStatus: serverProduct ? 'synced' : 'pending_insert',
+          purchasePrice,
+          wholesalePrice,
+          retailPrice,
+          price: retailPrice,
+          cost: purchasePrice,
+          mrp,
+          openingStock,
+          stockQuantity: openingStock,
+          barcode,
+          hsn,
+          hsnCode: hsn,
+          gst,
+          description,
         };
+      });
 
-        // 3. Save to local SQLite database if available
-        try {
-          await productRepository.insert(localProduct as any, false);
-        } catch (dbErr) {
-          // ignore SQLite cache warnings on web
+      try {
+        const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BULK_IMPORT, { items });
+        const resData = res.data?.data || res.data || {};
+        const createdProducts = Array.isArray(resData) ? resData : (resData.data || []);
+        const batchSuccess = (resData.createdCount || 0) + (resData.updatedCount || 0) || createdProducts.length || batchRows.length;
+        const batchFailed = resData.failCount || 0;
+
+        successCount += batchSuccess;
+        failedCount += batchFailed;
+        if (resData.errors && Array.isArray(resData.errors)) {
+          allErrors.push(...resData.errors);
         }
 
-        // 4. Update Zustand store
-        addProduct(localProduct);
-        successCount++;
-      } catch (rowErr) {
-        console.error(`Import failed at row ${row.row}:`, rowErr);
-        failedCount++;
+        // Cache created products locally in SQLite repository and store
+        for (let i = 0; i < batchRows.length; i++) {
+          const row = batchRows[i];
+          const serverProd = createdProducts[i] || createdProducts.find((p: any) => p.sku === row.sku);
+          const serverId = serverProd?.id ? Number(serverProd.id) : Math.floor(Math.random() * -1000000000);
+
+          const localProduct: any = {
+            id: serverId,
+            name: row.name,
+            sku: row.sku,
+            productCode: row.code || row.sku,
+            price: row.retailPrice,
+            cost: row.purchasePrice,
+            purchasePrice: row.purchasePrice,
+            wholesalePrice: row.wholesalePrice,
+            retailPrice: row.retailPrice,
+            mrp: row.mrp,
+            stockQuantity: row.openingStock,
+            openingStock: row.openingStock,
+            barcode: row.barcode,
+            hsn: row.hsn,
+            gst: row.gst,
+            description: row.description,
+            categoryId: serverProd?.categoryId || undefined,
+            categoryName: row.categoryName,
+            brandId: serverProd?.brandId || undefined,
+            brandName: row.brandName,
+            unitId: serverProd?.baseUnitId || undefined,
+            baseUnitId: serverProd?.baseUnitId || undefined,
+            conversionRate: Number(row.subunitVal) || 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            syncStatus: serverProd ? 'synced' : 'pending_insert',
+          };
+
+          try {
+            await productRepository.insert(localProduct as any, false);
+          } catch (_) {}
+
+          addProduct(localProduct);
+        }
+      } catch (batchErr: any) {
+        console.error('Batch import error:', batchErr.response?.data || batchErr.message);
+        failedCount += batchRows.length;
+        allErrors.push(batchErr.response?.data?.message || batchErr.message || 'Batch request failed');
       }
 
-      setImportProgress(Math.round(((i + 1) / validRows.length) * 100));
-      await new Promise<void>((resolve) => setTimeout(() => resolve(), 10));
+      setImportProgress(Math.round(((b + 1) / totalBatches) * 100));
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 20));
     }
 
     try {

@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   PRODUCTS: {
     BASE: '/products',
     BY_ID: (id: string | number) => `/products/${id}`,
+    BULK_IMPORT: '/products/bulk-import',
   },
   SETTINGS: {
     BASE: '/settings',
