@@ -725,12 +725,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                 ]}
               >
                 <ScrollView horizontal showsHorizontalScrollIndicator>
-                  <View style={{ minWidth: 915 }}>
+                  <View style={{ minWidth: 880 }}>
                     {/* Table Header */}
                     <View style={styles.tableHeaderRow}>
                       <Text style={[styles.th, { width: 170 }]}>Product</Text>
                       <Text style={[styles.th, { width: 120 }]}>Unit</Text>
-                      <Text style={[styles.th, { width: 105 }]}>Qty</Text>
+                      <Text style={[styles.th, { width: 85 }]}>Qty</Text>
                       <Text style={[styles.th, { width: 105 }]}>{priceType === 'wholesale' ? 'Wholesale (₹)' : 'Retailer (₹)'}</Text>
                       <Text style={[styles.th, { width: 85 }]}>Discount (₹)</Text>
                       <Text style={[styles.th, { width: 75 }]}>Tax (%)</Text>
@@ -794,7 +794,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                           </View>
 
                           {/* Qty */}
-                          <View style={{ width: 105, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <View style={{ width: 85, paddingRight: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                             <TouchableOpacity
                               style={[
                                 styles.qtyStepperBtn,
@@ -809,7 +809,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                               }}
                               activeOpacity={0.7}
                             >
-                              <Minus size={12} color={theme.colors.text} />
+                              <Minus size={11} color={theme.colors.text} />
                             </TouchableOpacity>
 
                             <TextInput
@@ -856,12 +856,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                               }}
                               activeOpacity={0.7}
                             >
-                              <Plus size={12} color={theme.colors.text} />
+                              <Plus size={11} color={theme.colors.text} />
                             </TouchableOpacity>
                           </View>
 
                           {/* Sale Price */}
-                          <View style={{ width: 100, paddingRight: 6 }}>
+                          <View style={{ width: 105, paddingRight: 6 }}>
                             <TextInput
                               style={[
                                 styles.cellInput,
@@ -1353,9 +1353,10 @@ const styles = StyleSheet.create({
   cellInput: {
     borderWidth: 1,
     borderRadius: 4,
-    height: 32,
-    paddingHorizontal: 8,
+    height: 30,
+    paddingHorizontal: 6,
     fontSize: 12,
+    minWidth: 0,
   },
   summarySection: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   notesInput: {
@@ -1398,19 +1399,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   qtyStepperBtn: {
-    width: 24,
-    height: 32,
+    width: 20,
+    height: 28,
     borderRadius: 4,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyInput: {
-    flex: 1,
+    width: 32,
+    minWidth: 0,
+    maxWidth: 34,
+    height: 28,
     textAlign: 'center',
-    paddingHorizontal: 2,
-    fontSize: 13,
+    paddingHorizontal: 1,
+    fontSize: 12,
     fontWeight: '600',
+    marginHorizontal: 2,
   },
   quickCustomerModal: {
     overflow: 'hidden',
