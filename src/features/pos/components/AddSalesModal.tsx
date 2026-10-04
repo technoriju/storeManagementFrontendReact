@@ -31,6 +31,7 @@ import { useCreateSale } from '../api/useSales';
 import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
 import { Product } from '../../products/types';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from './ReceiptPrintPreviewModal';
 
 interface SaleItemRow {
   productId: number;
@@ -86,6 +87,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [items, setItems] = useState<SaleItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (visible) {
@@ -314,6 +317,42 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         })),
       });
 
+      const customerObj = customers.find((c) => String(c.id) === customerId);
+      const isCustWholesale = !!(customerObj?.gstin && customerObj.gstin.length > 3);
+
+      const receiptData: ReceiptPrintData = {
+        invoiceNumber: reference,
+        reference,
+        date,
+        customerName: customerObj?.name || 'Walk-in Customer',
+        customerPhone: customerObj?.phone || '',
+        customerAddress: customerObj?.address || '',
+        customerGstin: customerObj?.gstin || '',
+        customerType: isCustWholesale ? 'wholesale' : 'retail',
+        biller,
+        subtotal: itemsSubtotal,
+        discount: totalDiscount,
+        gst: itemsTax + orderTaxNum,
+        shipping: shippingNum,
+        total: grandTotal,
+        paid: status === 'Completed' ? grandTotal : 0,
+        due: status === 'Completed' ? 0 : grandTotal,
+        paymentMethod: 'Cash',
+        notes,
+        items: calculatedItems.map((item) => ({
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+          gst: item.gst,
+          taxAmount: item.taxAmount,
+          total: item.total,
+          unit: item.unit,
+        })),
+      };
+
       // Reset & Close
       setItems([]);
       setCustomerId('');
@@ -321,14 +360,17 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       setSearchQuery('');
       setNotes('');
       onClose();
-      Alert.alert('Success', 'Sale created successfully!');
+
+      setPrintData(receiptData);
+      setShowPrintModal(true);
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to save sale.');
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <>
+      <Modal visible={visible} transparent animationType="fade">
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
         <View
           style={[
@@ -865,7 +907,14 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         </View>
       </View>
     </Modal>
-  );
+
+    <ReceiptPrintPreviewModal
+      visible={showPrintModal}
+      data={printData}
+      onClose={() => setShowPrintModal(false)}
+    />
+  </>
+);
 };
 
 const styles = StyleSheet.create({

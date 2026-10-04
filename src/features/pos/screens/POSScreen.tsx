@@ -14,6 +14,7 @@ import { useKeyboardShortcut } from '../../../shared/hooks/useKeyboardShortcut';
 import { Product } from '../../products/types';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 
 export const POSScreen = () => {
   const {
@@ -37,6 +38,8 @@ export const POSScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isReturnMode, setIsReturnMode] = useState(false);
+  const [printReceiptData, setPrintReceiptData] = useState<ReceiptPrintData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   useEffect(() => {
@@ -72,6 +75,32 @@ export const POSScreen = () => {
 
     try {
       const invNum = `POS-${Date.now().toString().slice(-6)}`;
+      const sub = getSubtotal();
+      const disc = getTotalDiscount();
+      const gTax = getTotalGST();
+      const gTotal = getGrandTotal();
+
+      const receiptItems = cart.map((item) => {
+        const rawSubtotal = item.price * item.quantity;
+        const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
+        const taxAmt = netSubtotal * ((item.gstRate || 0) / 100);
+        return {
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: item.discount || 0,
+          gst: item.gstRate || 0,
+          taxAmount: taxAmt,
+          unitCost: item.unitCost || 0,
+          total: netSubtotal + taxAmt,
+          unit: item.unit,
+          unitType: item.unitType,
+          conversionRate: item.conversionRate,
+          hsn: (item.product as any).hsn || (item.product as any).sku || '',
+        };
+      });
+
       await createSaleMutation.mutateAsync({
         sale: {
           invoiceNumber: invNum,
@@ -79,11 +108,11 @@ export const POSScreen = () => {
           customerId: customer?.id || 1,
           customerName: customer?.name || 'Walk-in Customer',
           date: new Date().toISOString().split('T')[0],
-          subtotal: getSubtotal(),
-          discount: getTotalDiscount(),
-          gst: getTotalGST(),
-          total: getGrandTotal(),
-          paid: getGrandTotal(),
+          subtotal: sub,
+          discount: disc,
+          gst: gTax,
+          total: gTotal,
+          paid: gTotal,
           due: 0,
           status: 'Completed',
           paymentStatus: 'Paid',
@@ -91,28 +120,30 @@ export const POSScreen = () => {
           shipping: 0,
           biller: 'POS Cashier',
         },
-        items: cart.map((item) => {
-          const rawSubtotal = item.price * item.quantity;
-          const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
-          const taxAmt = netSubtotal * ((item.gstRate || 0) / 100);
-          return {
-            productId: item.product.id,
-            productName: item.product.name,
-            quantity: item.quantity,
-            unitPrice: item.price,
-            discount: item.discount || 0,
-            gst: item.gstRate || 0,
-            taxAmount: taxAmt,
-            unitCost: item.unitCost || 0,
-            total: netSubtotal + taxAmt,
-            unit: item.unit,
-            unitType: item.unitType,
-            conversionRate: item.conversionRate,
-          };
-        }),
+        items: receiptItems,
       });
 
-      Alert.alert('Success', `Sale ${invNum} completed successfully!`);
+      // Prepare receipt data for print preview
+      const receiptData: ReceiptPrintData = {
+        invoiceNumber: invNum,
+        reference: invNum,
+        date: new Date().toISOString().split('T')[0],
+        customerName: customer?.name || 'Walk-in Customer',
+        customerPhone: customer?.phone || '',
+        customerType: 'retail',
+        biller: 'POS Cashier',
+        subtotal: sub,
+        discount: disc,
+        gst: gTax,
+        total: gTotal,
+        paid: gTotal,
+        due: 0,
+        paymentMethod: 'Cash',
+        items: receiptItems,
+      };
+
+      setPrintReceiptData(receiptData);
+      setShowPrintModal(true);
       clearCart();
       fetchProducts().catch(() => {});
     } catch (err: any) {
@@ -303,6 +334,12 @@ export const POSScreen = () => {
           <Text style={styles.checkoutBtnText}>Checkout (F12)</Text>
         </TouchableOpacity>
       </View>
+
+      <ReceiptPrintPreviewModal
+        visible={showPrintModal}
+        data={printReceiptData}
+        onClose={() => setShowPrintModal(false)}
+      />
     </View>
   );
 };

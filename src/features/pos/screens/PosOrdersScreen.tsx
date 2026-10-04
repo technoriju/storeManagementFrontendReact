@@ -17,8 +17,10 @@ import {
   MoreVertical,
   Eye,
   Trash2,
-  X
+  X,
+  Printer,
 } from 'lucide-react-native';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -31,7 +33,19 @@ const MenuItem = ({ icon, label, onPress }: any) => (
   </Pressable>
 );
 
-const ActionMenu = ({ item, theme, onDelete, onView }: { item: any; theme: any; onDelete: (item: any) => void; onView: (item: any) => void }) => {
+const ActionMenu = ({
+  item,
+  theme,
+  onDelete,
+  onView,
+  onPrint,
+}: {
+  item: any;
+  theme: any;
+  onDelete: (item: any) => void;
+  onView: (item: any) => void;
+  onPrint: (item: any) => void;
+}) => {
   const [visible, setVisible] = useState(false);
   const [layout, setLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const buttonRef = useRef<any>(null);
@@ -67,6 +81,14 @@ const ActionMenu = ({ item, theme, onDelete, onView }: { item: any; theme: any; 
               }}
             />
             <MenuItem
+              icon={<Printer size={16} color="#2563EB" />}
+              label="Print Receipt"
+              onPress={() => {
+                setVisible(false);
+                onPrint(item);
+              }}
+            />
+            <MenuItem
               icon={<Trash2 size={16} color="#EF4444" />}
               label="Delete Sale"
               onPress={() => {
@@ -86,6 +108,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const [printOrderData, setPrintOrderData] = useState<ReceiptPrintData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -94,6 +118,57 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   useEffect(() => {
     refetch();
   }, [lastSyncedAt, refetch]);
+
+  const handleOpenPrintPreview = (order: any) => {
+    if (!order) return;
+    const ordItems = order.items && order.items.length > 0
+      ? order.items.map((i: any) => ({
+          productId: i.productId,
+          productName: i.productName || `Product #${i.productId || 1}`,
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice) || 0,
+          discount: Number(i.discount) || 0,
+          gst: Number(i.gst) || 0,
+          taxAmount: Number(i.taxAmount) || 0,
+          total: Number(i.total) || 0,
+          unit: i.unit || 'Pcs',
+          hsn: i.hsn || '',
+        }))
+      : [
+          {
+            productName: 'General Goods / Services',
+            quantity: 1,
+            unitPrice: Number(order.grandTotal || 0),
+            discount: 0,
+            gst: 0,
+            total: Number(order.grandTotal || 0),
+            unit: 'Unit',
+          },
+        ];
+
+    const rData: ReceiptPrintData = {
+      invoiceNumber: order.reference || `ORD-${order.id}`,
+      reference: order.reference,
+      date: order.date,
+      customerName: order.customerName || 'Walk-in Customer',
+      customerPhone: order.customerPhone || '',
+      customerAddress: order.customerAddress || '',
+      customerGstin: order.customerGstin || '',
+      customerType: (order.customerGstin && order.customerGstin.length > 3) ? 'wholesale' : 'retail',
+      biller: order.biller || 'Cashier',
+      subtotal: Number(order.subtotal || order.grandTotal || 0),
+      discount: Number(order.discount || 0),
+      gst: Number(order.gst || 0),
+      total: Number(order.grandTotal || 0),
+      paid: Number(order.paid !== undefined ? order.paid : order.grandTotal || 0),
+      due: Number(order.due !== undefined ? order.due : 0),
+      paymentMethod: order.paymentMethod || 'Cash',
+      items: ordItems,
+    };
+
+    setPrintOrderData(rData);
+    setShowPrintModal(true);
+  };
 
   // Initial demo orders if DB has no sales yet
   const fallbackOrders = useMemo(() => [
@@ -287,7 +362,13 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const renderRowActions = (item: any) => (
-    <ActionMenu item={item} theme={theme} onDelete={handleDelete} onView={setSelectedOrder} />
+    <ActionMenu
+      item={item}
+      theme={theme}
+      onDelete={handleDelete}
+      onView={setSelectedOrder}
+      onPrint={handleOpenPrintPreview}
+    />
   );
 
   return (
@@ -353,10 +434,29 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                   </View>
                 </View>
               </ScrollView>
+
+              {/* Modal Footer with Print Action */}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' }}
+                  onPress={() => {
+                    handleOpenPrintPreview(selectedOrder);
+                  }}
+                >
+                  <Printer size={16} color="white" />
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Print Receipt</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Modal>
       )}
+
+      <ReceiptPrintPreviewModal
+        visible={showPrintModal}
+        data={printOrderData}
+        onClose={() => setShowPrintModal(false)}
+      />
     </View>
   );
 };

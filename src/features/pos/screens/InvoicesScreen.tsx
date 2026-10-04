@@ -11,11 +11,12 @@ import {
   RefreshCw, 
   Trash2, 
   Eye, 
-  X,
-  User,
-  Printer,
-  CreditCard,
+  X, 
+  User, 
+  Printer, 
+  CreditCard, 
 } from 'lucide-react-native';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -25,6 +26,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
+  const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -111,6 +114,57 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     );
   };
 
+  const handleOpenPrintPreview = (invoice: any) => {
+    if (!invoice) return;
+    const invItems = invoice.items && invoice.items.length > 0
+      ? invoice.items.map((i: any) => ({
+          productId: i.productId,
+          productName: i.productName || `Product #${i.productId || 1}`,
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice) || 0,
+          discount: Number(i.discount) || 0,
+          gst: Number(i.gst) || 0,
+          taxAmount: Number(i.taxAmount) || 0,
+          total: Number(i.total) || 0,
+          unit: i.unit || 'Pcs',
+          hsn: i.hsn || '',
+        }))
+      : [
+          {
+            productName: 'General Goods / Services',
+            quantity: 1,
+            unitPrice: Number(invoice.total || 0),
+            discount: 0,
+            gst: Number(invoice.orderTax || invoice.gst || 0),
+            total: Number(invoice.total || 0),
+            unit: 'Unit',
+          },
+        ];
+
+    const rData: ReceiptPrintData = {
+      invoiceNumber: invoice.invoiceNumber,
+      reference: invoice.reference,
+      date: invoice.date,
+      customerName: invoice.customerName || 'Walk-in Customer',
+      customerPhone: invoice.customerPhone || '',
+      customerAddress: invoice.customerAddress || '',
+      customerGstin: invoice.customerGstin || '',
+      customerType: (invoice.customerGstin && invoice.customerGstin.length > 3) ? 'wholesale' : 'retail',
+      biller: invoice.biller || 'Cashier',
+      subtotal: Number(invoice.subtotal || invoice.total || 0),
+      discount: Number(invoice.discount || 0),
+      gst: Number((invoice.orderTax || 0) + (invoice.gst || 0)),
+      total: Number(invoice.total || 0),
+      paid: Number(invoice.paid !== undefined ? invoice.paid : invoice.total || 0),
+      due: Number(invoice.due !== undefined ? invoice.due : 0),
+      paymentMethod: invoice.paymentMethod || 'Cash',
+      items: invItems,
+    };
+
+    setPrintData(rData);
+    setShowPrintModal(true);
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'Paid': return { bg: '#ECFDF5', text: '#10B981', dot: '#10B981' };
@@ -193,9 +247,12 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     {
       key: 'actions',
       title: 'Actions',
-      width: 80,
+      width: 100,
       render: (_: any, item: any) => (
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <Pressable onPress={() => handleOpenPrintPreview(item)} style={{ padding: 4 }}>
+            <Printer size={16} color={theme.colors.primary} />
+          </Pressable>
           <Pressable onPress={() => setViewInvoice(item)} style={{ padding: 4 }}>
             <Eye size={16} color={theme.colors.textSecondary} />
           </Pressable>
@@ -316,7 +373,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                 <Pressable
                   style={[styles.printButton, { backgroundColor: theme.colors.primary }]}
                   onPress={() => {
-                    Alert.alert('Print Invoice', `Invoice ${viewInvoice.invoiceNumber} sent to printer!`);
+                    handleOpenPrintPreview(viewInvoice);
                   }}
                 >
                   <Printer size={16} color="white" />
@@ -327,6 +384,12 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           </View>
         </Modal>
       )}
+
+      <ReceiptPrintPreviewModal
+        visible={showPrintModal}
+        data={printData}
+        onClose={() => setShowPrintModal(false)}
+      />
     </View>
   );
 };
