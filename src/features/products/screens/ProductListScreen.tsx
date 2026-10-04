@@ -51,46 +51,46 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   useEffect(() => {
     const loadLookups = async () => {
       try {
-        const catRes = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
-        const catList = catRes.data?.data || catRes.data || [];
-        if (Array.isArray(catList)) {
-          const cMap: Record<string, string> = {};
-          catList.forEach((c: any) => {
-            if (c.id && c.name) cMap[String(c.id)] = c.name;
-          });
-          setCategoryMap(cMap);
-        }
-      } catch (e) {
-        try {
-          const localCats = await categoryRepository.getAll();
+        const localCats = await categoryRepository.getAll();
+        if (localCats.length > 0) {
           const cMap: Record<string, string> = {};
           localCats.forEach((c: any) => {
             if (c.id && c.name) cMap[String(c.id)] = c.name;
           });
           setCategoryMap(cMap);
-        } catch (_) {}
-      }
+        } else {
+          const catRes = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE);
+          const catList = catRes.data?.data || catRes.data || [];
+          if (Array.isArray(catList)) {
+            const cMap: Record<string, string> = {};
+            catList.forEach((c: any) => {
+              if (c.id && c.name) cMap[String(c.id)] = c.name;
+            });
+            setCategoryMap(cMap);
+          }
+        }
+      } catch (_) {}
 
       try {
-        const brRes = await apiClient.get(API_ENDPOINTS.BRANDS.BASE);
-        const brList = brRes.data?.data || brRes.data || [];
-        if (Array.isArray(brList)) {
-          const bMap: Record<string, string> = {};
-          brList.forEach((b: any) => {
-            if (b.id && b.name) bMap[String(b.id)] = b.name;
-          });
-          setBrandMap(bMap);
-        }
-      } catch (e) {
-        try {
-          const localBrands = await brandRepository.getAll();
+        const localBrands = await brandRepository.getAll();
+        if (localBrands.length > 0) {
           const bMap: Record<string, string> = {};
           localBrands.forEach((b: any) => {
             if (b.id && b.name) bMap[String(b.id)] = b.name;
           });
           setBrandMap(bMap);
-        } catch (_) {}
-      }
+        } else {
+          const brRes = await apiClient.get(API_ENDPOINTS.BRANDS.BASE);
+          const brList = brRes.data?.data || brRes.data || [];
+          if (Array.isArray(brList)) {
+            const bMap: Record<string, string> = {};
+            brList.forEach((b: any) => {
+              if (b.id && b.name) bMap[String(b.id)] = b.name;
+            });
+            setBrandMap(bMap);
+          }
+        }
+      } catch (_) {}
     };
 
     loadLookups();

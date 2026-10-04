@@ -77,31 +77,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
       const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE);
       const data = response.data?.data || response.data;
       if (Array.isArray(data)) {
-        const normalized: Product[] = data.map((item: any) => {
-          const purchasePrice = item.purchasePrice !== undefined && item.purchasePrice !== null ? Number(item.purchasePrice) : Number(item.cost ?? 0);
-          const wholesalePrice = item.wholesalePrice !== undefined && item.wholesalePrice !== null ? Number(item.wholesalePrice) : 0;
-          const retailPrice = item.retailPrice !== undefined && item.retailPrice !== null ? Number(item.retailPrice) : Number(item.price ?? 0);
-          const stockQuantity = Number(item.stockQuantity ?? item.openingStock ?? 0);
-          const categoryName = item.category?.name || item.categoryName || undefined;
-          const brandName = item.brand?.name || item.brandName || undefined;
-
-          return {
-            ...item,
-            id: Number(item.id),
-            price: retailPrice,
-            cost: purchasePrice,
-            purchasePrice,
-            wholesalePrice,
-            retailPrice,
-            stockQuantity,
-            categoryName,
-            brandName,
-            category: item.category ? { id: Number(item.category.id), name: item.category.name } : undefined,
-            brand: item.brand ? { id: Number(item.brand.id), name: item.brand.name } : undefined,
-          };
-        });
+        const normalized = await productRepository.saveRawProducts(data);
         set({ products: normalized, isLoading: false });
-        productRepository.fetchFromApi().catch(() => {});
         return;
       }
     } catch (error: any) {

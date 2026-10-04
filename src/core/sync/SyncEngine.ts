@@ -49,23 +49,26 @@ class SyncEngine {
     if (this.syncInterval) clearInterval(this.syncInterval);
   }
 
-  private handleConnectivityChange(state: NetInfoState) {
+  private async handleConnectivityChange(state: NetInfoState) {
     this.isOnline = !!state.isConnected && !!state.isInternetReachable;
-    const store = useSyncStore.getState();
     
     if (this.isOnline) {
-      if (store.status === 'offline') {
-        this.updateSyncStatus();
+      await this.updatePendingCount();
+      const count = await outboxRepo.getPendingCount();
+      if (count > 0) {
+        await this.syncNow();
       }
-      this.syncNow();
     } else {
       useSyncStore.getState().setStatus('offline');
     }
   }
 
-  private handleAppStateChange(nextAppState: AppStateStatus) {
+  private async handleAppStateChange(nextAppState: AppStateStatus) {
     if (nextAppState === 'active' && this.isOnline) {
-      this.syncNow();
+      const count = await outboxRepo.getPendingCount();
+      if (count > 0) {
+        await this.syncNow();
+      }
     }
   }
   
@@ -95,7 +98,7 @@ class SyncEngine {
     }
   }
 
-  async syncNow() {
+  async syncNow(options?: { pullServer?: boolean }) {
     if (this.isSyncing || !this.isOnline) return;
 
     this.isSyncing = true;
@@ -103,7 +106,9 @@ class SyncEngine {
 
     try {
       await this.processOutbox();
-      await this.pullServerChanges();
+      if (options?.pullServer) {
+        await this.pullServerChanges();
+      }
 
       useSyncStore.getState().setLastSyncedAt(new Date().toISOString());
       await this.updatePendingCount();
@@ -188,7 +193,7 @@ class SyncEngine {
     await this.updatePendingCount();
   }
 
-  private async pullServerChanges() {
+  public async pullServerChanges() {
     try {
       await Promise.allSettled([
         categoryRepository.fetchFromApi(),
