@@ -15,11 +15,14 @@ import { Product } from '../../products/types';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
+import { getProductPriceByType } from '../utils/priceUtils';
 
 export const POSScreen = () => {
   const {
     cart,
     customer,
+    priceType,
+    setPriceType,
     addToCart,
     toggleCartItemUnit,
     updateCartItem,
@@ -119,6 +122,7 @@ export const POSScreen = () => {
           orderTax: 0,
           shipping: 0,
           biller: 'POS Cashier',
+          notes: `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
         },
         items: receiptItems,
       });
@@ -130,7 +134,7 @@ export const POSScreen = () => {
         date: new Date().toISOString().split('T')[0],
         customerName: customer?.name || 'Walk-in Customer',
         customerPhone: customer?.phone || '',
-        customerType: 'retail',
+        customerType: priceType,
         biller: 'POS Cashier',
         subtotal: sub,
         discount: disc,
@@ -168,20 +172,41 @@ export const POSScreen = () => {
   });
 
   const renderProduct = ({ item }: { item: Product }) => {
+    const activePrice = getProductPriceByType(item, priceType);
     const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
     const hasSubUnit = !!(item.subUnitId || item.subunitId || cRate > 1);
     const subUnitName = item.subUnitName || 'Pcs';
     const baseUnitName = item.baseUnitName || item.unit || 'Box';
-    const subPrice = cRate > 0 ? (item.price / cRate).toFixed(2) : item.price.toFixed(2);
+    const subPrice = cRate > 0 ? (activePrice / cRate).toFixed(2) : activePrice.toFixed(2);
 
     return (
       <TouchableOpacity
         style={styles.productCard}
         onPress={() => addToCart(item, isReturnMode ? -1 : 1)}
       >
-        <Text style={styles.productName}>{item.name}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <Text style={[styles.productName, { flex: 1, marginRight: 6 }]} numberOfLines={1}>{item.name}</Text>
+          <View
+            style={{
+              backgroundColor: priceType === 'wholesale' ? '#DCFCE7' : '#DBEAFE',
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 4,
+            }}
+          >
+            <Text
+              style={{
+                color: priceType === 'wholesale' ? '#15803D' : '#1D4ED8',
+                fontSize: 10,
+                fontWeight: '700',
+              }}
+            >
+              {priceType === 'wholesale' ? 'Wholesale' : 'Retail'}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.productPrice}>
-          ₹{item.price.toFixed(2)} / {baseUnitName}
+          ₹{activePrice.toFixed(2)} / {baseUnitName}
         </Text>
         {hasSubUnit && (
           <Text style={{ fontSize: 11, color: '#0284C7', marginBottom: 2 }}>
@@ -256,11 +281,50 @@ export const POSScreen = () => {
     <View style={styles.container}>
       {/* Left side: Products */}
       <View style={styles.productsSection}>
+        {/* Wholesale vs Retailer Mode Switcher */}
+        <View style={styles.priceTypeSelectorRow}>
+          <Text style={styles.priceTypeLabel}>Pricing Mode:</Text>
+          <View style={styles.priceTypeGroup}>
+            <TouchableOpacity
+              style={[
+                styles.priceTypeBtn,
+                priceType === 'wholesale' && styles.priceTypeBtnActiveWholesale,
+              ]}
+              onPress={() => setPriceType('wholesale')}
+            >
+              <Text
+                style={[
+                  styles.priceTypeBtnText,
+                  priceType === 'wholesale' && styles.priceTypeBtnTextActive,
+                ]}
+              >
+                Wholesale (Default)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.priceTypeBtn,
+                priceType === 'retail' && styles.priceTypeBtnActiveRetail,
+              ]}
+              onPress={() => setPriceType('retail')}
+            >
+              <Text
+                style={[
+                  styles.priceTypeBtnText,
+                  priceType === 'retail' && styles.priceTypeBtnTextActive,
+                ]}
+              >
+                Retailer
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.searchContainer}>
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
-            placeholder="Search product or scan barcode..."
+            placeholder={`Search product (${priceType} price) or scan barcode...`}
             value={searchQuery}
             onChangeText={setSearchQuery}
             onSubmitEditing={handleSearchSubmit}
@@ -353,6 +417,52 @@ const styles = StyleSheet.create({
   productsSection: {
     flex: 1,
     padding: 16,
+  },
+  priceTypeSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  priceTypeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  priceTypeGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priceTypeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+  },
+  priceTypeBtnActiveWholesale: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  priceTypeBtnActiveRetail: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  priceTypeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  priceTypeBtnTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   searchContainer: {
     marginBottom: 16,

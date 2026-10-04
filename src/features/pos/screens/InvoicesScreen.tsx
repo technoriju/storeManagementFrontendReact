@@ -14,9 +14,11 @@ import {
   X, 
   User, 
   Printer, 
-  CreditCard, 
+  CreditCard,
+  PlusCircle, 
 } from 'lucide-react-native';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
+import { AddSalesModal } from '../components/AddSalesModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -28,6 +30,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -275,6 +278,13 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Pressable 
+            style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
+            onPress={() => setShowAddModal(true)}
+          >
+            <PlusCircle size={16} color="white" />
+            <Text style={styles.primaryActionText}>Add Sales Invoice</Text>
+          </Pressable>
+          <Pressable 
             style={[styles.iconButton, { borderColor: theme.colors.border }]}
             onPress={() => refetch()}
           >
@@ -390,6 +400,14 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
         data={printData}
         onClose={() => setShowPrintModal(false)}
       />
+
+      <AddSalesModal
+        visible={showAddModal}
+        onClose={() => {
+          setShowAddModal(false);
+          refetch();
+        }}
+      />
     </View>
   );
 };
@@ -400,6 +418,19 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: 'bold' },
   subtitle: { fontSize: 13, marginTop: 2 },
   iconButton: { padding: 8, borderWidth: 1, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  primaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  primaryActionText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   tableCard: { flex: 1 },
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },

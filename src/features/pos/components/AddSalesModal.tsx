@@ -32,6 +32,7 @@ import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
 import { Product } from '../../products/types';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from './ReceiptPrintPreviewModal';
+import { PriceType, getProductPriceByType } from '../utils/priceUtils';
 
 interface SaleItemRow {
   productId: number;
@@ -51,6 +52,8 @@ interface SaleItemRow {
   baseCost?: number;
   subCost?: number;
   unitCost?: number;
+  wholesalePrice?: number;
+  retailPrice?: number;
 }
 
 interface Props {
@@ -81,6 +84,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const [shipping, setShipping] = useState<string>('0');
   const [biller, setBiller] = useState<string>('Admin');
   const [notes, setNotes] = useState<string>('');
+  const [priceType, setPriceType] = useState<PriceType>('wholesale');
 
   // Product Search & Items Table
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -98,8 +102,36 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       setDate(new Date().toISOString().split('T')[0]);
       setReference(`SL-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
+      setPriceType('wholesale');
     }
   }, [visible, products.length, fetchProducts]);
+
+  // Handle Wholesale vs Retail Price Type Switching
+  const handlePriceTypeChange = (newType: PriceType) => {
+    if (newType === priceType) return;
+    setPriceType(newType);
+
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        const prod = products.find((p) => p.id === item.productId);
+        const wholesaleP = prod ? getProductPriceByType(prod, 'wholesale') : (item.wholesalePrice || item.basePrice || 0);
+        const retailP = prod ? getProductPriceByType(prod, 'retail') : (item.retailPrice || item.basePrice || 0);
+        const newBasePrice = newType === 'wholesale' ? wholesaleP : retailP;
+        const cRate = item.conversionRate && item.conversionRate > 0 ? item.conversionRate : 1;
+        const newSubPrice = cRate > 0 ? Number((newBasePrice / cRate).toFixed(2)) : newBasePrice;
+        const newUnitPrice = item.unitType === 'sub' ? newSubPrice : newBasePrice;
+
+        return {
+          ...item,
+          wholesalePrice: wholesaleP,
+          retailPrice: retailP,
+          basePrice: newBasePrice,
+          subPrice: newSubPrice,
+          unitPrice: newUnitPrice,
+        };
+      })
+    );
+  };
 
   // Customer & Supplier Options
   const customerOptions = useMemo(() => {
@@ -150,7 +182,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       updated[existingIndex].quantity += 1;
       setItems(updated);
     } else {
-      const basePrice = product.price || product.retailPrice || 0;
+      const wholesaleP = getProductPriceByType(product, 'wholesale');
+      const retailP = getProductPriceByType(product, 'retail');
+      const basePrice = priceType === 'wholesale' ? wholesaleP : retailP;
       const baseCost = product.cost || product.purchasePrice || 0;
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
 
@@ -191,6 +225,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
           baseUnitName,
           subUnitName,
           conversionRate: cRate,
+          wholesalePrice: wholesaleP,
+          retailPrice: retailP,
         },
       ]);
     }
@@ -318,7 +354,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       });
 
       const customerObj = customers.find((c) => String(c.id) === customerId);
-      const isCustWholesale = !!(customerObj?.gstin && customerObj.gstin.length > 3);
 
       const receiptData: ReceiptPrintData = {
         invoiceNumber: reference,
@@ -328,7 +363,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         customerPhone: customerObj?.phone || '',
         customerAddress: customerObj?.address || '',
         customerGstin: customerObj?.gstin || '',
-        customerType: isCustWholesale ? 'wholesale' : 'retail',
+        customerType: priceType, // 'wholesale' | 'retail' based on user selection
         biller,
         subtotal: itemsSubtotal,
         discount: totalDiscount,
@@ -338,7 +373,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         paid: status === 'Completed' ? grandTotal : 0,
         due: status === 'Completed' ? 0 : grandTotal,
         paymentMethod: 'Cash',
-        notes,
+        notes: notes ? `${notes} [${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]` : `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
         items: calculatedItems.map((item) => ({
           productId: item.productId,
           productName: item.productName,
@@ -462,10 +497,61 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                 </View>
               </View>
 
+              {/* Pricing Mode Toggle (Wholesale vs Retailer) */}
+              <View style={[styles.tierRow, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <View>
+                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 13 }}>
+                      Pricing Mode *
+                    </Text>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+                      By default, wholesale price is applied. Toggle anytime to switch.
+                    </Text>
+                  </View>
+                  <View style={styles.tierButtonGroup}>
+                    <TouchableOpacity
+                      style={[
+                        styles.tierButton,
+                        priceType === 'wholesale' && styles.tierButtonActiveWholesale,
+                      ]}
+                      onPress={() => handlePriceTypeChange('wholesale')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.tierButtonText,
+                          priceType === 'wholesale' && styles.tierButtonTextActive,
+                        ]}
+                      >
+                        Wholesale (Default)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.tierButton,
+                        priceType === 'retail' && styles.tierButtonActiveRetail,
+                      ]}
+                      onPress={() => handlePriceTypeChange('retail')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.tierButtonText,
+                          priceType === 'retail' && styles.tierButtonTextActive,
+                        ]}
+                      >
+                        Retailer
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
               {/* Row 2: Live Product Search */}
               <View style={{ zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
                 <Text style={{ color: theme.colors.text, marginBottom: 6, fontWeight: '500' }}>
-                  Search & Add Product *
+                  Search & Add Product * ({priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})
                 </Text>
                 <View
                   style={[
@@ -479,7 +565,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                   <Search size={18} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
                   <TextInput
                     style={[styles.searchInput, { color: theme.colors.text }]}
-                    placeholder="Search by product name, SKU or barcode..."
+                    placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
                     placeholderTextColor={theme.colors.textSecondary}
                     value={searchQuery}
                     onChangeText={(q) => {
@@ -513,7 +599,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                       showsVerticalScrollIndicator={true}
                     >
                       {filteredProducts.map((p) => {
-                        const price = p.price || p.retailPrice || 0;
+                        const activePrice = getProductPriceByType(p, priceType);
                         return (
                           <TouchableOpacity
                             key={p.id}
@@ -533,9 +619,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                             </View>
                             <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                               <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
-                                ₹{Number(price).toFixed(2)}
+                                ₹{Number(activePrice).toFixed(2)}
                               </Text>
-                              <Text style={{ color: '#10B981', fontSize: 11 }}>+ Add Item</Text>
+                              <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>
+                                {priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'}
+                              </Text>
+                              <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '600', marginTop: 2 }}>+ Add Item</Text>
                             </View>
                           </TouchableOpacity>
                         );
@@ -579,7 +668,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                       <Text style={[styles.th, { width: 170 }]}>Product</Text>
                       <Text style={[styles.th, { width: 120 }]}>Unit</Text>
                       <Text style={[styles.th, { width: 70 }]}>Qty</Text>
-                      <Text style={[styles.th, { width: 100 }]}>Sale Price (₹)</Text>
+                      <Text style={[styles.th, { width: 105 }]}>{priceType === 'wholesale' ? 'Wholesale (₹)' : 'Retailer (₹)'}</Text>
                       <Text style={[styles.th, { width: 85 }]}>Discount (₹)</Text>
                       <Text style={[styles.th, { width: 75 }]}>Tax (%)</Text>
                       <Text style={[styles.th, { width: 85 }]}>Tax Amt (₹)</Text>
@@ -937,6 +1026,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   row: { flexDirection: 'row', gap: 14 },
+  tierRow: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+  },
+  tierButtonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tierButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  tierButtonActiveWholesale: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  tierButtonActiveRetail: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  tierButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  tierButtonTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   plusBtn: {
     width: 40,
     height: 40,

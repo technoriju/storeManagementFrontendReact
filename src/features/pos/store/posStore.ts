@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { Product } from '../../products/types';
+import { PriceType, getProductPriceByType } from '../utils/priceUtils';
 
 export interface CartItem {
   id: number; // unique id for the cart item
@@ -19,6 +20,8 @@ export interface CartItem {
   price: number; // Selling price used
   discount: number; // Discount amount per unit or total for the item
   gstRate: number; // e.g. 5, 12, 18, 28
+  wholesalePrice?: number;
+  retailPrice?: number;
 }
 
 interface Customer {
@@ -39,8 +42,10 @@ interface POSState {
   cart: CartItem[];
   customer: Customer | null;
   holdSales: HoldSale[];
+  priceType: PriceType;
   
   // Actions
+  setPriceType: (type: PriceType) => void;
   addToCart: (product: Product, quantity?: number, unit?: string, preferredUnitType?: 'base' | 'sub') => void;
   toggleCartItemUnit: (id: number) => void;
   updateCartItem: (id: number, updates: Partial<CartItem>) => void;
@@ -62,10 +67,37 @@ export const usePOSStore = create<POSState>((set, get) => ({
   cart: [],
   customer: null,
   holdSales: [],
+  priceType: 'wholesale',
+
+  setPriceType: (type: PriceType) => {
+    set((state) => {
+      if (state.priceType === type) return state;
+      const newCart = state.cart.map((item) => {
+        const basePrice = getProductPriceByType(item.product, type);
+        const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+        const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
+        const price = item.unitType === 'sub' ? subPrice : basePrice;
+
+        return {
+          ...item,
+          basePrice,
+          subPrice,
+          price,
+        };
+      });
+
+      return {
+        priceType: type,
+        cart: newCart,
+      };
+    });
+  },
 
   addToCart: (product, quantity = 1, unit = '', preferredUnitType) => {
     set((state) => {
-      const basePrice = product.price || product.retailPrice || 0;
+      const wholesaleP = getProductPriceByType(product, 'wholesale');
+      const retailP = getProductPriceByType(product, 'retail');
+      const basePrice = state.priceType === 'wholesale' ? wholesaleP : retailP;
       const baseCost = product.cost || product.purchasePrice || 0;
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
       const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
@@ -110,6 +142,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
         price,
         discount: 0,
         gstRate: product.gst || 0,
+        wholesalePrice: wholesaleP,
+        retailPrice: retailP,
       };
 
       return { cart: [...state.cart, newItem] };

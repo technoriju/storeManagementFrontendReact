@@ -120,14 +120,16 @@ export interface ReceiptPrintPreviewModalProps {
 }
 
 function printHtmlViaIframe(htmlContent: string) {
-  if (typeof document === 'undefined') return;
+  const globalDoc: any = (globalThis as any).document;
+  const globalWin: any = (globalThis as any).window;
+  if (!globalDoc) return;
 
-  const existingIframe = document.getElementById('receipt-hidden-print-iframe');
+  const existingIframe = globalDoc.getElementById('receipt-hidden-print-iframe');
   if (existingIframe) {
     existingIframe.remove();
   }
 
-  const iframe = document.createElement('iframe');
+  const iframe = globalDoc.createElement('iframe');
   iframe.id = 'receipt-hidden-print-iframe';
   iframe.style.position = 'fixed';
   iframe.style.right = '0';
@@ -137,11 +139,11 @@ function printHtmlViaIframe(htmlContent: string) {
   iframe.style.border = '0';
   iframe.style.visibility = 'hidden';
 
-  document.body.appendChild(iframe);
+  globalDoc.body?.appendChild(iframe);
 
   const doc = iframe.contentWindow?.document;
   if (!doc) {
-    const printWin = window.open('', '_blank', 'width=800,height=600');
+    const printWin = globalWin?.open('', '_blank', 'width=800,height=600');
     if (printWin) {
       printWin.document.open();
       printWin.document.write(htmlContent);
@@ -165,7 +167,7 @@ function printHtmlViaIframe(htmlContent: string) {
       iframe.contentWindow?.print();
     } catch (err) {
       console.error('Iframe print error, trying popup window:', err);
-      const printWin = window.open('', '_blank', 'width=800,height=600');
+      const printWin = globalWin?.open('', '_blank', 'width=800,height=600');
       if (printWin) {
         printWin.document.open();
         printWin.document.write(htmlContent);
@@ -796,7 +798,8 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
   // Print execution handler for Web & Mobile using clean isolated HTML iframe
   const handlePrint = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (!data) return;
+    if (Platform.OS === 'web' && typeof (globalThis as any).window !== 'undefined') {
       try {
         const htmlContent = generateReceiptHtml({
           data,
