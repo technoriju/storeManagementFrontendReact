@@ -128,18 +128,54 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     );
   };
 
-  const handleOpenPrintPreview = async (invoice: any) => {
-    if (!invoice) return;
-    let invItems = invoice.items && invoice.items.length > 0 ? invoice.items : [];
-    if (invItems.length === 0 && invoice.id) {
-      invItems = await saleRepository.getItemsForSale(Number(invoice.id));
-      if ((!invItems || invItems.length === 0) && /^\d+$/.test(String(invoice.id))) {
+  const loadInvoiceItems = async (invoice: any) => {
+    if (!invoice) return [];
+    let invItems: any[] = [];
+
+    // 1. If server ID, fetch fresh verified items from API
+    if (/^\d+$/.test(String(invoice.id)) && Number(invoice.id) > 0 && Number(invoice.id) < 1000000000000) {
+      try {
         const serverSale = await saleRepository.fetchByIdFromApi(Number(invoice.id));
-        if (serverSale?.items?.length) {
+        if (serverSale?.items && serverSale.items.length > 0) {
           invItems = serverSale.items;
         }
+      } catch (err) {
+        console.warn('Server fetch items fallback to local:', err);
       }
     }
+
+    // 2. Fallback to invoice.items
+    if ((!invItems || invItems.length === 0) && invoice.items && invoice.items.length > 0) {
+      invItems = invoice.items;
+    }
+
+    // 3. Fallback to local DB getItemsForSale
+    if ((!invItems || invItems.length === 0) && invoice.id) {
+      invItems = await saleRepository.getItemsForSale(Number(invoice.id));
+    }
+
+    // 4. Strict filter: must belong to this invoice, quantity > 0, deduplicate by productId
+    const itemsMap = new Map<string, any>();
+    for (const it of (invItems || [])) {
+      if (!it) continue;
+      if (it.saleId !== undefined && it.saleId !== null && invoice.id && Number(it.saleId) !== Number(invoice.id)) {
+        continue;
+      }
+      const qty = Number(it.quantity) || 0;
+      if (qty <= 0) continue;
+
+      const pKey = String(it.productId || it.productName);
+      if (!itemsMap.has(pKey) || (Number(it.total) > 0 && Number(itemsMap.get(pKey).total) === 0)) {
+        itemsMap.set(pKey, it);
+      }
+    }
+
+    return Array.from(itemsMap.values());
+  };
+
+  const handleOpenPrintPreview = async (invoice: any) => {
+    if (!invoice) return;
+    const invItems = await loadInvoiceItems(invoice);
 
     const itemsForPrint = invItems && invItems.length > 0
       ? invItems.map((i: any) => ({
@@ -193,16 +229,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const handleViewInvoice = async (invoice: any) => {
     if (!invoice) return;
-    let invItems = invoice.items && invoice.items.length > 0 ? invoice.items : [];
-    if (invItems.length === 0 && invoice.id) {
-      invItems = await saleRepository.getItemsForSale(Number(invoice.id));
-      if ((!invItems || invItems.length === 0) && /^\d+$/.test(String(invoice.id))) {
-        const serverSale = await saleRepository.fetchByIdFromApi(Number(invoice.id));
-        if (serverSale?.items?.length) {
-          invItems = serverSale.items;
-        }
-      }
-    }
+    const invItems = await loadInvoiceItems(invoice);
     setViewInvoice({ ...invoice, items: invItems });
   };
 
@@ -436,7 +463,10 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       <ReceiptPrintPreviewModal
         visible={showPrintModal}
         data={printData}
-        onClose={() => setShowPrintModal(false)}
+        onClose={() => {
+          setShowPrintModal(false);
+          setPrintData(null);
+        }}
       />
 
       <AddSalesModal

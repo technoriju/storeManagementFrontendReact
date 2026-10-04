@@ -100,26 +100,43 @@ export class SaleRepository extends BaseRepository<Sale> {
         }
       }
       for (const row of rawRows) {
-        if (row) {
-          items.push({
-            id: Number(row.id),
-            saleId: Number(row.saleId),
-            productId: Number(row.productId),
-            productName: row.productName || row.fallbackProductName || `Product #${row.productId}`,
-            quantity: Number(row.quantity || 1),
-            unitPrice: Number(row.unitPrice || 0),
-            discount: Number(row.discount || 0),
-            gst: Number(row.gst || 0),
-            taxAmount: Number(row.taxAmount || 0),
-            unitCost: Number(row.unitCost || 0),
-            unit: row.unit ? String(row.unit) : undefined,
-            unitType: row.unitType || 'sub',
-            conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
-            total: Number(row.total || 0),
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            syncStatus: row.syncStatus
-          });
+        if (!row) continue;
+        // Strictly verify item belongs to this sale
+        if (row.saleId !== undefined && row.saleId !== null && Number(row.saleId) !== Number(saleId)) {
+          continue;
+        }
+        const qty = Number(row.quantity || 1);
+        if (qty <= 0) continue;
+
+        const pId = Number(row.productId);
+        const existingIdx = items.findIndex((it) => it.productId === pId);
+        const newItem: SaleItem = {
+          id: Number(row.id),
+          saleId: Number(row.saleId || saleId),
+          productId: pId,
+          productName: row.productName || row.fallbackProductName || `Product #${row.productId}`,
+          quantity: qty,
+          unitPrice: Number(row.unitPrice || 0),
+          discount: Number(row.discount || 0),
+          gst: Number(row.gst || 0),
+          taxAmount: Number(row.taxAmount || 0),
+          unitCost: Number(row.unitCost || 0),
+          unit: row.unit ? String(row.unit) : undefined,
+          unitType: row.unitType || 'sub',
+          conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
+          total: Number(row.total || 0),
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          syncStatus: row.syncStatus,
+        };
+
+        if (existingIdx >= 0) {
+          // If duplicate row exists, prefer synced or higher total
+          if (newItem.syncStatus === 'synced' || newItem.total > items[existingIdx].total) {
+            items[existingIdx] = newItem;
+          }
+        } else {
+          items.push(newItem);
         }
       }
       return items;
@@ -220,13 +237,20 @@ export class SaleRepository extends BaseRepository<Sale> {
         for (const r of itemRows) {
           if (!r) continue;
           const sId = Number(r.saleId);
+          if (!sId) continue;
           if (!itemsBySaleId[sId]) itemsBySaleId[sId] = [];
-          itemsBySaleId[sId].push({
+
+          const pId = Number(r.productId);
+          const qty = Number(r.quantity || 1);
+          if (qty <= 0) continue;
+
+          const existingIdx = itemsBySaleId[sId].findIndex((it) => it.productId === pId);
+          const newItem: SaleItem = {
             id: Number(r.id),
             saleId: sId,
-            productId: Number(r.productId),
+            productId: pId,
             productName: r.productName || r.fallbackProductName || `Product #${r.productId}`,
-            quantity: Number(r.quantity || 1),
+            quantity: qty,
             unitPrice: Number(r.unitPrice || 0),
             discount: Number(r.discount || 0),
             gst: Number(r.gst || 0),
@@ -239,7 +263,18 @@ export class SaleRepository extends BaseRepository<Sale> {
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
             syncStatus: r.syncStatus,
-          });
+          };
+
+          if (existingIdx >= 0) {
+            const existing = itemsBySaleId[sId][existingIdx];
+            if (newItem.syncStatus === 'synced' && existing.syncStatus !== 'synced') {
+              itemsBySaleId[sId][existingIdx] = newItem;
+            } else if (newItem.total > 0 && existing.total === 0) {
+              itemsBySaleId[sId][existingIdx] = newItem;
+            }
+          } else {
+            itemsBySaleId[sId].push(newItem);
+          }
         }
 
         for (const sale of sales) {
@@ -502,7 +537,7 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         if (items.length > 0) {
           await db.execute(
-            'DELETE FROM sale_items WHERE saleId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            'DELETE FROM sale_items WHERE saleId = ?',
             [sale.id]
           );
 
@@ -573,7 +608,7 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         if (items.length > 0) {
           await db.execute(
-            'DELETE FROM sale_items WHERE saleId = ? AND (syncStatus = "synced" OR syncStatus IS NULL)',
+            'DELETE FROM sale_items WHERE saleId = ?',
             [sale.id]
           );
 
@@ -604,6 +639,7 @@ export class SaleRepository extends BaseRepository<Sale> {
             );
           }
         }
+        return { ...sale, items };
       }
 
       return await this.getById(id);

@@ -1005,7 +1005,10 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     <ReceiptPrintPreviewModal
       visible={showPrintModal}
       data={printData}
-      onClose={() => setShowPrintModal(false)}
+      onClose={() => {
+        setShowPrintModal(false);
+        setPrintData(null);
+      }}
     />
   </>
 );

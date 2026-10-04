@@ -413,7 +413,10 @@ export const POSScreen = () => {
       <ReceiptPrintPreviewModal
         visible={showPrintModal}
         data={printReceiptData}
-        onClose={() => setShowPrintModal(false)}
+        onClose={() => {
+          setShowPrintModal(false);
+          setPrintReceiptData(null);
+        }}
       />
     </View>
   );

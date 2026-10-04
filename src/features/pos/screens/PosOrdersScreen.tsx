@@ -120,18 +120,54 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const handleOpenPrintPreview = async (order: any) => {
-    if (!order) return;
-    let ordItems = order.items && order.items.length > 0 ? order.items : [];
-    if (ordItems.length === 0 && order.id) {
-      ordItems = await saleRepository.getItemsForSale(Number(order.id));
-      if ((!ordItems || ordItems.length === 0) && /^\d+$/.test(String(order.id))) {
+  const loadOrderItems = async (order: any) => {
+    if (!order) return [];
+    let ordItems: any[] = [];
+
+    // 1. If server ID, fetch fresh verified items from API
+    if (/^\d+$/.test(String(order.id)) && Number(order.id) > 0 && Number(order.id) < 1000000000000) {
+      try {
         const serverSale = await saleRepository.fetchByIdFromApi(Number(order.id));
-        if (serverSale?.items?.length) {
+        if (serverSale?.items && serverSale.items.length > 0) {
           ordItems = serverSale.items;
         }
+      } catch (err) {
+        console.warn('Server fetch items fallback to local:', err);
       }
     }
+
+    // 2. Fallback to order.items
+    if ((!ordItems || ordItems.length === 0) && order.items && order.items.length > 0) {
+      ordItems = order.items;
+    }
+
+    // 3. Fallback to local DB getItemsForSale
+    if ((!ordItems || ordItems.length === 0) && order.id) {
+      ordItems = await saleRepository.getItemsForSale(Number(order.id));
+    }
+
+    // 4. Strict filter: must belong to this sale, quantity > 0, deduplicate by productId
+    const itemsMap = new Map<string, any>();
+    for (const it of (ordItems || [])) {
+      if (!it) continue;
+      if (it.saleId !== undefined && it.saleId !== null && order.id && Number(it.saleId) !== Number(order.id)) {
+        continue;
+      }
+      const qty = Number(it.quantity) || 0;
+      if (qty <= 0) continue;
+
+      const pKey = String(it.productId || it.productName);
+      if (!itemsMap.has(pKey) || (Number(it.total) > 0 && Number(itemsMap.get(pKey).total) === 0)) {
+        itemsMap.set(pKey, it);
+      }
+    }
+
+    return Array.from(itemsMap.values());
+  };
+
+  const handleOpenPrintPreview = async (order: any) => {
+    if (!order) return;
+    const ordItems = await loadOrderItems(order);
 
     const itemsForPrint = ordItems && ordItems.length > 0
       ? ordItems.map((i: any) => ({
@@ -185,16 +221,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const handleViewOrder = async (order: any) => {
     if (!order) return;
-    let ordItems = order.items && order.items.length > 0 ? order.items : [];
-    if (ordItems.length === 0 && order.id) {
-      ordItems = await saleRepository.getItemsForSale(Number(order.id));
-      if ((!ordItems || ordItems.length === 0) && /^\d+$/.test(String(order.id))) {
-        const serverSale = await saleRepository.fetchByIdFromApi(Number(order.id));
-        if (serverSale?.items?.length) {
-          ordItems = serverSale.items;
-        }
-      }
-    }
+    const ordItems = await loadOrderItems(order);
     setSelectedOrder({ ...order, items: ordItems });
   };
 
@@ -500,7 +527,10 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       <ReceiptPrintPreviewModal
         visible={showPrintModal}
         data={printOrderData}
-        onClose={() => setShowPrintModal(false)}
+        onClose={() => {
+          setShowPrintModal(false);
+          setPrintOrderData(null);
+        }}
       />
     </View>
   );
