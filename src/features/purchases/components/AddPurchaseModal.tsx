@@ -319,7 +319,12 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={true}>
+          <ScrollView
+            style={styles.modalBody}
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
             <View style={{ padding: isMobile ? 12 : 20, gap: isMobile ? 12 : 16 }}>
               {/* Error banner */}
               {errorMessage && (
@@ -517,7 +522,13 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                         </Text>
                       </View>
                     ) : (
-                      calculatedItems.map((item, index) => (
+                      <ScrollView
+                        style={{ maxHeight: isMobile ? 240 : 300 }}
+                        nestedScrollEnabled={true}
+                        showsVerticalScrollIndicator={true}
+                        keyboardShouldPersistTaps="handled"
+                      >
+                        {calculatedItems.map((item, index) => (
                         <View
                           key={`${item.productId}-${index}`}
                           style={[
@@ -671,10 +682,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                             </TouchableOpacity>
                           </View>
                         </View>
-                      ))
-                    )}
-                  </View>
-                </ScrollView>
+                      ))}
+                    </ScrollView>
+                  )}
+                </View>
+              </ScrollView>
               </View>
 
               {/* Row 3: Order Tax, Discount, Shipping, Status */}
