@@ -13,7 +13,7 @@ export const SuppliersModule = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const navigateTo = (screen: SupplierScreenType, id?: string | number) => {
-    if (id !== undefined) setSelectedId(Number(id));
+    setSelectedId(id !== undefined && id !== null ? Number(id) : null);
     setCurrentScreen(screen);
   };
 
@@ -33,7 +33,7 @@ export const SuppliersModule = () => {
     <View style={styles.container}>
       {renderScreen()}
       {currentScreen === 'form' && (
-        <SupplierFormScreen supplierId={selectedId} onNavigate={navigateTo} />
+        <SupplierFormScreen key={selectedId ?? 'new'} supplierId={selectedId} onNavigate={navigateTo} />
       )}
     </View>
   );

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { Payment } from '../../../types/models';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 
-export const PaymentHistoryScreen = ({ route }: any) => {
-  const { customerId, supplierId } = route.params || {};
+export const PaymentHistoryScreen = ({ route, navigation, entityId, entityType, onNavigate }: any) => {
+  const customerId = entityType === 'customer' ? entityId : (route?.params?.customerId ?? null);
+  const supplierId = entityType === 'supplier' ? entityId : (route?.params?.supplierId ?? null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
@@ -61,6 +62,12 @@ export const PaymentHistoryScreen = ({ route }: any) => {
           )}
         />
       )}
+      <TouchableOpacity 
+        style={[styles.backBtn, { backgroundColor: '#6b7280' }]} 
+        onPress={() => onNavigate ? onNavigate('list') : navigation?.goBack?.()}
+      >
+        <Text style={styles.backBtnText}>Back to List</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -77,7 +84,9 @@ const styles = StyleSheet.create({
   pay: { color: '#d32f2f' },
   details: { color: '#555', marginBottom: 4 },
   date: { color: '#888', fontSize: 12, marginBottom: 4 },
-  notes: { color: '#666', fontStyle: 'italic', marginTop: 4 }
+  notes: { color: '#666', fontStyle: 'italic', marginTop: 4 },
+  backBtn: { padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 16 },
+  backBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
 });
 
 

@@ -14,8 +14,9 @@ const PAYMENT_TYPES: { label: string, value: PaymentType }[] = [
   { label: 'Pay', value: 'pay' }
 ];
 
-export const PaymentFormScreen = ({ route, navigation }: any) => {
-  const { customerId, supplierId } = route.params || {};
+export const PaymentFormScreen = ({ route, navigation, entityId, entityType, onNavigate }: any) => {
+  const customerId = entityType === 'customer' ? entityId : (route?.params?.customerId ?? null);
+  const supplierId = entityType === 'supplier' ? entityId : (route?.params?.supplierId ?? null);
   const { updateCustomer } = useCustomerStore();
   const { updateSupplier } = useSupplierStore();
 
@@ -76,7 +77,11 @@ export const PaymentFormScreen = ({ route, navigation }: any) => {
         }
       }
 
-      navigation.goBack();
+      if (onNavigate) {
+        onNavigate('list');
+      } else {
+        navigation?.goBack?.();
+      }
     } catch (e) {
       console.error(e);
       Alert.alert('Error', 'Failed to save payment.');
@@ -141,6 +146,13 @@ export const PaymentFormScreen = ({ route, navigation }: any) => {
 
       <TouchableOpacity style={styles.button} onPress={handleSave}>
         <Text style={styles.buttonText}>Save Payment</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: '#6b7280', marginTop: 10 }]} 
+        onPress={() => onNavigate ? onNavigate('list') : navigation?.goBack?.()}
+      >
+        <Text style={styles.buttonText}>Cancel</Text>
       </TouchableOpacity>
     </ScrollView>
   );

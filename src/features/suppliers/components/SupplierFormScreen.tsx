@@ -26,9 +26,24 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
   const [postalCode, setPostalCode] = useState('');
   const [isActive, setIsActive] = useState(true);
 
+  const resetForm = () => {
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setPhone('');
+    setAddress('');
+    setCity('');
+    setState('');
+    setCountry('');
+    setPostalCode('');
+    setIsActive(true);
+  };
+
   useEffect(() => {
     if (supplierId) {
       loadSupplier();
+    } else {
+      resetForm();
     }
   }, [supplierId]);
 
@@ -47,6 +62,11 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onNavigate('list');
   };
 
   const handleSave = async () => {
@@ -90,6 +110,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
         await supplierRepository.insert(newSupplier);
         addSupplier(newSupplier);
       }
+      resetForm();
       onNavigate('list');
     } catch (e) {
       console.error(e);
@@ -104,7 +125,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>{supplierId ? 'Edit Supplier' : 'Add Supplier'}</Text>
-            <TouchableOpacity onPress={() => onNavigate('list')} style={styles.closeButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X size={16} color="white" />
             </TouchableOpacity>
           </View>
@@ -173,7 +194,7 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
 
           {/* Footer Actions */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => onNavigate('list')}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.submitBtn} onPress={handleSave}>
