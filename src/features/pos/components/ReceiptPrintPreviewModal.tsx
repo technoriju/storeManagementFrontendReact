@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import {
   Printer,
@@ -18,13 +19,13 @@ import {
   Check,
   Building2,
   User,
-  QrCode,
   Share2,
   ZoomIn,
   ZoomOut,
   RotateCcw,
 } from 'lucide-react-native';
 import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
+import { QR_CODE_DATA_URI } from '../../../assets/qrCodeAsset';
 
 // Helper: Convert numbers to Indian Rupees in words
 export function amountToWords(amount: number): string {
@@ -234,32 +235,7 @@ function generateReceiptHtml({
   const sgstAmount = Number((gst / 2).toFixed(2));
   const words = amountToWords(total);
 
-  const qrSvg = `
-    <svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100" height="100" fill="#ffffff"/>
-      <rect x="8" y="8" width="30" height="30" fill="#000000"/>
-      <rect x="12" y="12" width="22" height="22" fill="#ffffff"/>
-      <rect x="16" y="16" width="14" height="14" fill="#000000"/>
-      <rect x="62" y="8" width="30" height="30" fill="#000000"/>
-      <rect x="66" y="12" width="22" height="22" fill="#ffffff"/>
-      <rect x="70" y="16" width="14" height="14" fill="#000000"/>
-      <rect x="8" y="62" width="30" height="30" fill="#000000"/>
-      <rect x="12" y="66" width="22" height="22" fill="#ffffff"/>
-      <rect x="16" y="70" width="14" height="14" fill="#000000"/>
-      <rect x="44" y="10" width="6" height="14" fill="#000000"/>
-      <rect x="52" y="16" width="6" height="22" fill="#000000"/>
-      <rect x="10" y="44" width="18" height="6" fill="#000000"/>
-      <rect x="22" y="52" width="14" height="6" fill="#000000"/>
-      <rect x="42" y="42" width="18" height="18" fill="#000000"/>
-      <rect x="46" y="46" width="10" height="10" fill="#ffffff"/>
-      <rect x="65" y="44" width="26" height="6" fill="#000000"/>
-      <rect x="74" y="54" width="16" height="6" fill="#000000"/>
-      <rect x="44" y="66" width="6" height="26" fill="#000000"/>
-      <rect x="54" y="76" width="6" height="16" fill="#000000"/>
-      <rect x="66" y="66" width="12" height="12" fill="#000000"/>
-      <rect x="80" y="80" width="12" height="12" fill="#000000"/>
-    </svg>
-  `;
+  const qrImageHtml = `<img src="${QR_CODE_DATA_URI}" alt="UPI QR" class="receipt-qr-img" />`;
 
   if (isThermal) {
     return `<!DOCTYPE html>
@@ -311,6 +287,7 @@ function generateReceiptHtml({
     .summary-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
     .grand-total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin: 4px 0; }
     .qr-container { text-align: center; margin: 8px 0; }
+    .receipt-qr-img { width: 84px; height: 84px; object-fit: contain; display: inline-block; }
     .qr-caption { font-size: 9px; margin-top: 4px; font-weight: bold; }
     .upi-id { font-size: 8px; color: #444; }
     .footer-msg { font-size: 10px; font-weight: bold; text-align: center; margin: 6px 0 2px 0; }
@@ -426,7 +403,7 @@ function generateReceiptHtml({
 
   ${showQrCode ? `
     <div class="qr-container">
-      ${qrSvg}
+      ${qrImageHtml}
       <div class="qr-caption">Scan with UPI to Pay / Verify</div>
       <div class="upi-id">${business.upiId || ''}</div>
     </div>
@@ -548,8 +525,8 @@ function generateReceiptHtml({
     .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
     .sign-box { width: 140px; text-align: center; }
     .sign-line { border-bottom: 1px solid #334155; margin-bottom: 3px; height: 16px; }
-    .sign-label { font-size: 8px; color: #64748b; }
     .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; }
+    .qr-inline .receipt-qr-img { width: 44px; height: 44px; object-fit: contain; }
   </style>
 </head>
 <body>
@@ -714,7 +691,7 @@ function generateReceiptHtml({
 
       ${showQrCode ? `
         <div class="qr-inline">
-          ${qrSvg}
+          ${qrImageHtml}
           <div>
             <div style="font-weight: bold; font-size: 8.5px;">Scan to Pay UPI</div>
             <div style="font-size: 8px; color: #64748b;">${business.upiId || ''}</div>
@@ -1188,7 +1165,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     {showQrCode && (
                       <View style={styles.thermalQrBox}>
                         <View style={styles.simulatedQr}>
-                          <QrCode size={56} color="#000000" />
+                          <Image
+                            source={{ uri: QR_CODE_DATA_URI }}
+                            style={styles.thermalQrImg}
+                            resizeMode="contain"
+                          />
                         </View>
                         <Text style={styles.thermalQrCaption}>
                           Scan with UPI to Pay / Verify
@@ -1497,7 +1478,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                         {/* UPI QR & Quick Verification */}
                         {showQrCode && (
                           <View style={styles.lsQrInlineBox}>
-                            <QrCode size={40} color="#000000" />
+                            <Image
+                              source={{ uri: QR_CODE_DATA_URI }}
+                              style={styles.lsQrImg}
+                              resizeMode="contain"
+                            />
                             <View style={{ marginLeft: 8 }}>
                               <Text style={styles.lsQrTitle}>Scan to Pay UPI</Text>
                               <Text style={styles.lsQrSub}>{business.upiId}</Text>
@@ -1909,11 +1894,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   simulatedQr: {
-    padding: 6,
+    padding: 4,
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#000000',
+  },
+  thermalQrImg: {
+    width: 76,
+    height: 76,
   },
   thermalQrCaption: {
     fontSize: 9,
@@ -2300,6 +2289,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  lsQrImg: {
+    width: 44,
+    height: 44,
   },
   lsQrTitle: {
     fontSize: 9,

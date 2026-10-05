@@ -54,18 +54,18 @@ interface InvoiceSettingsState {
 const defaultBusinessProfile: BusinessProfile = {
   businessName: 'Tarama Enterprise',
   tagline: 'Wholesale & Retail Distributors',
-  address: 'Hanidhara, Amta Udaynarayanpur Road, Howrah, West Bengal - 711401',
-  phone: '+91 9732513820 / 022-23456789',
-  email: 'sales@mahatrading.com',
-  gstin: '27AABCM1234F1Z8',
+  address: 'Hanidhara Mansatala(Saoraberia) Joypur, Howrah, West Bengal - 711401',
+  phone: '+91 9732513820 / 8617633023',
+  email: 'taramaenterprise41@gmail.com',
+  gstin: '19BOBPP9698M1ZR',
   pan: 'AABCM1234F',
-  state: 'Maharashtra',
-  stateCode: '27',
+  state: 'West Bengal',
+  stateCode: '19',
   bankName: 'HDFC Bank',
   accountNumber: '50200012345678',
   ifscCode: 'HDFC0001234',
   branch: 'Market Yard Branch',
-  upiId: 'mahatrading@hdfcbank',
+  upiId: '8617633023@okbizaxis',
 };
 
 const defaultSettings: InvoiceSettings = {
