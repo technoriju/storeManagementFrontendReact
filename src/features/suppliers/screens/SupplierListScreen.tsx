@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native';
 
 interface Props {
-  onNavigate: (screen: SupplierScreenType, supplierId?: string) => void;
+  onNavigate: (screen: SupplierScreenType, supplierId?: string | number) => void;
 }
 
 export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {

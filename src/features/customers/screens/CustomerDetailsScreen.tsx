@@ -4,8 +4,8 @@ import { customerRepository } from '../../../core/repositories/CustomerRepositor
 import { Customer } from '../../../types/models';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
-export const CustomerDetailsScreen = ({ route, navigation }: any) => {
-  const { id } = route.params || {};
+export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigate }: any) => {
+  const id = customerId ?? route?.params?.id;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +17,7 @@ export const CustomerDetailsScreen = ({ route, navigation }: any) => {
 
   const loadCustomer = async () => {
     try {
-      const data = await customerRepository.getById(id);
+      const data = await customerRepository.getById(Number(id));
       setCustomer(data);
     } catch (e) {
       console.error(e);
@@ -53,23 +53,30 @@ export const CustomerDetailsScreen = ({ route, navigation }: any) => {
 
       <TouchableOpacity 
         style={styles.button} 
-        onPress={() => navigation.navigate('CustomerForm', { id: customer.id })}
+        onPress={() => onNavigate ? onNavigate('form', customer.id) : navigation?.navigate('CustomerForm', { id: customer.id })}
       >
         <Text style={styles.buttonText}>Edit Customer</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.paymentButton]} 
-        onPress={() => navigation.navigate('PaymentForm', { customerId: customer.id })}
+        onPress={() => onNavigate ? onNavigate('payment_form', customer.id) : navigation?.navigate('PaymentForm', { customerId: customer.id })}
       >
         <Text style={styles.buttonText}>Add Payment</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.historyButton]} 
-        onPress={() => navigation.navigate('PaymentHistory', { customerId: customer.id })}
+        onPress={() => onNavigate ? onNavigate('payment_history', customer.id) : navigation?.navigate('PaymentHistory', { customerId: customer.id })}
       >
         <Text style={styles.buttonText}>View Payment History</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: '#6b7280' }]} 
+        onPress={() => onNavigate ? onNavigate('list') : navigation?.goBack?.()}
+      >
+        <Text style={styles.buttonText}>Back to List</Text>
       </TouchableOpacity>
     </View>
   );

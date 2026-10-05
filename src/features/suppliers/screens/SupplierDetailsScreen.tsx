@@ -4,8 +4,8 @@ import { supplierRepository } from '../../../core/repositories/SupplierRepositor
 import { Supplier } from '../../../types/models';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 
-export const SupplierDetailsScreen = ({ route, navigation }: any) => {
-  const { id } = route.params || {};
+export const SupplierDetailsScreen = ({ route, navigation, supplierId, onNavigate }: any) => {
+  const id = supplierId ?? route?.params?.id;
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +17,7 @@ export const SupplierDetailsScreen = ({ route, navigation }: any) => {
 
   const loadSupplier = async () => {
     try {
-      const data = await supplierRepository.getById(id);
+      const data = await supplierRepository.getById(Number(id));
       setSupplier(data);
     } catch (e) {
       console.error(e);
@@ -54,23 +54,30 @@ export const SupplierDetailsScreen = ({ route, navigation }: any) => {
 
       <TouchableOpacity 
         style={styles.button} 
-        onPress={() => navigation.navigate('SupplierForm', { id: supplier.id })}
+        onPress={() => onNavigate ? onNavigate('form', supplier.id) : navigation?.navigate('SupplierForm', { id: supplier.id })}
       >
         <Text style={styles.buttonText}>Edit Supplier</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.paymentButton]} 
-        onPress={() => navigation.navigate('PaymentForm', { supplierId: supplier.id })}
+        onPress={() => onNavigate ? onNavigate('payment_form', supplier.id) : navigation?.navigate('PaymentForm', { supplierId: supplier.id })}
       >
         <Text style={styles.buttonText}>Add Payment</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.historyButton]} 
-        onPress={() => navigation.navigate('PaymentHistory', { supplierId: supplier.id })}
+        onPress={() => onNavigate ? onNavigate('payment_history', supplier.id) : navigation?.navigate('PaymentHistory', { supplierId: supplier.id })}
       >
         <Text style={styles.buttonText}>View Payment History</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: '#6b7280' }]} 
+        onPress={() => onNavigate ? onNavigate('list') : navigation?.goBack?.()}
+      >
+        <Text style={styles.buttonText}>Back to List</Text>
       </TouchableOpacity>
     </View>
   );
