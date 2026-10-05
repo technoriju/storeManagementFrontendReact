@@ -188,12 +188,13 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       width: 85,
       render: (_: any, item: any) => {
         const qty = Number(item.stockQuantity ?? item.openingStock ?? 0);
+        const displayQty = Number(qty.toFixed(4));
         return (
           <Text style={{ 
             color: qty > 0 ? theme.colors.text : '#EF4444', 
             fontWeight: '700' 
           }}>
-            {qty}
+            {displayQty}
           </Text>
         );
       }

@@ -120,7 +120,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
       if (existingItemIndex >= 0) {
         const newCart = [...state.cart];
-        newCart[existingItemIndex].quantity += quantity;
+        newCart[existingItemIndex].quantity = Number((newCart[existingItemIndex].quantity + quantity).toFixed(4));
         return { cart: newCart };
       }
 

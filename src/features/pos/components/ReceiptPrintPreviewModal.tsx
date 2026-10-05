@@ -358,7 +358,7 @@ function generateReceiptHtml({
 
   <div class="summary-row">
     <span>Items Count: ${items.length}</span>
-    <span>Total Qty: ${items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}</span>
+    <span>Total Qty: ${Number(items.reduce((s, it) => s + (Number(it.quantity) || 0), 0).toFixed(4))}</span>
   </div>
   <div class="summary-row">
     <span>Subtotal:</span>
@@ -605,7 +605,8 @@ function generateReceiptHtml({
     </thead>
     <tbody>
       ${items.map((item, idx) => {
-        const rawAmt = Number(item.unitPrice || 0) * Number(item.quantity || 1);
+        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+        const rawAmt = Number(item.unitPrice || 0) * itemQty;
         const discAmt = Number(item.discount || 0);
         const taxableAmt = Math.max(0, rawAmt - discAmt);
         return `
@@ -1110,7 +1111,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                       <View style={styles.thermalSummaryRow}>
                         <Text style={styles.thermalMono}>Items Count: {items.length}</Text>
                         <Text style={styles.thermalMono}>
-                          Total Qty: {items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}
+                          Total Qty: {Number(items.reduce((s, it) => s + (Number(it.quantity) || 0), 0).toFixed(4))}
                         </Text>
                       </View>
                       <View style={styles.thermalSummaryRow}>
@@ -1323,7 +1324,8 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                       {/* Rows */}
                       {items.map((item, idx) => {
-                        const rawAmt = Number(item.unitPrice || 0) * Number(item.quantity || 1);
+                        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+                        const rawAmt = Number(item.unitPrice || 0) * itemQty;
                         const discAmt = Number(item.discount || 0);
                         const taxableAmt = Math.max(0, rawAmt - discAmt);
                         return (

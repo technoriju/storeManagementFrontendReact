@@ -1032,7 +1032,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 <FormGroup width="33.33%" label="Quantity / Opening Stock">
                   <AppInput 
                     placeholder="0" 
-                    keyboardType="numeric"
+                    keyboardType="decimal-pad"
                     value={quantity}
                     onChangeText={setQuantity}
                     containerStyle={{ marginBottom: 0 }} 
@@ -1042,7 +1042,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 <FormGroup width="33.33%" label="Quantity Alert">
                   <AppInput 
                     placeholder="5" 
-                    keyboardType="numeric"
+                    keyboardType="decimal-pad"
                     value={quantityAlert}
                     onChangeText={setQuantityAlert}
                     containerStyle={{ marginBottom: 0 }} 

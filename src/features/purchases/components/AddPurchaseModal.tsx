@@ -35,7 +35,7 @@ interface PurchaseItemRow {
   productId: number;
   productName: string;
   sku?: string;
-  quantity: number;
+  quantity: number | string;
   unitPrice: number;
   discount: number;
   gst: number;
@@ -127,7 +127,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
     if (existingIndex >= 0) {
       const updated = [...items];
-      updated[existingIndex].quantity += 1;
+      const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
+      updated[existingIndex].quantity = Number((curr + 1).toFixed(4));
       setItems(updated);
     } else {
       const basePrice = product.purchasePrice || product.cost || product.price || 0;
@@ -180,7 +181,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   // Update item field
-  const handleUpdateItem = (index: number, field: keyof PurchaseItemRow, value: number) => {
+  const handleUpdateItem = (index: number, field: keyof PurchaseItemRow, value: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
     setItems(updated);
@@ -194,13 +195,16 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
   // Calculated Line Items
   const calculatedItems = useMemo(() => {
     return items.map((item) => {
-      const rawSubtotal = item.quantity * item.unitPrice;
+      const parsedQty = parseFloat(String(item.quantity));
+      const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
+      const rawSubtotal = effectiveQty * item.unitPrice;
       const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
       const taxAmount = netSubtotal * ((item.gst || 0) / 100);
       const total = netSubtotal + taxAmount;
-      const unitCost = item.quantity > 0 ? total / item.quantity : 0;
+      const unitCost = effectiveQty > 0 ? total / effectiveQty : 0;
       return {
         ...item,
+        quantity: item.quantity,
         taxAmount,
         unitCost,
         total,
@@ -210,7 +214,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
   // Calculated Order Totals
   const itemsSubtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    return items.reduce((sum, item) => {
+      const parsedQty = parseFloat(String(item.quantity));
+      const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
+      return sum + effectiveQty * item.unitPrice;
+    }, 0);
   }, [items]);
 
   const itemsDiscount = useMemo(() => {
@@ -266,7 +274,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
         items: calculatedItems.map((item) => ({
           productId: item.productId,
           productName: item.productName,
-          quantity: item.quantity,
+          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
           unitPrice: item.unitPrice,
           discount: item.discount,
           gst: item.gst,
@@ -585,11 +593,24 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
                                   backgroundColor: theme.colors.surface,
                                 },
                               ]}
-                              keyboardType="numeric"
-                              value={String(item.quantity)}
+                              keyboardType="decimal-pad"
+                              selectTextOnFocus
+                              value={item.quantity === 0 || item.quantity === '' ? '' : String(item.quantity)}
+                              placeholder="1"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(1, parseInt(v, 10) || 1);
-                                handleUpdateItem(index, 'quantity', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'quantity', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.quantity));
+                                if (isNaN(parsed) || parsed <= 0) {
+                                  handleUpdateItem(index, 'quantity', 1);
+                                } else {
+                                  handleUpdateItem(index, 'quantity', parsed);
+                                }
                               }}
                             />
                           </View>

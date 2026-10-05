@@ -219,8 +219,8 @@ export const POSScreen = () => {
           </Text>
         )}
         <Text style={styles.productStock}>
-          Stock: {item.stockQuantity} {baseUnitName}
-          {hasSubUnit ? ` (${Math.round(item.stockQuantity * cRate)} ${subUnitName})` : ''}
+          Stock: {Number(Number(item.stockQuantity || 0).toFixed(4))} {baseUnitName}
+          {hasSubUnit ? ` (${Number((Number(item.stockQuantity || 0) * cRate).toFixed(2))} ${subUnitName})` : ''}
         </Text>
       </TouchableOpacity>
     );
@@ -258,8 +258,9 @@ export const POSScreen = () => {
         <TouchableOpacity
           style={styles.qtyBtn}
           onPress={() => {
-            if (item.quantity > 1) {
-              updateCartItem(item.id, { quantity: item.quantity - 1 });
+            const current = parseFloat(String(item.quantity)) || 1;
+            if (current > 1) {
+              updateCartItem(item.id, { quantity: Number((current - 1).toFixed(4)) });
             } else {
               removeFromCart(item.id);
             }
@@ -267,10 +268,49 @@ export const POSScreen = () => {
         >
           <Text style={styles.qtyBtnText}>-</Text>
         </TouchableOpacity>
-        <Text style={styles.qtyText}>{item.quantity}</Text>
+        <TextInput
+          style={[
+            styles.qtyText,
+            {
+              minWidth: 40,
+              height: 28,
+              textAlign: 'center',
+              borderWidth: 1,
+              borderColor: '#CBD5E1',
+              borderRadius: 4,
+              paddingVertical: 0,
+              paddingHorizontal: 2,
+              color: '#1E293B',
+              backgroundColor: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: '600',
+            },
+          ]}
+          keyboardType="decimal-pad"
+          selectTextOnFocus
+          value={item.quantity === 0 ? '' : String(item.quantity)}
+          onChangeText={(v) => {
+            const clean = v.replace(/[^0-9.]/g, '');
+            const parts = clean.split('.');
+            const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+            const parsed = parseFloat(sanitized);
+            updateCartItem(item.id, { quantity: isNaN(parsed) ? (sanitized === '' ? 0 : (sanitized as any)) : parsed });
+          }}
+          onBlur={() => {
+            const parsed = parseFloat(String(item.quantity));
+            if (isNaN(parsed) || parsed <= 0) {
+              updateCartItem(item.id, { quantity: 1 });
+            } else {
+              updateCartItem(item.id, { quantity: parsed });
+            }
+          }}
+        />
         <TouchableOpacity
           style={styles.qtyBtn}
-          onPress={() => updateCartItem(item.id, { quantity: item.quantity + 1 })}
+          onPress={() => {
+            const current = parseFloat(String(item.quantity)) || 0;
+            updateCartItem(item.id, { quantity: Number((current + 1).toFixed(4)) });
+          }}
         >
           <Text style={styles.qtyBtnText}>+</Text>
         </TouchableOpacity>
