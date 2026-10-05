@@ -89,8 +89,15 @@ const AuthenticatedApp = () => {
     if (activeTab === 'suppliers') {
       return <SuppliersModule />;
     }
-    if (activeTab === 'settings') {
-      return <SettingsModule />;
+    if (
+      activeTab === 'settings' ||
+      activeTab === 'invoice_preview' ||
+      activeTab === 'invoice' ||
+      activeTab === 'business' ||
+      activeTab === 'printers' ||
+      activeTab.startsWith('settings_')
+    ) {
+      return <SettingsModule initialRoute={activeTab} />;
     }
     if (activeTab === 'sync_queue') {
       return <SyncSettingsScreen />;
@@ -130,6 +137,7 @@ const AuthenticatedApp = () => {
 };
 
 import { syncEngine } from '../core/sync/SyncEngine';
+import { initSettingsFromDb } from '../features/settings/store/invoiceSettings.store';
 
 const RootNavigator = () => {
   const { isInitializing, isAuthenticated, initialize, logout } = useAuthStore();
@@ -142,6 +150,7 @@ const RootNavigator = () => {
     });
     initialize();
     initializeDatabase();
+    initSettingsFromDb();
     
     // Initialize SyncEngine
     syncEngine.init();
