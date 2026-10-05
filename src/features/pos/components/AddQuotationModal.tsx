@@ -31,7 +31,7 @@ interface QuotationItemRow {
   productId: number;
   productName: string;
   sku?: string;
-  quantity: number;
+  quantity: number | string;
   unitPrice: number;
   discount: number;
   taxAmount: number;
@@ -112,14 +112,15 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
     if (existingIndex >= 0) {
       const updated = [...items];
       const row = updated[existingIndex];
-      const newQty = row.quantity + 1;
+      const currQty = parseFloat(String(row.quantity)) || 0;
+      const newQty = Number((currQty + 1).toFixed(4));
       const sub = newQty * row.unitPrice - row.discount;
-      const tax = (sub * taxRate) / 100;
+      const tax = (Math.max(0, sub) * taxRate) / 100;
       updated[existingIndex] = {
         ...row,
         quantity: newQty,
         taxAmount: tax,
-        total: sub + tax,
+        total: Math.max(0, sub) + tax,
       };
       setItems(updated);
     } else {
@@ -143,19 +144,37 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
     setIsSearching(false);
   };
 
-  const handleUpdateQuantity = (index: number, qty: number) => {
-    if (qty <= 0) return;
+  const handleUpdateQuantityRaw = (index: number, val: string) => {
     const updated = [...items];
     const row = updated[index];
-    const sub = qty * row.unitPrice - row.discount;
+    const qtyNum = parseFloat(val);
+    const sub = (!isNaN(qtyNum) && qtyNum > 0 ? qtyNum : 0) * row.unitPrice - row.discount;
     const prod = products.find((p) => p.id === row.productId);
     const taxRate = Number(prod?.gst || 0);
-    const tax = (sub * taxRate) / 100;
+    const tax = (Math.max(0, sub) * taxRate) / 100;
     updated[index] = {
       ...row,
-      quantity: qty,
+      quantity: val,
       taxAmount: tax,
-      total: sub + tax,
+      total: Math.max(0, sub) + tax,
+    };
+    setItems(updated);
+  };
+
+  const handleUpdateQuantity = (index: number, qty: number | string) => {
+    const qtyNum = parseFloat(String(qty));
+    if (isNaN(qtyNum) || qtyNum <= 0) return;
+    const updated = [...items];
+    const row = updated[index];
+    const sub = qtyNum * row.unitPrice - row.discount;
+    const prod = products.find((p) => p.id === row.productId);
+    const taxRate = Number(prod?.gst || 0);
+    const tax = (Math.max(0, sub) * taxRate) / 100;
+    updated[index] = {
+      ...row,
+      quantity: qtyNum,
+      taxAmount: tax,
+      total: Math.max(0, sub) + tax,
     };
     setItems(updated);
   };
@@ -165,7 +184,10 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   const itemsSubtotal = useMemo(() => {
-    return items.reduce((acc, row) => acc + row.quantity * row.unitPrice, 0);
+    return items.reduce((acc, row) => {
+      const q = parseFloat(String(row.quantity));
+      return acc + (!isNaN(q) && q > 0 ? q : 0) * row.unitPrice;
+    }, 0);
   }, [items]);
 
   const itemsTax = useMemo(() => {
@@ -207,7 +229,7 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
         items: items.map((i) => ({
           productId: i.productId,
           productName: i.productName,
-          quantity: i.quantity,
+          quantity: parseFloat(String(i.quantity)) > 0 ? parseFloat(String(i.quantity)) : 1,
           unitPrice: i.unitPrice,
           discount: i.discount,
           taxAmount: i.taxAmount,
@@ -367,14 +389,56 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
                           style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => handleUpdateQuantity(idx, row.quantity - 1)}
+                          onPress={() => {
+                            const current = parseFloat(String(row.quantity)) || 1;
+                            const next = Math.max(0.001, Number((current - 1).toFixed(4)));
+                            handleUpdateQuantity(idx, next);
+                          }}
                         >
                           <Text style={{ color: theme.colors.text }}>-</Text>
                         </TouchableOpacity>
-                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{row.quantity}</Text>
+                        <TextInput
+                          style={{
+                            minWidth: 44,
+                            height: 28,
+                            textAlign: 'center',
+                            borderWidth: 1,
+                            borderColor: theme.colors.border,
+                            borderRadius: 4,
+                            color: theme.colors.text,
+                            backgroundColor: theme.colors.surface,
+                            paddingVertical: 0,
+                            paddingHorizontal: 4,
+                            fontWeight: '600',
+                            fontSize: 13,
+                          }}
+                          keyboardType="decimal-pad"
+                          selectTextOnFocus
+                          value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
+                          placeholder="1"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          onChangeText={(v) => {
+                            const clean = v.replace(/[^0-9.]/g, '');
+                            const parts = clean.split('.');
+                            const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                            handleUpdateQuantityRaw(idx, sanitized);
+                          }}
+                          onBlur={() => {
+                            const parsed = parseFloat(String(row.quantity));
+                            if (isNaN(parsed) || parsed <= 0) {
+                              handleUpdateQuantity(idx, 1);
+                            } else {
+                              handleUpdateQuantity(idx, parsed);
+                            }
+                          }}
+                        />
                         <TouchableOpacity
                           style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => handleUpdateQuantity(idx, row.quantity + 1)}
+                          onPress={() => {
+                            const current = parseFloat(String(row.quantity)) || 0;
+                            const next = Number((current + 1).toFixed(4));
+                            handleUpdateQuantity(idx, next);
+                          }}
                         >
                           <Text style={{ color: theme.colors.text }}>+</Text>
                         </TouchableOpacity>

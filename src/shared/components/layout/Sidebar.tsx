@@ -155,6 +155,23 @@ const menuSections: MenuSection[] = [
       { id: 'sync_queue', label: 'Sync Queue', icon: 'refresh-cw' },
       { id: 'delete_account_request', label: 'Delete Account Request', icon: 'trash-2' },
     ]
+  },
+  {
+    title: 'Settings',
+    items: [
+      {
+        id: 'settings',
+        label: 'Settings',
+        icon: 'settings',
+        hasChevron: true,
+        subItems: [
+          { id: 'invoice_preview', label: 'Invoice Preview' },
+          { id: 'invoice', label: 'Invoice Format' },
+          { id: 'business', label: 'Business Profile' },
+          { id: 'printers', label: 'Printers' },
+        ]
+      }
+    ]
   }
 ];
 
@@ -220,6 +237,9 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   const handlePress = () => {
     if (hasSubItems) {
       toggleExpand();
+      if (item.id === 'settings') {
+        onItemPress(item.id);
+      }
     } else {
       onItemPress(item.id);
     }

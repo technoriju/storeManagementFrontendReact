@@ -32,7 +32,7 @@ interface ReturnItemRow {
   productId: number;
   productName: string;
   sku?: string;
-  quantity: number;
+  quantity: number | string;
   unitPrice: number;
   taxAmount: number;
   total: number;
@@ -114,8 +114,10 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
     if (existingIndex >= 0) {
       const updated = [...items];
-      updated[existingIndex].quantity += 1;
-      updated[existingIndex].total = updated[existingIndex].quantity * updated[existingIndex].unitPrice;
+      const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
+      const nextQty = Number((curr + 1).toFixed(4));
+      updated[existingIndex].quantity = nextQty;
+      updated[existingIndex].total = nextQty * updated[existingIndex].unitPrice;
       setItems(updated);
     } else {
       setItems((prev) => [
@@ -135,11 +137,21 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
     setIsSearching(false);
   };
 
-  const handleUpdateQuantity = (index: number, qty: number) => {
-    if (qty <= 0) return;
+  const handleUpdateQuantityRaw = (index: number, val: string) => {
     const updated = [...items];
-    updated[index].quantity = qty;
-    updated[index].total = qty * updated[index].unitPrice;
+    const qtyNum = parseFloat(val);
+    const effectiveQty = !isNaN(qtyNum) && qtyNum > 0 ? qtyNum : 0;
+    updated[index].quantity = val;
+    updated[index].total = effectiveQty * updated[index].unitPrice;
+    setItems(updated);
+  };
+
+  const handleUpdateQuantity = (index: number, qty: number | string) => {
+    const qtyNum = parseFloat(String(qty));
+    if (isNaN(qtyNum) || qtyNum <= 0) return;
+    const updated = [...items];
+    updated[index].quantity = qtyNum;
+    updated[index].total = qtyNum * updated[index].unitPrice;
     setItems(updated);
   };
 
@@ -176,7 +188,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
         items: items.map((i) => ({
           productId: i.productId,
           productName: i.productName,
-          quantity: i.quantity,
+          quantity: parseFloat(String(i.quantity)) > 0 ? parseFloat(String(i.quantity)) : 1,
           unitPrice: i.unitPrice,
           taxAmount: i.taxAmount,
           total: i.total,
@@ -341,14 +353,56 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
                           style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => handleUpdateQuantity(idx, row.quantity - 1)}
+                          onPress={() => {
+                            const current = parseFloat(String(row.quantity)) || 1;
+                            const next = Math.max(0.001, Number((current - 1).toFixed(4)));
+                            handleUpdateQuantity(idx, next);
+                          }}
                         >
                           <Text style={{ color: theme.colors.text }}>-</Text>
                         </TouchableOpacity>
-                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{row.quantity}</Text>
+                        <TextInput
+                          style={{
+                            minWidth: 44,
+                            height: 28,
+                            textAlign: 'center',
+                            borderWidth: 1,
+                            borderColor: theme.colors.border,
+                            borderRadius: 4,
+                            color: theme.colors.text,
+                            backgroundColor: theme.colors.surface,
+                            paddingVertical: 0,
+                            paddingHorizontal: 4,
+                            fontWeight: '600',
+                            fontSize: 13,
+                          }}
+                          keyboardType="decimal-pad"
+                          selectTextOnFocus
+                          value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
+                          placeholder="1"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          onChangeText={(v) => {
+                            const clean = v.replace(/[^0-9.]/g, '');
+                            const parts = clean.split('.');
+                            const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                            handleUpdateQuantityRaw(idx, sanitized);
+                          }}
+                          onBlur={() => {
+                            const parsed = parseFloat(String(row.quantity));
+                            if (isNaN(parsed) || parsed <= 0) {
+                              handleUpdateQuantity(idx, 1);
+                            } else {
+                              handleUpdateQuantity(idx, parsed);
+                            }
+                          }}
+                        />
                         <TouchableOpacity
                           style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => handleUpdateQuantity(idx, row.quantity + 1)}
+                          onPress={() => {
+                            const current = parseFloat(String(row.quantity)) || 0;
+                            const next = Number((current + 1).toFixed(4));
+                            handleUpdateQuantity(idx, next);
+                          }}
                         >
                           <Text style={{ color: theme.colors.text }}>+</Text>
                         </TouchableOpacity>

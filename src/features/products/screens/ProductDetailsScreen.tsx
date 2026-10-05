@@ -64,8 +64,8 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
           <InfoRow label="Retail Price" value={`₹${Number(product.retailPrice ?? product.price ?? 0).toFixed(2)}`} />
           <InfoRow label="MRP" value={product.mrp !== undefined && product.mrp !== null ? `₹${Number(product.mrp).toFixed(2)}` : '-'} />
           
-          <InfoRow label="Current Stock" value={Number(product.stockQuantity ?? product.openingStock ?? 0)} />
-          <InfoRow label="Opening Stock" value={product.openingStock !== undefined ? Number(product.openingStock) : '-'} />
+          <InfoRow label="Current Stock" value={Number(Number(product.stockQuantity ?? product.openingStock ?? 0).toFixed(4))} />
+          <InfoRow label="Opening Stock" value={product.openingStock !== undefined ? Number(Number(product.openingStock).toFixed(4)) : '-'} />
         </View>
 
         <View style={styles.actions}>

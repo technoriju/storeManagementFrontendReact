@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../core/auth/auth.store';
 import { hasPermission, SETTINGS_PERMISSIONS } from '../types/permissions';
 
 // Import Screens
+import { InvoicePreviewScreen } from './InvoicePreviewScreen';
 import { InvoiceSettingsScreen } from './InvoiceSettingsScreen';
 import { UsersScreen } from './UsersScreen';
 import { RolesScreen } from './RolesScreen';
@@ -25,35 +26,129 @@ interface SettingRoute {
   component: React.ReactNode;
 }
 
-const SETTING_ROUTES: SettingRoute[] = [
-  { id: 'business', label: 'Business Profile', group: 'General', permission: SETTINGS_PERMISSIONS.VIEW_BUSINESS, component: <BusinessSettingsScreen /> },
-  { id: 'gst', label: 'GST Configuration', group: 'General', permission: SETTINGS_PERMISSIONS.VIEW_GST, component: <GstSettingsScreen /> },
-  
-  { id: 'branches', label: 'Branches', group: 'Store Operations', permission: SETTINGS_PERMISSIONS.VIEW_BRANCHES, component: <BranchesScreen /> },
-  { id: 'warehouses', label: 'Warehouses', group: 'Store Operations', permission: SETTINGS_PERMISSIONS.VIEW_WAREHOUSES, component: <WarehousesScreen /> },
-  { id: 'printers', label: 'Printers', group: 'Store Operations', permission: SETTINGS_PERMISSIONS.VIEW_PRINTERS, component: <PrinterSettingsScreen /> },
+interface SettingsLayoutProps {
+  initialRoute?: string;
+}
 
-  { id: 'invoice', label: 'Invoice Format', group: 'Billing & Sync', permission: SETTINGS_PERMISSIONS.VIEW_INVOICE, component: <InvoiceSettingsScreen /> },
-  { id: 'sync', label: 'Sync Queue', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_SYNC, component: <SyncSettingsScreen /> },
-
-  { id: 'users', label: 'Users', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_USERS, component: <UsersScreen /> },
-  { id: 'roles', label: 'Roles', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_ROLES, component: <RolesScreen /> },
-  { id: 'permissions', label: 'Permissions', group: 'User Management', permission: SETTINGS_PERMISSIONS.VIEW_PERMISSIONS, component: <PermissionsScreen /> },
-];
-
-export const SettingsLayout = () => {
+export const SettingsLayout: React.FC<SettingsLayoutProps> = ({ initialRoute }) => {
   const theme = useTheme();
   const { isDesktop, isTablet } = useResponsive();
   const isLargeScreen = isDesktop || isTablet;
   
   const { permissions } = useAuthStore();
-  
+  const [isListView, setIsListView] = useState(true);
+
+  const SETTING_ROUTES: SettingRoute[] = [
+    {
+      id: 'invoice_preview',
+      label: 'Invoice Preview',
+      group: 'Billing & Print',
+      permission: SETTINGS_PERMISSIONS.VIEW_INVOICE,
+      component: <InvoicePreviewScreen onNavigate={(rId) => {
+        setActiveRouteId(rId);
+        setIsListView(false);
+      }} />,
+    },
+    {
+      id: 'invoice',
+      label: 'Invoice Format',
+      group: 'Billing & Print',
+      permission: SETTINGS_PERMISSIONS.VIEW_INVOICE,
+      component: <InvoiceSettingsScreen />,
+    },
+    {
+      id: 'printers',
+      label: 'Printers',
+      group: 'Billing & Print',
+      permission: SETTINGS_PERMISSIONS.VIEW_PRINTERS,
+      component: <PrinterSettingsScreen />,
+    },
+    
+    {
+      id: 'business',
+      label: 'Business Profile',
+      group: 'General',
+      permission: SETTINGS_PERMISSIONS.VIEW_BUSINESS,
+      component: <BusinessSettingsScreen />,
+    },
+    {
+      id: 'gst',
+      label: 'GST Configuration',
+      group: 'General',
+      permission: SETTINGS_PERMISSIONS.VIEW_GST,
+      component: <GstSettingsScreen />,
+    },
+    
+    {
+      id: 'branches',
+      label: 'Branches',
+      group: 'Store Operations',
+      permission: SETTINGS_PERMISSIONS.VIEW_BRANCHES,
+      component: <BranchesScreen />,
+    },
+    {
+      id: 'warehouses',
+      label: 'Warehouses',
+      group: 'Store Operations',
+      permission: SETTINGS_PERMISSIONS.VIEW_WAREHOUSES,
+      component: <WarehousesScreen />,
+    },
+
+    {
+      id: 'sync',
+      label: 'Sync Queue',
+      group: 'User Management',
+      permission: SETTINGS_PERMISSIONS.VIEW_SYNC,
+      component: <SyncSettingsScreen />,
+    },
+    {
+      id: 'users',
+      label: 'Users',
+      group: 'User Management',
+      permission: SETTINGS_PERMISSIONS.VIEW_USERS,
+      component: <UsersScreen />,
+    },
+    {
+      id: 'roles',
+      label: 'Roles',
+      group: 'User Management',
+      permission: SETTINGS_PERMISSIONS.VIEW_ROLES,
+      component: <RolesScreen />,
+    },
+    {
+      id: 'permissions',
+      label: 'Permissions',
+      group: 'User Management',
+      permission: SETTINGS_PERMISSIONS.VIEW_PERMISSIONS,
+      component: <PermissionsScreen />,
+    },
+  ];
+
   // Filter routes based on user permissions
   const availableRoutes = SETTING_ROUTES.filter(route => hasPermission(permissions, route.permission));
   
-  const [activeRouteId, setActiveRouteId] = useState<string>(
-    availableRoutes.length > 0 ? availableRoutes[0].id : ''
-  );
+  const [activeRouteId, setActiveRouteId] = useState<string>(() => {
+    if (initialRoute && initialRoute !== 'settings') {
+      const cleanRoute = initialRoute.replace(/^settings_/, '');
+      const match = availableRoutes.find(r => r.id === cleanRoute || r.id === initialRoute);
+      if (match) return match.id;
+    }
+    const hasPreview = availableRoutes.some(r => r.id === 'invoice_preview');
+    if (hasPreview) return 'invoice_preview';
+    return availableRoutes.length > 0 ? availableRoutes[0].id : '';
+  });
+
+  useEffect(() => {
+    if (initialRoute && initialRoute !== 'settings') {
+      const cleanRoute = initialRoute.replace(/^settings_/, '');
+      const match = availableRoutes.find(r => r.id === cleanRoute || r.id === initialRoute);
+      if (match) {
+        setActiveRouteId(match.id);
+        setIsListView(false);
+        return;
+      }
+    }
+  }, [initialRoute, availableRoutes]);
 
   const activeRoute = availableRoutes.find(r => r.id === activeRouteId);
 
@@ -112,8 +207,6 @@ export const SettingsLayout = () => {
   if (!isLargeScreen) {
     // On mobile, if we are in a sub-route, show the back button and the content.
     // Otherwise show the list. This is a simple state-based stack navigation.
-    const [isListView, setIsListView] = useState(true);
-
     if (isListView) {
       return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import {
   Printer,
@@ -18,13 +19,13 @@ import {
   Check,
   Building2,
   User,
-  QrCode,
   Share2,
   ZoomIn,
   ZoomOut,
   RotateCcw,
 } from 'lucide-react-native';
 import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
+import { QR_CODE_DATA_URI } from '../../../assets/qrCodeAsset';
 
 // Helper: Convert numbers to Indian Rupees in words
 export function amountToWords(amount: number): string {
@@ -110,16 +111,18 @@ export interface ReceiptPrintData {
   notes?: string;
 }
 
+export type ReceiptPaperFormat = '80mm' | '140x210mm' | 'halfA4Landscape';
+
 export interface ReceiptPrintPreviewModalProps {
   visible: boolean;
   onClose: () => void;
   data: ReceiptPrintData | null;
-  initialFormat?: '80mm' | 'halfA4Landscape';
+  initialFormat?: ReceiptPaperFormat;
   initialCustomerType?: 'retail' | 'wholesale';
   initialColorMode?: 'bw' | 'color';
 }
 
-function printHtmlViaIframe(htmlContent: string) {
+export function printHtmlViaIframe(htmlContent: string) {
   const globalDoc: any = (globalThis as any).document;
   const globalWin: any = (globalThis as any).window;
   if (!globalDoc) return;
@@ -186,7 +189,7 @@ function printHtmlViaIframe(htmlContent: string) {
   }, 250);
 }
 
-function generateReceiptHtml({
+export function generateReceiptHtml({
   data,
   business,
   settings,
@@ -203,7 +206,7 @@ function generateReceiptHtml({
   data: ReceiptPrintData;
   business: any;
   settings: any;
-  paperFormat: '80mm' | 'halfA4Landscape';
+  paperFormat: ReceiptPaperFormat;
   customerType: 'retail' | 'wholesale';
   colorMode?: 'bw' | 'color';
   showBusinessInfo: boolean;
@@ -234,32 +237,7 @@ function generateReceiptHtml({
   const sgstAmount = Number((gst / 2).toFixed(2));
   const words = amountToWords(total);
 
-  const qrSvg = `
-    <svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect width="100" height="100" fill="#ffffff"/>
-      <rect x="8" y="8" width="30" height="30" fill="#000000"/>
-      <rect x="12" y="12" width="22" height="22" fill="#ffffff"/>
-      <rect x="16" y="16" width="14" height="14" fill="#000000"/>
-      <rect x="62" y="8" width="30" height="30" fill="#000000"/>
-      <rect x="66" y="12" width="22" height="22" fill="#ffffff"/>
-      <rect x="70" y="16" width="14" height="14" fill="#000000"/>
-      <rect x="8" y="62" width="30" height="30" fill="#000000"/>
-      <rect x="12" y="66" width="22" height="22" fill="#ffffff"/>
-      <rect x="16" y="70" width="14" height="14" fill="#000000"/>
-      <rect x="44" y="10" width="6" height="14" fill="#000000"/>
-      <rect x="52" y="16" width="6" height="22" fill="#000000"/>
-      <rect x="10" y="44" width="18" height="6" fill="#000000"/>
-      <rect x="22" y="52" width="14" height="6" fill="#000000"/>
-      <rect x="42" y="42" width="18" height="18" fill="#000000"/>
-      <rect x="46" y="46" width="10" height="10" fill="#ffffff"/>
-      <rect x="65" y="44" width="26" height="6" fill="#000000"/>
-      <rect x="74" y="54" width="16" height="6" fill="#000000"/>
-      <rect x="44" y="66" width="6" height="26" fill="#000000"/>
-      <rect x="54" y="76" width="6" height="16" fill="#000000"/>
-      <rect x="66" y="66" width="12" height="12" fill="#000000"/>
-      <rect x="80" y="80" width="12" height="12" fill="#000000"/>
-    </svg>
-  `;
+  const qrImageHtml = `<img src="${QR_CODE_DATA_URI}" alt="UPI QR" class="receipt-qr-img" />`;
 
   if (isThermal) {
     return `<!DOCTYPE html>
@@ -311,6 +289,7 @@ function generateReceiptHtml({
     .summary-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 2px; }
     .grand-total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 900; margin: 4px 0; }
     .qr-container { text-align: center; margin: 8px 0; }
+    .receipt-qr-img { width: 84px; height: 84px; object-fit: contain; display: inline-block; }
     .qr-caption { font-size: 9px; margin-top: 4px; font-weight: bold; }
     .upi-id { font-size: 8px; color: #444; }
     .footer-msg { font-size: 10px; font-weight: bold; text-align: center; margin: 6px 0 2px 0; }
@@ -381,7 +360,7 @@ function generateReceiptHtml({
 
   <div class="summary-row">
     <span>Items Count: ${items.length}</span>
-    <span>Total Qty: ${items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}</span>
+    <span>Total Qty: ${Number(items.reduce((s, it) => s + (Number(it.quantity) || 0), 0).toFixed(4))}</span>
   </div>
   <div class="summary-row">
     <span>Subtotal:</span>
@@ -426,7 +405,7 @@ function generateReceiptHtml({
 
   ${showQrCode ? `
     <div class="qr-container">
-      ${qrSvg}
+      ${qrImageHtml}
       <div class="qr-caption">Scan with UPI to Pay / Verify</div>
       <div class="upi-id">${business.upiId || ''}</div>
     </div>
@@ -442,6 +421,254 @@ function generateReceiptHtml({
 
   <div class="dashed-line"></div>
   <div class="powered-by">Printed via Billing System</div>
+</body>
+</html>`;
+  }
+
+  // 140 mm width * 210 mm height Portrait Invoice
+  if (paperFormat === '140x210mm') {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Invoice - ${invNumber}</title>
+  <style>
+    @page {
+      size: 140mm 210mm portrait;
+      margin: 3mm 4mm;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 8.5px;
+      color: #0f172a;
+      background: #fff;
+      width: 132mm;
+      max-width: 132mm;
+      margin: 0 auto;
+      padding: 1.5mm 0;
+      line-height: 1.25;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      ${colorMode === 'bw' ? `
+      -webkit-filter: grayscale(100%);
+      filter: grayscale(100%);
+      ` : ''}
+    }
+    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 4px; }
+    .store-name { font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
+    .store-sub { font-size: 8px; color: #334155; line-height: 1.25; }
+    .inv-badge {
+      background: ${colorMode === 'bw' ? '#000000' : (isWholesale ? '#1e293b' : '#047857')};
+      color: #fff;
+      padding: 3px 8px;
+      font-size: 9.5px;
+      font-weight: 800;
+      border-radius: 2px;
+      display: inline-block;
+      text-align: right;
+    }
+    .copy-text { font-size: 7.5px; color: #64748b; font-weight: bold; margin-top: 1px; }
+    .parties-grid {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+      gap: 10px;
+    }
+    .party-col { flex: 1.5; }
+    .status-col { flex: 1; text-align: right; }
+    .section-title { font-size: 7.5px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
+    .cust-name { font-size: 11px; font-weight: bold; color: #0f172a; }
+    .party-sub { font-size: 8px; color: #334155; line-height: 1.25; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; border: 1px solid #cbd5e1; }
+    .items-table th { background: #f1f5f9; font-size: 8px; font-weight: 700; color: #1e293b; padding: 3px 4px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 8px; padding: 2.5px 4px; border: 1px solid #e2e8f0; }
+    .alt-row { background: #f8fafc; }
+    .bottom-grid { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+    .bottom-left { flex: 1.2; }
+    .bottom-right { flex: 1; }
+    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 5px; border-radius: 2px; font-size: 7.5px; margin-bottom: 3px; }
+    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 3px 5px; border-radius: 2px; font-size: 7.5px; margin-bottom: 3px; }
+    .bank-title { font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 8px; margin-bottom: 1px; }
+    .terms-box { font-size: 7px; color: #64748b; line-height: 1.2; margin-top: 3px; }
+    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; }
+    .totals-table td { padding: 2px 5px; font-size: 8.5px; border-bottom: 1px solid #f1f5f9; }
+    .grand-total-row { background: ${colorMode === 'bw' ? '#000000' : '#0f172a'}; color: #fff; font-weight: bold; }
+    .grand-total-row td { color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: 900; }
+    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
+    .sign-box { width: 120px; text-align: center; }
+    .sign-line { border-bottom: 1px solid #334155; margin-bottom: 2px; height: 14px; }
+    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 3px; border: 1px solid #e2e8f0; border-radius: 2px; }
+    .qr-inline .receipt-qr-img { width: 38px; height: 38px; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td style="vertical-align: top; width: 62%;">
+        <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
+        ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 8.5px;">${business.tagline}</div>` : ''}
+        <div class="store-sub">${business.address || ''}</div>
+        <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
+        <div class="store-sub" style="font-weight: bold; color: #0f172a;">
+          GSTIN: ${business.gstin || ''} | State: ${business.state || ''} (${business.stateCode || ''})
+        </div>
+      </td>
+      <td style="vertical-align: top; width: 38%; text-align: right;">
+        <div class="inv-badge">
+          ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+        </div>
+        <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
+        <table style="margin-top: 2px; width: 100%; text-align: right;">
+          <tr>
+            <td style="font-size: 7.5px; color: #64748b;">Invoice No:</td>
+            <td style="font-size: 9px; font-weight: bold; color: #0f172a;">${invNumber}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 7.5px; color: #64748b;">Date:</td>
+            <td style="font-size: 8px; font-weight: 600; color: #0f172a;">${invDate}</td>
+          </tr>
+          <tr>
+            <td style="font-size: 7.5px; color: #64748b;">Mode:</td>
+            <td style="font-size: 8px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <div class="parties-grid">
+    <div class="party-col">
+      <div class="section-title">${isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}</div>
+      <div class="cust-name">${custName}</div>
+      ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
+      ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
+      ${isWholesale && custGstin ? `<div class="party-sub" style="font-weight: bold;">Buyer GSTIN: ${custGstin}</div>` : ''}
+    </div>
+    <div class="status-col">
+      <div><strong>Status:</strong> <span style="font-weight: bold; color: ${due === 0 ? '#059669' : '#dc2626'};">${due === 0 ? 'FULLY PAID' : 'DUE'}</span></div>
+      <div style="font-size: 7.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
+    </div>
+  </div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 20px;">#</th>
+        <th style="text-align: left;">ITEM</th>
+        ${isWholesale ? '<th style="width: 40px;">HSN</th>' : ''}
+        <th style="width: 30px; text-align: center;">QTY</th>
+        <th style="width: 45px; text-align: right;">RATE</th>
+        <th style="width: 35px; text-align: right;">DISC</th>
+        ${showTaxBreakdown ? `
+          <th style="width: 45px; text-align: right;">TAXABLE</th>
+          <th style="width: 35px; text-align: center;">GST</th>
+        ` : ''}
+        <th style="width: 55px; text-align: right;">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((item, idx) => {
+        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+        const rawAmt = Number(item.unitPrice || 0) * itemQty;
+        const discAmt = Number(item.discount || 0);
+        const taxableAmt = Math.max(0, rawAmt - discAmt);
+        return `
+          <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
+            <td style="text-align: center;">${idx + 1}</td>
+            <td style="font-weight: 600;">${item.productName || 'Item'}</td>
+            ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
+            <td style="text-align: center;">${item.quantity} ${item.unit || ''}</td>
+            <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
+            <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
+            ${showTaxBreakdown ? `
+              <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
+              <td style="text-align: center;">${item.gst || 0}%</td>
+            ` : ''}
+            <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('')}
+    </tbody>
+  </table>
+
+  <div class="bottom-grid">
+    <div class="bottom-left">
+      <div class="words-box">
+        <strong>Amount in Words:</strong><br/>
+        <em>${words}</em>
+      </div>
+
+      ${isWholesale && showBankDetails ? `
+        <div class="bank-box">
+          <div class="bank-title">BANK DETAILS (NEFT/RTGS):</div>
+          <div>Bank: <strong>${business.bankName || ''}</strong></div>
+          <div>A/C: <strong>${business.accountNumber || ''}</strong> | IFSC: <strong>${business.ifscCode || ''}</strong></div>
+        </div>
+      ` : ''}
+
+      ${showTerms ? `
+        <div class="terms-box">
+          <strong>Terms:</strong> 1. Goods once sold will not be exchanged. 2. Subject to local jurisdiction.
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="bottom-right">
+      <table class="totals-table">
+        <tr>
+          <td style="color: #64748b;">Subtotal:</td>
+          <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
+        </tr>
+        ${discount > 0 ? `
+          <tr>
+            <td style="color: #64748b;">Discount:</td>
+            <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        ${showTaxBreakdown && gst > 0 ? `
+          <tr>
+            <td style="color: #64748b;">CGST + SGST:</td>
+            <td style="text-align: right;">₹${gst.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        <tr class="grand-total-row">
+          <td style="color: #fff; font-weight: bold;">TOTAL:</td>
+          <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: bold;">₹${total.toFixed(2)}</td>
+        </tr>
+        <tr>
+          <td style="color: #64748b;">Received:</td>
+          <td style="text-align: right; font-weight: bold;">₹${paid.toFixed(2)}</td>
+        </tr>
+      </table>
+
+      ${showQrCode ? `
+        <div class="qr-inline">
+          ${qrImageHtml}
+          <div>
+            <div style="font-weight: bold; font-size: 8px;">Scan to Pay UPI</div>
+            <div style="font-size: 7.5px; color: #64748b;">${business.upiId || ''}</div>
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  </div>
+
+  ${showSignatures ? `
+    <div class="signatures-row">
+      <div class="sign-box">
+        <div class="sign-line"></div>
+        <div style="font-size: 7.5px; color: #64748b;">Customer Signature</div>
+      </div>
+      <div class="sign-box">
+        <div style="font-size: 7.5px; font-weight: bold;">For ${business.businessName || ''}</div>
+        <div class="sign-line"></div>
+        <div style="font-size: 7.5px; color: #64748b;">Authorized Signatory</div>
+      </div>
+    </div>
+  ` : ''}
 </body>
 </html>`;
   }
@@ -548,8 +775,8 @@ function generateReceiptHtml({
     .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
     .sign-box { width: 140px; text-align: center; }
     .sign-line { border-bottom: 1px solid #334155; margin-bottom: 3px; height: 16px; }
-    .sign-label { font-size: 8px; color: #64748b; }
     .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; }
+    .qr-inline .receipt-qr-img { width: 44px; height: 44px; object-fit: contain; }
   </style>
 </head>
 <body>
@@ -628,7 +855,8 @@ function generateReceiptHtml({
     </thead>
     <tbody>
       ${items.map((item, idx) => {
-        const rawAmt = Number(item.unitPrice || 0) * Number(item.quantity || 1);
+        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+        const rawAmt = Number(item.unitPrice || 0) * itemQty;
         const discAmt = Number(item.discount || 0);
         const taxableAmt = Math.max(0, rawAmt - discAmt);
         return `
@@ -714,7 +942,7 @@ function generateReceiptHtml({
 
       ${showQrCode ? `
         <div class="qr-inline">
-          ${qrSvg}
+          ${qrImageHtml}
           <div>
             <div style="font-weight: bold; font-size: 8.5px;">Scan to Pay UPI</div>
             <div style="font-size: 8px; color: #64748b;">${business.upiId || ''}</div>
@@ -755,9 +983,16 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const { settings } = useInvoiceSettingsStore();
   const business = settings.businessProfile;
 
-  // Selected paper size: '80mm' (Thermal) or 'halfA4Landscape' (Regular Half A4 Landscape)
-  const [paperFormat, setPaperFormat] = useState<'80mm' | 'halfA4Landscape'>(
-    initialFormat || (settings.paperSize === 'halfA4Landscape' ? 'halfA4Landscape' : '80mm')
+  // Selected paper size: '80mm' | '140x210mm' | 'halfA4Landscape'
+  const defaultPaperFormat: ReceiptPaperFormat = 
+    settings.defaultPreviewType === '140x210mm' || settings.paperSize === '140x210mm'
+      ? '140x210mm'
+      : settings.defaultPreviewType === 'halfA4Landscape' || settings.paperSize === 'halfA4Landscape' || settings.defaultPreviewType === 'invoice'
+      ? 'halfA4Landscape'
+      : '80mm';
+
+  const [paperFormat, setPaperFormat] = useState<ReceiptPaperFormat>(
+    initialFormat || defaultPaperFormat
   );
 
   // Print color mode: 'bw' (Default) or 'color'
@@ -772,6 +1007,20 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
       setColorMode(settings.printColorMode);
     }
   }, [initialColorMode, settings.printColorMode]);
+
+  useEffect(() => {
+    if (initialFormat) {
+      setPaperFormat(initialFormat);
+    } else {
+      const defFormat: ReceiptPaperFormat =
+        settings.defaultPreviewType === '140x210mm' || settings.paperSize === '140x210mm'
+          ? '140x210mm'
+          : settings.defaultPreviewType === 'halfA4Landscape' || settings.paperSize === 'halfA4Landscape' || settings.defaultPreviewType === 'invoice'
+          ? 'halfA4Landscape'
+          : '80mm';
+      setPaperFormat(defFormat);
+    }
+  }, [initialFormat, settings.defaultPreviewType, settings.paperSize, visible]);
 
   // Customer / Invoice Type: 'retail' or 'wholesale'
   const detectedCustomerType: 'retail' | 'wholesale' = useMemo(() => {
@@ -897,22 +1146,32 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
               <Text style={styles.controlLabel}>Printer / Paper Size:</Text>
               <View style={styles.segmentedButtons}>
                 <TouchableOpacity
-                  style={[styles.segmentBtn, isThermal && styles.segmentBtnActive]}
+                  style={[styles.segmentBtn, paperFormat === '80mm' && styles.segmentBtnActive]}
                   onPress={() => setPaperFormat('80mm')}
                 >
-                  <FileText size={14} color={isThermal ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, isThermal && styles.segmentTextActive]}>
-                    Thermal (80 mm)
+                  <FileText size={14} color={paperFormat === '80mm' ? '#FFFFFF' : '#475569'} />
+                  <Text style={[styles.segmentText, paperFormat === '80mm' && styles.segmentTextActive]}>
+                    80 mm Thermal
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.segmentBtn, !isThermal && styles.segmentBtnActive]}
+                  style={[styles.segmentBtn, paperFormat === '140x210mm' && styles.segmentBtnActive]}
+                  onPress={() => setPaperFormat('140x210mm')}
+                >
+                  <FileText size={14} color={paperFormat === '140x210mm' ? '#FFFFFF' : '#475569'} />
+                  <Text style={[styles.segmentText, paperFormat === '140x210mm' && styles.segmentTextActive]}>
+                    140×210 mm
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.segmentBtn, paperFormat === 'halfA4Landscape' && styles.segmentBtnActive]}
                   onPress={() => setPaperFormat('halfA4Landscape')}
                 >
-                  <Building2 size={14} color={!isThermal ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, !isThermal && styles.segmentTextActive]}>
-                    Regular (Half A4 Landscape)
+                  <Building2 size={14} color={paperFormat === 'halfA4Landscape' ? '#FFFFFF' : '#475569'} />
+                  <Text style={[styles.segmentText, paperFormat === 'halfA4Landscape' && styles.segmentTextActive]}>
+                    Half A4 Landscape
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1133,7 +1392,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                       <View style={styles.thermalSummaryRow}>
                         <Text style={styles.thermalMono}>Items Count: {items.length}</Text>
                         <Text style={styles.thermalMono}>
-                          Total Qty: {items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}
+                          Total Qty: {Number(items.reduce((s, it) => s + (Number(it.quantity) || 0), 0).toFixed(4))}
                         </Text>
                       </View>
                       <View style={styles.thermalSummaryRow}>
@@ -1188,7 +1447,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     {showQrCode && (
                       <View style={styles.thermalQrBox}>
                         <View style={styles.simulatedQr}>
-                          <QrCode size={56} color="#000000" />
+                          <Image
+                            source={{ uri: QR_CODE_DATA_URI }}
+                            style={styles.thermalQrImg}
+                            resizeMode="contain"
+                          />
                         </View>
                         <Text style={styles.thermalQrCaption}>
                           Scan with UPI to Pay / Verify
@@ -1342,7 +1605,8 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                       {/* Rows */}
                       {items.map((item, idx) => {
-                        const rawAmt = Number(item.unitPrice || 0) * Number(item.quantity || 1);
+                        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+                        const rawAmt = Number(item.unitPrice || 0) * itemQty;
                         const discAmt = Number(item.discount || 0);
                         const taxableAmt = Math.max(0, rawAmt - discAmt);
                         return (
@@ -1497,7 +1761,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                         {/* UPI QR & Quick Verification */}
                         {showQrCode && (
                           <View style={styles.lsQrInlineBox}>
-                            <QrCode size={40} color="#000000" />
+                            <Image
+                              source={{ uri: QR_CODE_DATA_URI }}
+                              style={styles.lsQrImg}
+                              resizeMode="contain"
+                            />
                             <View style={{ marginLeft: 8 }}>
                               <Text style={styles.lsQrTitle}>Scan to Pay UPI</Text>
                               <Text style={styles.lsQrSub}>{business.upiId}</Text>
@@ -1909,11 +2177,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   simulatedQr: {
-    padding: 6,
+    padding: 4,
     backgroundColor: '#FFFFFF',
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#000000',
+  },
+  thermalQrImg: {
+    width: 76,
+    height: 76,
   },
   thermalQrCaption: {
     fontSize: 9,
@@ -2300,6 +2572,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  lsQrImg: {
+    width: 44,
+    height: 44,
   },
   lsQrTitle: {
     fontSize: 9,

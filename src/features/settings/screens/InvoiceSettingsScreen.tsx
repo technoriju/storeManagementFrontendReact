@@ -4,14 +4,16 @@ import { useTheme } from '../../../shared/theme/theme';
 import { useInvoiceSettingsStore, PaperSize, TaxDisplay } from '../store/invoiceSettings.store';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 
-export const InvoiceSettingsScreen = () => {
+interface InvoiceSettingsScreenProps {
+  onNavigate?: (routeId: string) => void;
+}
+
+export const InvoiceSettingsScreen: React.FC<InvoiceSettingsScreenProps> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { isDesktop, isTablet } = useResponsive();
-  const isLargeScreen = isDesktop || isTablet;
 
   const { settings, updateSetting, updateColumn } = useInvoiceSettingsStore();
 
-  const paperSizes: PaperSize[] = ['58mm', '80mm', 'A4', 'A5', 'Custom'];
+  const paperSizes: PaperSize[] = ['80mm', '140x210mm', 'halfA4Landscape', '58mm', 'A4', 'A5', 'Custom'];
   const taxOptions: { label: string; value: TaxDisplay }[] = [
     { label: 'Exclusive (added at end)', value: 'exclusive' },
     { label: 'Inclusive (in item price)', value: 'inclusive' },
@@ -36,10 +38,18 @@ export const InvoiceSettingsScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={isLargeScreen ? styles.splitView : styles.singleView}>
-        {/* Settings Panel */}
-        <ScrollView style={styles.settingsPanel} contentContainerStyle={styles.settingsContent}>
+      <ScrollView style={styles.settingsPanel} contentContainerStyle={styles.settingsContent}>
+        <View style={styles.headerRow}>
           <Text style={[styles.header, { color: theme.colors.text }]}>Invoice format</Text>
+          {onNavigate && (
+            <TouchableOpacity
+              style={styles.viewPreviewsBannerBtn}
+              onPress={() => onNavigate('invoice_preview')}
+            >
+              <Text style={styles.viewPreviewsBannerBtnText}>Open All Previews →</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
           {/* Paper Size */}
           <View style={styles.section}>
@@ -145,90 +155,8 @@ export const InvoiceSettingsScreen = () => {
 
           <View style={{ height: 40 }} />
         </ScrollView>
-
-        {/* Live Preview Panel (Only on large screens or placed at bottom) */}
-        {isLargeScreen && (
-          <View style={[styles.previewContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <Text style={[styles.previewHeader, { color: theme.colors.textSecondary }]}>Wireframe preview</Text>
-            <View style={styles.previewWrapper}>
-              <View style={[
-                styles.receiptSheet,
-                { 
-                  backgroundColor: theme.colors.background,
-                  width: settings.paperSize.includes('mm') ? 220 : 340
-                }
-              ]}>
-                {settings.showLogo && <View style={styles.previewLogo} />}
-                {settings.showBusinessName && <Text style={styles.previewTitle}>BUSINESS NAME</Text>}
-                {settings.showAddress && <Text style={styles.previewText}>123 Business Rd, City</Text>}
-                {settings.showGstin && <Text style={styles.previewText}>GSTIN: 22AAAAA0000A1Z5</Text>}
-                
-                <View style={styles.previewSpacer} />
-                
-                {(settings.showInvoiceNumber || settings.showCustomerInfo) && (
-                  <View style={styles.previewRow}>
-                    {settings.showInvoiceNumber && <Text style={styles.previewText}>INV-001</Text>}
-                    {settings.showCustomerInfo && <Text style={styles.previewText}>Customer Name</Text>}
-                  </View>
-                )}
-                
-                <View style={styles.previewSpacer} />
-                
-                <View style={styles.previewTableHead}>
-                  {settings.columns.item && <Text style={[styles.previewText, { flex: 2 }]}>Item</Text>}
-                  {settings.columns.qty && <Text style={[styles.previewText, { flex: 1, textAlign: 'center' }]}>Qty</Text>}
-                  {settings.columns.rate && <Text style={[styles.previewText, { flex: 1, textAlign: 'right' }]}>Rate</Text>}
-                  {settings.columns.amount && <Text style={[styles.previewText, { flex: 1, textAlign: 'right' }]}>Amt</Text>}
-                </View>
-                <View style={styles.previewTableRow}>
-                  {settings.columns.item && <View style={[styles.previewLine, { flex: 2, height: 8, marginRight: 8 }]} />}
-                  {settings.columns.qty && <View style={[styles.previewLine, { flex: 1, height: 8, marginRight: 8 }]} />}
-                  {settings.columns.rate && <View style={[styles.previewLine, { flex: 1, height: 8, marginRight: 8 }]} />}
-                  {settings.columns.amount && <View style={[styles.previewLine, { flex: 1, height: 8 }]} />}
-                </View>
-                <View style={styles.previewTableRow}>
-                  {settings.columns.item && <View style={[styles.previewLine, { flex: 2, height: 8, marginRight: 8, width: '60%' }]} />}
-                  {settings.columns.qty && <View style={[styles.previewLine, { flex: 1, height: 8, marginRight: 8 }]} />}
-                  {settings.columns.rate && <View style={[styles.previewLine, { flex: 1, height: 8, marginRight: 8 }]} />}
-                  {settings.columns.amount && <View style={[styles.previewLine, { flex: 1, height: 8 }]} />}
-                </View>
-                
-                <View style={styles.previewSpacer} />
-                
-                <View style={styles.previewRow}>
-                  <Text style={styles.previewText}>Total</Text>
-                  <Text style={styles.previewTextBold}>₹0.00</Text>
-                </View>
-
-                {settings.taxDisplay !== 'none' && (
-                  <View style={styles.previewRow}>
-                    <Text style={styles.previewTextLight}>Includes Tax ({settings.taxDisplay})</Text>
-                  </View>
-                )}
-                
-                <View style={[styles.previewSpacer, { height: 32 }]} />
-                
-                {settings.showSignature && (
-                  <View style={{ alignItems: 'flex-end', marginTop: 16 }}>
-                    <View style={{ width: 80, height: 1, backgroundColor: '#999', marginBottom: 4 }} />
-                    <Text style={styles.previewTextLight}>Signature</Text>
-                  </View>
-                )}
-                
-                {settings.showTerms && (
-                  <Text style={[styles.previewTextLight, { marginTop: 16, textAlign: 'center' }]}>Terms & Conditions apply.</Text>
-                )}
-                
-                {!!settings.footerMessage && (
-                  <Text style={[styles.previewText, { marginTop: 8, textAlign: 'center' }]}>{settings.footerMessage}</Text>
-                )}
-              </View>
-            </View>
-          </View>
-        )}
       </View>
-    </View>
-  );
+    );
 };
 
 const styles = StyleSheet.create({
@@ -336,87 +264,24 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
   },
-  previewContainer: {
-    flex: 1,
-    borderLeftWidth: 1,
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewHeader: {
-    position: 'absolute',
-    top: 32,
-    left: 32,
-    fontSize: 14,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  previewWrapper: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  receiptSheet: {
-    padding: 24,
-    borderRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  previewLogo: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#ccc',
-    borderRadius: 20,
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  previewTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  previewText: {
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#333',
-    marginBottom: 2,
-  },
-  previewTextBold: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  previewTextLight: {
-    fontSize: 10,
-    color: '#777',
-    textAlign: 'center',
-  },
-  previewSpacer: {
-    height: 16,
-  },
-  previewRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  previewTableHead: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingBottom: 4,
-    marginBottom: 8,
+  viewPreviewsBannerBtn: {
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  previewTableRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  previewLine: {
-    backgroundColor: '#ddd',
-    borderRadius: 2,
+  viewPreviewsBannerBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
 

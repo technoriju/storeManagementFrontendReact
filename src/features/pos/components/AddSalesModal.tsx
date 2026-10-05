@@ -42,7 +42,7 @@ interface SaleItemRow {
   productId: number;
   productName: string;
   sku?: string;
-  quantity: number;
+  quantity: number | string;
   unitPrice: number;
   discount: number;
   gst: number;
@@ -235,7 +235,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
     if (existingIndex >= 0) {
       const updated = [...items];
-      updated[existingIndex].quantity += 1;
+      const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
+      updated[existingIndex].quantity = Number((curr + 1).toFixed(4));
       setItems(updated);
     } else {
       const wholesaleP = getProductPriceByType(product, 'wholesale');
@@ -309,7 +310,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   // Update item field
-  const handleUpdateItem = (index: number, field: keyof SaleItemRow, value: number) => {
+  const handleUpdateItem = (index: number, field: keyof SaleItemRow, value: any) => {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
     setItems(updated);
@@ -323,7 +324,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   // Calculated Line Items
   const calculatedItems = useMemo(() => {
     return items.map((item) => {
-      const effectiveQty = item.quantity > 0 ? item.quantity : 1;
+      const parsedQty = parseFloat(String(item.quantity));
+      const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
       const rawSubtotal = effectiveQty * item.unitPrice;
       const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
       const taxAmount = netSubtotal * ((item.gst || 0) / 100);
@@ -340,7 +342,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   // Order Totals Calculations
   const itemsSubtotal = useMemo(() => {
     return items.reduce((sum, item) => {
-      const effectiveQty = item.quantity > 0 ? item.quantity : 1;
+      const parsedQty = parseFloat(String(item.quantity));
+      const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
       return sum + effectiveQty * item.unitPrice;
     }, 0);
   }, [items]);
@@ -403,7 +406,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         items: calculatedItems.map((item) => ({
           productId: item.productId,
           productName: item.productName,
-          quantity: Math.max(1, item.quantity || 1),
+          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
           unitPrice: item.unitPrice,
           discount: item.discount,
           gst: item.gst,
@@ -441,7 +444,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
           productId: item.productId,
           productName: item.productName,
           sku: item.sku,
-          quantity: Math.max(1, item.quantity || 1),
+          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
           unitPrice: item.unitPrice,
           discount: item.discount,
           gst: item.gst,
@@ -816,8 +819,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 },
                               ]}
                               onPress={() => {
-                                const current = item.quantity || 1;
-                                handleUpdateItem(index, 'quantity', Math.max(1, current - 1));
+                                const current = parseFloat(String(item.quantity)) || 1;
+                                const next = Math.max(0.001, Number((current - 1).toFixed(4)));
+                                handleUpdateItem(index, 'quantity', next);
                               }}
                               activeOpacity={0.7}
                             >
@@ -834,22 +838,23 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                   backgroundColor: theme.colors.surface,
                                 },
                               ]}
-                              keyboardType="number-pad"
+                              keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={item.quantity === 0 ? '' : String(item.quantity)}
+                              value={item.quantity === 0 || item.quantity === '' ? '' : String(item.quantity)}
                               placeholder="1"
                               placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const clean = v.replace(/[^0-9]/g, '');
-                                if (clean === '') {
-                                  handleUpdateItem(index, 'quantity', 0);
-                                } else {
-                                  handleUpdateItem(index, 'quantity', parseInt(clean, 10));
-                                }
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'quantity', sanitized);
                               }}
                               onBlur={() => {
-                                if (!item.quantity || item.quantity < 1) {
+                                const parsed = parseFloat(String(item.quantity));
+                                if (isNaN(parsed) || parsed <= 0) {
                                   handleUpdateItem(index, 'quantity', 1);
+                                } else {
+                                  handleUpdateItem(index, 'quantity', parsed);
                                 }
                               }}
                             />
@@ -863,8 +868,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 },
                               ]}
                               onPress={() => {
-                                const current = item.quantity || 0;
-                                handleUpdateItem(index, 'quantity', current + 1);
+                                const current = parseFloat(String(item.quantity)) || 0;
+                                const next = Number((current + 1).toFixed(4));
+                                handleUpdateItem(index, 'quantity', next);
                               }}
                               activeOpacity={0.7}
                             >
