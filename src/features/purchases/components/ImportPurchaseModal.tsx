@@ -37,7 +37,7 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: '80%' }}>
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
             <View style={{ padding: 24, gap: 20 }}>
               {/* Row 1 */}
               <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
@@ -117,8 +117,8 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  dialog: { width: '100%', maxHeight: '90%' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  dialog: { width: '100%', maxHeight: '90%', overflow: 'hidden', flexDirection: 'column' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, flexShrink: 0 },
   closeBtn: { backgroundColor: 'red', width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   row: { flexDirection: 'row', gap: 16 },
   plusBtn: { width: 40, height: 40, backgroundColor: '#0F172A', borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   editorToolbar: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1 },
   toolbarDivider: { width: 1, height: 16, backgroundColor: '#E2E8F0', marginHorizontal: 8 },
   toolbarIcon: { marginHorizontal: 8 },
-  footer: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 16, borderTopWidth: 1, gap: 12 }
+  footer: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 16, borderTopWidth: 1, gap: 12, flexShrink: 0 }
 });
 
 

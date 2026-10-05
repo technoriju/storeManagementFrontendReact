@@ -7,7 +7,7 @@ export const breakpoints = {
 };
 
 export function useResponsive() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   const isMobile = width < breakpoints.tablet;
   const isTablet = width >= breakpoints.tablet && width < breakpoints.desktop;
@@ -22,5 +22,6 @@ export function useResponsive() {
     isTouch,
     isMouse,
     windowWidth: width,
+    windowHeight: height,
   };
 }

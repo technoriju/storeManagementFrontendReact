@@ -55,7 +55,7 @@ interface Props {
 
 export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowHeight } = useResponsive();
 
   // Suppliers & Products
   const { data: suppliers = [] } = useSuppliers();
@@ -293,15 +293,16 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)', padding: isMobile ? 8 : 16 }]}>
         <View
           style={[
             styles.dialog,
             {
               backgroundColor: theme.colors.surface,
               borderRadius: theme.borderRadius.lg,
-              width: isMobile ? '95%' : '85%',
+              width: isMobile ? '98%' : '85%',
               maxWidth: 1050,
+              maxHeight: isMobile ? Math.floor((windowHeight || 800) * 0.95) : Math.min(Math.floor((windowHeight || 800) * 0.90), 850),
             },
           ]}
         >
@@ -318,8 +319,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: '80%' }} keyboardShouldPersistTaps="handled">
-            <View style={{ padding: 20, gap: 16 }}>
+          <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={true}>
+            <View style={{ padding: isMobile ? 12 : 20, gap: isMobile ? 12 : 16 }}>
               {/* Error banner */}
               {errorMessage && (
                 <View style={styles.errorBanner}>
@@ -799,19 +800,19 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 16 }]}>
             <AppButton
               title="Cancel"
               variant="outline"
               onPress={onClose}
-              style={{ backgroundColor: '#0F172A', minWidth: 100 }}
+              style={{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 100 }}
               textStyle={{ color: 'white' }}
             />
             <AppButton
               title={createPurchaseMutation.isPending ? 'Saving...' : 'Submit Purchase'}
               onPress={handleSubmit}
               disabled={createPurchaseMutation.isPending}
-              style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: 140 }}
+              style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }}
             />
           </View>
         </View>
@@ -822,7 +823,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
-  dialog: { overflow: 'hidden' },
+  dialog: { overflow: 'hidden', flexDirection: 'column' },
+  modalBody: { flex: 1 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -830,6 +832,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
+    flexShrink: 0,
   },
   closeBtn: {
     backgroundColor: '#EF4444',
@@ -944,5 +947,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     gap: 12,
+    flexShrink: 0,
   },
 });
