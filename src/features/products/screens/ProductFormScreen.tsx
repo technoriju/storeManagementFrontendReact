@@ -576,14 +576,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         } catch (e) {}
       }
 
-      if (subs.length === 0) {
-        subs = [
-          { id: 1, name: 'Piece', multiplier: 10, parentUnitId: Number(selectedUnit) },
-          { id: 2, name: 'Pouch', multiplier: 12, parentUnitId: Number(selectedUnit) },
-          { id: 3, name: 'Gram', multiplier: 1000, parentUnitId: Number(selectedUnit) },
-        ];
-      }
-
+      // Do not inject fake subunit IDs that do not exist in DB
       setRawSubUnits(subs);
       const subOptions = subs.map((u: any) => ({ 
         label: u.name, 

@@ -14,6 +14,7 @@ import { useKeyboardShortcut } from '../../../shared/hooks/useKeyboardShortcut';
 import { Product } from '../../products/types';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
+import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { getProductPriceByType } from '../utils/priceUtils';
 
@@ -107,6 +108,16 @@ export const POSScreen = () => {
         };
       });
 
+      let prevDue = 0;
+      let advPay = 0;
+      if (customer?.id && Number(customer.id) !== 1) {
+        try {
+          const cBal = await saleRepository.getCustomerPreviousBalance(customer.id, customer.name);
+          if (cBal.totalDue > 0) prevDue = cBal.totalDue;
+          else if (cBal.advance > 0) advPay = cBal.advance;
+        } catch (_) {}
+      }
+
       await createSaleMutation.mutateAsync({
         sale: {
           invoiceNumber: invNum,
@@ -125,6 +136,9 @@ export const POSScreen = () => {
           orderTax: 0,
           shipping: 0,
           biller: 'POS Cashier',
+          previousDue: prevDue,
+          advancePayment: advPay,
+          showPreviousBalance: Boolean(prevDue > 0 || advPay > 0),
           notes: `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
         },
         items: receiptItems,
@@ -145,6 +159,9 @@ export const POSScreen = () => {
         total: gTotal,
         paid: gTotal,
         due: 0,
+        previousDue: prevDue,
+        advancePayment: advPay,
+        showPreviousBalance: Boolean(prevDue > 0 || advPay > 0),
         paymentMethod: 'Cash',
         items: receiptItems,
       };

@@ -226,6 +226,9 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       paid: Number(order.paid !== undefined ? order.paid : (order.grandTotal || order.total || 0)),
       due: Number(order.due !== undefined ? order.due : 0),
       paymentMethod: order.paymentMethod || 'Cash',
+      previousDue: order.previousDue !== undefined ? Number(order.previousDue) : undefined,
+      advancePayment: order.advancePayment !== undefined ? Number(order.advancePayment) : undefined,
+      showPreviousBalance: order.showPreviousBalance !== undefined ? Boolean(order.showPreviousBalance) : (Number(order.previousDue || 0) > 0 || Number(order.advancePayment || 0) > 0),
       items: itemsForPrint,
     };
 
@@ -285,6 +288,9 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           paymentStatus: s.paymentStatus || 'Unpaid',
           biller: s.biller || 'Admin',
           items: s.items || [],
+          previousDue: s.previousDue !== undefined ? Number(s.previousDue) : 0,
+          advancePayment: s.advancePayment !== undefined ? Number(s.advancePayment) : 0,
+          showPreviousBalance: s.showPreviousBalance !== undefined ? Boolean(s.showPreviousBalance) : (Number(s.previousDue || 0) > 0 || Number(s.advancePayment || 0) > 0),
           syncStatus: s.syncStatus || 'synced',
         });
       }

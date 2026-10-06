@@ -9,15 +9,15 @@ export class SaleRepository extends BaseRepository<Sale> {
   protected tableName = 'sales';
 
   protected getInsertColumns(): string {
-    return 'id, invoiceNumber, reference, customerId, customerName, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, biller, notes, createdAt, updatedAt, syncStatus';
+    return 'id, invoiceNumber, reference, customerId, customerName, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, biller, notes, previousDue, advancePayment, showPreviousBalance, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'invoiceNumber = ?, reference = ?, customerId = ?, customerName = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, biller = ?, notes = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'invoiceNumber = ?, reference = ?, customerId = ?, customerName = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, biller = ?, notes = ?, previousDue = ?, advancePayment = ?, showPreviousBalance = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Sale): any[] {
@@ -42,6 +42,9 @@ export class SaleRepository extends BaseRepository<Sale> {
       entity.paymentStatus || 'Unpaid',
       entity.biller || null,
       entity.notes || null,
+      entity.previousDue || 0,
+      entity.advancePayment || 0,
+      entity.showPreviousBalance ? 1 : 0,
       entity.createdAt,
       entity.updatedAt,
       entity.syncStatus || 'synced'
@@ -70,6 +73,9 @@ export class SaleRepository extends BaseRepository<Sale> {
       paymentStatus: (row.paymentStatus as any) || 'Unpaid',
       biller: row.biller ? String(row.biller) : undefined,
       notes: row.notes ? String(row.notes) : undefined,
+      previousDue: Number(row.previousDue || 0),
+      advancePayment: Number(row.advancePayment || 0),
+      showPreviousBalance: Boolean(row.showPreviousBalance),
       createdAt: String(row.createdAt || new Date().toISOString()),
       updatedAt: String(row.updatedAt || new Date().toISOString()),
       syncStatus: (row.syncStatus as any) || 'synced'
@@ -329,6 +335,13 @@ export class SaleRepository extends BaseRepository<Sale> {
         grandTotal: Number(entity.total || 0),
         paymentAmount: Number(entity.paid || 0),
         paymentMethod: 'CASH',
+        paid: Number(entity.paid || 0),
+        due: Number(entity.due || 0),
+        previousDue: Number(entity.previousDue || 0),
+        advancePayment: Number(entity.advancePayment || 0),
+        showPreviousBalance: Boolean(entity.showPreviousBalance),
+        notes: entity.notes || undefined,
+        paymentStatus: entity.paymentStatus || 'Unpaid',
         items: items.map((it) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
@@ -403,7 +416,7 @@ export class SaleRepository extends BaseRepository<Sale> {
     return [];
   }
 
-  private normalizeApiSale(s: any): { sale: Sale; items: SaleItem[] } {
+  private normalizeApiSale(s: any, existingSale?: Sale | null): { sale: Sale; items: SaleItem[] } {
     const saleId = Number(s.id);
     const total = Number(s.grandTotal ?? s.total ?? 0);
     const paid = Number(
@@ -411,10 +424,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         s.paid ??
         (Array.isArray(s.payments)
           ? s.payments.reduce((sum: number, pay: any) => sum + Number(pay.amount || pay.payment?.amount || 0), 0)
-          : 0)
+          : (existingSale?.paid ?? 0))
     );
     const due = Number(s.due ?? Math.max(0, total - paid));
-    let paymentStatus = s.paymentStatus;
+    let paymentStatus = s.paymentStatus || existingSale?.paymentStatus;
     if (!paymentStatus) {
       if (paid >= total && total > 0) paymentStatus = 'Paid';
       else if (paid > 0) paymentStatus = 'Partial';
@@ -426,6 +439,18 @@ export class SaleRepository extends BaseRepository<Sale> {
       : s.date
       ? String(s.date).slice(0, 10)
       : new Date().toISOString().slice(0, 10);
+
+    const prevDue = s.previousDue !== undefined && Number(s.previousDue) > 0
+      ? Number(s.previousDue)
+      : Number(existingSale?.previousDue || 0);
+
+    const advPay = s.advancePayment !== undefined && Number(s.advancePayment) > 0
+      ? Number(s.advancePayment)
+      : Number(existingSale?.advancePayment || 0);
+
+    const showPrev = s.showPreviousBalance !== undefined
+      ? Boolean(s.showPreviousBalance)
+      : Boolean(existingSale?.showPreviousBalance || (prevDue > 0 || advPay > 0));
 
     const sale: Sale = {
       id: saleId,
@@ -447,8 +472,11 @@ export class SaleRepository extends BaseRepository<Sale> {
       status: (s.status === 'COMPLETED' ? 'Completed' : s.status || 'Completed') as any,
       paymentStatus: paymentStatus as any,
       biller: s.biller || 'Admin',
-      notes: s.notes ? String(s.notes) : undefined,
-      createdAt: s.createdAt ? String(s.createdAt) : new Date().toISOString(),
+      notes: s.notes || existingSale?.notes,
+      previousDue: prevDue,
+      advancePayment: advPay,
+      showPreviousBalance: showPrev,
+      createdAt: s.createdAt ? String(s.createdAt) : (existingSale?.createdAt || new Date().toISOString()),
       updatedAt: s.updatedAt ? String(s.updatedAt) : new Date().toISOString(),
       syncStatus: 'synced',
     };
@@ -499,16 +527,16 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       for (const raw of rawList) {
         if (!raw.id) continue;
-        const { sale, items } = this.normalizeApiSale(raw);
+        const rawId = Number(raw.id);
 
         // Check if existing locally by server ID first
-        let existing = await super.getById(sale.id);
+        let existing = await super.getById(rawId);
 
         // If not found by server ID, check if a local row exists with the same invoiceNumber or reference
-        if (!existing && (sale.invoiceNumber || sale.reference)) {
+        if (!existing && (raw.invoiceNumber || raw.reference)) {
           const matchRes = await db.execute(
             `SELECT id FROM sales WHERE invoiceNumber = ? OR (reference IS NOT NULL AND reference = ?)`,
-            [sale.invoiceNumber, sale.invoiceNumber]
+            [raw.invoiceNumber, raw.invoiceNumber]
           );
           let matchedRows: any[] = [];
           if (matchRes.rows && Array.isArray(matchRes.rows)) matchedRows = matchRes.rows;
@@ -516,13 +544,17 @@ export class SaleRepository extends BaseRepository<Sale> {
 
           for (const m of matchedRows) {
             const oldId = Number(m.id);
-            if (oldId && oldId !== sale.id) {
+            if (oldId && oldId !== rawId) {
+              const oldSale = await super.getById(oldId);
+              if (oldSale && !existing) existing = oldSale;
               await db.execute(`DELETE FROM sale_items WHERE saleId = ?`, [oldId]);
               await db.execute(`DELETE FROM sales WHERE id = ?`, [oldId]);
               await outboxRepo.removeForEntity(this.tableName, oldId);
             }
           }
         }
+
+        const { sale, items } = this.normalizeApiSale(raw, existing);
 
         if (existing && existing.syncStatus !== 'synced') {
           // Do not overwrite local pending changes
@@ -597,8 +629,8 @@ export class SaleRepository extends BaseRepository<Sale> {
       const raw = response.data?.data || response.data;
       if (!raw || !raw.id) return await this.getById(id);
 
-      const { sale, items } = this.normalizeApiSale(raw);
-      const existing = await super.getById(sale.id);
+      const existing = await super.getById(id);
+      const { sale, items } = this.normalizeApiSale(raw, existing);
       if (!existing || existing.syncStatus === 'synced') {
         if (existing) {
           await super.update(sale, false);
@@ -723,11 +755,192 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
+    // If sale has due, update customer's outstanding balance
+    if (sale.customerId && Number(sale.customerId) > 0) {
+      try {
+        const cId = Number(sale.customerId);
+        const saleDue = Number(sale.due || 0);
+        if (saleDue > 0) {
+          await db.execute(
+            `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+            [saleDue, now, cId]
+          );
+        }
+      } catch (custErr) {
+        console.warn('Failed to update customer balance on sale creation:', custErr);
+      }
+    }
+
+    // If sale has paid amount, record in payments table
+    if (sale.paid && Number(sale.paid) > 0) {
+      try {
+        await db.execute(
+          `INSERT INTO payments (amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Number(sale.paid),
+            'cash',
+            'receive',
+            sale.invoiceNumber,
+            `Payment for Invoice ${sale.invoiceNumber}`,
+            sale.customerId ? Number(sale.customerId) : null,
+            now,
+            now,
+            'pending_insert'
+          ]
+        );
+      } catch (payErr) {
+        console.warn('Failed to insert payment for sale:', payErr);
+      }
+    }
+
     // Always queue in outbox for reliable auto-sync
     await outboxRepo.add(this.tableName, saleId, 'CREATE', { sale, items: fullItems });
     this.requestSync();
 
     return { ...sale, items: fullItems };
+  }
+
+  private extractRows(results: any): any[] {
+    let rawRows: any[] = [];
+    if (!results) return rawRows;
+    if (Array.isArray(results)) return results;
+    if (results.rows && Array.isArray(results.rows)) {
+      rawRows = results.rows;
+    } else if (results.rows && typeof results.rows === 'object') {
+      if ('_array' in results.rows && Array.isArray((results.rows as any)._array)) {
+        rawRows = (results.rows as any)._array;
+      } else if ('item' in results.rows && typeof (results.rows as any).length === 'number') {
+        const len = (results.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((results.rows as any).item(i));
+        }
+      } else {
+        try {
+          rawRows = Array.from(results.rows as any);
+        } catch (e) {}
+      }
+    }
+    return rawRows;
+  }
+
+  public async getCustomerPreviousBalance(
+    customerId: number | string,
+    customerName?: string
+  ): Promise<{
+    outstandingBalance: number;
+    salesDue: number;
+    totalDue: number;
+    advance: number;
+    unpaidCount: number;
+  }> {
+    try {
+      const cIdNum = Number(customerId);
+      const cIdStr = String(customerId || '').trim();
+      const cName = customerName ? customerName.trim() : '';
+
+      // 1. Fetch customer opening/ledger balance from customers table
+      let custBal = 0;
+      try {
+        const custRes = await db.execute(
+          'SELECT outstandingBalance FROM customers WHERE id = ? OR (name IS NOT NULL AND LOWER(name) = LOWER(?)) LIMIT 1',
+          [!isNaN(cIdNum) ? cIdNum : 0, cName || '']
+        );
+        const cRows = this.extractRows(custRes);
+        if (cRows.length > 0 && cRows[0]) {
+          custBal = Number(cRows[0].outstandingBalance || 0);
+        }
+      } catch (err) {
+        console.warn('Failed to query customer balance:', err);
+      }
+
+      // 2. Query ALL previous invoices for this customer from local sales table
+      let sDue = 0;
+      let unpaidCount = 0;
+      try {
+        const salesRes = await db.execute(
+          `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
+           FROM sales 
+           WHERE (
+             customerId = ? 
+             OR customerId = ? 
+             OR (customerName IS NOT NULL AND customerName != '' AND LOWER(customerName) = LOWER(?))
+           )
+           AND (status IS NULL OR LOWER(status) != 'cancelled')`,
+          [!isNaN(cIdNum) ? cIdNum : 0, cIdStr, cName]
+        );
+        const sRows = this.extractRows(salesRes);
+        for (const row of sRows) {
+          if (!row) continue;
+          const total = Number(row.total || 0);
+          const paid = Number(row.paid || 0);
+          let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
+
+          // If due is <= 0 but total > paid and paymentStatus is not 'Paid', compute real due
+          if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
+            due = total - paid;
+          }
+
+          if (due > 0) {
+            sDue += due;
+            unpaidCount++;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query sales for customer balance:', err);
+      }
+
+      // 3. Fallback: if direct SQL returned 0, check all loaded sales via getAll()
+      if (sDue === 0) {
+        try {
+          const allSales = await this.getAll();
+          for (const s of allSales) {
+            if (!s) continue;
+            const matchesId = !isNaN(cIdNum) && cIdNum > 0 && Number(s.customerId) === cIdNum;
+            const matchesName = Boolean(
+              cName && s.customerName && s.customerName.trim().toLowerCase() === cName.toLowerCase()
+            );
+            if (matchesId || matchesName) {
+              const total = Number(s.total || 0);
+              const paid = Number(s.paid || 0);
+              let due = Number(s.due || 0);
+              if (due <= 0 && total > paid && String(s.paymentStatus || '').toLowerCase() !== 'paid') {
+                due = total - paid;
+              }
+              if (due > 0) {
+                sDue += due;
+                unpaidCount++;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. Compute effective total due and advance
+      let totalDue = 0;
+      let advance = 0;
+
+      if (sDue > 0) {
+        totalDue = sDue;
+        if (custBal > 0 && custBal > sDue) {
+          totalDue = custBal;
+        }
+      } else if (custBal > 0) {
+        totalDue = custBal;
+      } else if (custBal < 0) {
+        advance = Math.abs(custBal);
+      }
+
+      return {
+        outstandingBalance: custBal,
+        salesDue: sDue,
+        totalDue,
+        advance,
+        unpaidCount,
+      };
+    } catch {
+      return { outstandingBalance: 0, salesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
+    }
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {

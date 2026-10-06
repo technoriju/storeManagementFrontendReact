@@ -1,97 +1,136 @@
-import { BaseRepository } from './BaseRepository';
 import { Payment } from '../../types/models';
-import { apiClient } from '../api/api-client';
-import { API_ENDPOINTS } from '../api/api-urls';
+import { CrudConfig, OfflineCrudRepository, endpointFor, idOf, now } from './OfflineCrudRepository';
 import { db } from '../database/db';
 
-export class PaymentRepository extends BaseRepository<Payment> {
-  protected tableName = 'payments';
+const config: CrudConfig<Payment> = {
+  tableName: 'payments',
+  entityType: 'payments',
+  endpoint: endpointFor('PAYMENTS'),
+  columns: 'id, backendId, amount, method, type, reference, notes, customerId, supplierId, createdAt, updatedAt, syncStatus',
+  placeholders: '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?',
+  updateSet: 'backendId = ?, amount = ?, method = ?, type = ?, reference = ?, notes = ?, customerId = ?, supplierId = ?, createdAt = ?, updatedAt = ?, syncStatus = ?',
+  toRow: (e) => [
+    e.id,
+    e.backendId || null,
+    e.amount,
+    e.method,
+    e.type,
+    e.reference || null,
+    e.notes || null,
+    e.customerId || null,
+    e.supplierId || null,
+    e.createdAt || now(),
+    e.updatedAt || now(),
+    e.syncStatus || 'synced',
+  ],
+  fromRow: (r) => ({
+    id: r.id,
+    backendId: r.backendId || undefined,
+    amount: Number(r.amount),
+    method: r.method,
+    type: r.type,
+    reference: r.reference || undefined,
+    notes: r.notes || undefined,
+    customerId: r.customerId || undefined,
+    supplierId: r.supplierId || undefined,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    syncStatus: r.syncStatus,
+  }),
+  normalize: (r) => ({
+    id: idOf(r),
+    backendId: idOf(r),
+    amount: Number(r.amount || 0),
+    method: (r.method || r.paymentMethod || 'cash').toLowerCase(),
+    type: r.type || 'receive',
+    reference: r.reference || r.referenceNumber || undefined,
+    notes: r.notes || undefined,
+    customerId: r.customerId ? Number(r.customerId) : undefined,
+    supplierId: r.supplierId ? Number(r.supplierId) : undefined,
+    createdAt: r.createdAt || r.paymentDate || now(),
+    updatedAt: r.updatedAt || now(),
+    syncStatus: 'synced',
+  }),
+  payload: (e) => ({
+    amount: Number(e.amount),
+    paymentMethod: e.method,
+    method: e.method,
+    type: e.type,
+    referenceNumber: e.reference,
+    reference: e.reference,
+    notes: e.notes,
+    customerId: e.customerId,
+    supplierId: e.supplierId,
+  }),
+};
 
-  protected getInsertColumns(): string {
-    return 'id, amount, method, type, reference, notes, customerId, supplierId, createdAt, updatedAt, syncStatus';
+export class PaymentRepository extends OfflineCrudRepository<Payment> {
+  constructor() {
+    super(config);
   }
 
-  protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
-  }
-
-  protected getUpdateSet(): string {
-    return 'amount = ?, method = ?, type = ?, reference = ?, notes = ?, customerId = ?, supplierId = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
-  }
-
-  protected toRow(entity: Payment): any[] {
-    return [
-      entity.id,
-      entity.amount,
-      entity.method,
-      entity.type,
-      entity.reference || null,
-      entity.notes || null,
-      entity.customerId || null,
-      entity.supplierId || null,
-      entity.createdAt,
-      entity.updatedAt,
-      entity.syncStatus || 'synced'
-    ];
-  }
-
-  protected fromRow(row: any): Payment {
-    return {
-      id: row.id,
-      amount: row.amount,
-      method: row.method,
-      type: row.type,
-      reference: row.reference,
-      notes: row.notes,
-      customerId: row.customerId,
-      supplierId: row.supplierId,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      syncStatus: row.syncStatus,
-    };
-  }
-
-  protected async syncWithApi(entity: Payment, operation: 'insert' | 'update' | 'delete'): Promise<void> {
-    // API logic to be implemented, using mock try-catch
-    try {
-      if (operation !== 'delete' && entity.syncStatus !== 'synced') {
-        entity.syncStatus = 'synced';
-        await this.update(entity, false);
-      }
-    } catch (error) {
-      console.error(`Failed to sync payment ${entity.id} with API:`, error);
-    }
-  }
-
-  public async fetchFromApi(): Promise<void> {
-    // API logic to be implemented
-  }
-
-  public async getByCustomerId(customerId: string): Promise<Payment[]> {
-    try {
-      const results = await db.execute(`SELECT * FROM ${this.tableName} WHERE customerId = ? ORDER BY createdAt DESC`, [customerId]);
-      const items: Payment[] = [];
-      if (results.rows) {
-        for (let i = 0; i < results.rows.length; i++) {
-          items.push(this.fromRow(results.rows[i]));
+  private extractRows(results: any): any[] {
+    let rawRows: any[] = [];
+    if (results.rows && Array.isArray(results.rows)) {
+      rawRows = results.rows;
+    } else if (results.rows && typeof results.rows === 'object') {
+      if ('_array' in results.rows && Array.isArray((results.rows as any)._array)) {
+        rawRows = (results.rows as any)._array;
+      } else if ('item' in results.rows && typeof (results.rows as any).length === 'number') {
+        const len = (results.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((results.rows as any).item(i));
         }
+      } else {
+        try { rawRows = Array.from(results.rows as any); } catch (e) {}
       }
-      return items;
+    } else if (Array.isArray(results)) {
+      rawRows = results;
+    }
+    return rawRows;
+  }
+
+  public async getByCustomerId(customerId: string | number): Promise<Payment[]> {
+    try {
+      const results = await db.execute(
+        `SELECT * FROM ${this.tableName} WHERE customerId = ? ORDER BY createdAt DESC`,
+        [customerId]
+      );
+      return this.extractRows(results).map((row) => this.fromRow(row));
     } catch (error) {
       throw error;
     }
   }
 
-  public async getBySupplierId(supplierId: string): Promise<Payment[]> {
+  public async getBySupplierId(supplierId: string | number): Promise<Payment[]> {
     try {
-      const results = await db.execute(`SELECT * FROM ${this.tableName} WHERE supplierId = ? ORDER BY createdAt DESC`, [supplierId]);
-      const items: Payment[] = [];
-      if (results.rows) {
-        for (let i = 0; i < results.rows.length; i++) {
-          items.push(this.fromRow(results.rows[i]));
-        }
-      }
-      return items;
+      const results = await db.execute(
+        `SELECT * FROM ${this.tableName} WHERE supplierId = ? ORDER BY createdAt DESC`,
+        [supplierId]
+      );
+      return this.extractRows(results).map((row) => this.fromRow(row));
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async getCustomerPayments(): Promise<Payment[]> {
+    try {
+      const results = await db.execute(
+        `SELECT * FROM ${this.tableName} WHERE customerId IS NOT NULL OR type = 'receive' ORDER BY createdAt DESC`
+      );
+      return this.extractRows(results).map((row) => this.fromRow(row));
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async getSupplierPayments(): Promise<Payment[]> {
+    try {
+      const results = await db.execute(
+        `SELECT * FROM ${this.tableName} WHERE supplierId IS NOT NULL OR type = 'pay' ORDER BY createdAt DESC`
+      );
+      return this.extractRows(results).map((row) => this.fromRow(row));
     } catch (error) {
       throw error;
     }

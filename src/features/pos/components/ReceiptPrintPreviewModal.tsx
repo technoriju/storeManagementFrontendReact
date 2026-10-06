@@ -110,6 +110,9 @@ export interface ReceiptPrintData {
   due?: number;
   paymentMethod?: string;
   notes?: string;
+  previousDue?: number;
+  advancePayment?: number;
+  showPreviousBalance?: boolean;
 }
 
 export type ReceiptPaperFormat = '80mm' | '140x210mm' | 'halfA4Landscape';
@@ -203,6 +206,7 @@ export function generateReceiptHtml({
   showQrCode,
   showTerms,
   showSignatures,
+  showPreviousBalance = true,
 }: {
   data: ReceiptPrintData;
   business: any;
@@ -216,6 +220,7 @@ export function generateReceiptHtml({
   showQrCode: boolean;
   showTerms: boolean;
   showSignatures: boolean;
+  showPreviousBalance?: boolean;
 }): string {
   const isThermal = paperFormat === '80mm';
   const isWholesale = customerType === 'wholesale';
@@ -236,7 +241,25 @@ export function generateReceiptHtml({
   const items = data.items || [];
   const cgstAmount = Number((gst / 2).toFixed(2));
   const sgstAmount = Number((gst / 2).toFixed(2));
-  const words = amountToWords(total);
+
+  // Previous Due / Advance calculations
+  const previousDue = Number(data.previousDue || 0);
+  const advancePayment = Number(data.advancePayment || 0);
+  const isBalanceActive = Boolean(
+    (showPreviousBalance !== undefined ? showPreviousBalance : data.showPreviousBalance) &&
+    (previousDue > 0 || advancePayment > 0)
+  );
+
+  const totalPayable = total + (isBalanceActive && previousDue > 0 ? previousDue : 0);
+  const netBalanceDue = Math.max(0, totalPayable - paid);
+
+  const adjustedAdvance = Math.min(advancePayment, total);
+  const netPayable = Math.max(0, total - adjustedAdvance);
+  const netDue = Math.max(0, netPayable - paid);
+  const remainingAdvance = Math.max(0, advancePayment - adjustedAdvance);
+
+  const activePayableAmount = isBalanceActive && previousDue > 0 ? totalPayable : isBalanceActive && advancePayment > 0 ? netPayable : total;
+  const words = amountToWords(activePayableAmount);
 
   const qrImageHtml = `<img src="${QR_CODE_DATA_URI}" alt="UPI QR" class="receipt-qr-img" />`;
 
@@ -387,9 +410,33 @@ export function generateReceiptHtml({
   <div class="double-line"></div>
 
   <div class="grand-total-row">
-    <span>GRAND TOTAL:</span>
+    <span>${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'GRAND TOTAL:'}</span>
     <span>₹${total.toFixed(2)}</span>
   </div>
+
+  ${isBalanceActive && previousDue > 0 ? `
+    <div class="summary-row bold" style="color: #dc2626; padding-top: 2px;">
+      <span>Previous Due:</span>
+      <span>+₹${previousDue.toFixed(2)}</span>
+    </div>
+    <div class="dashed-line"></div>
+    <div class="grand-total-row" style="font-size: 14px;">
+      <span>TOTAL PAYABLE:</span>
+      <span>₹${totalPayable.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  ${isBalanceActive && advancePayment > 0 ? `
+    <div class="summary-row bold" style="color: #16a34a; padding-top: 2px;">
+      <span>Advance Credit:</span>
+      <span>-₹${adjustedAdvance.toFixed(2)}</span>
+    </div>
+    <div class="dashed-line"></div>
+    <div class="grand-total-row" style="font-size: 14px;">
+      <span>NET PAYABLE:</span>
+      <span>₹${netPayable.toFixed(2)}</span>
+    </div>
+  ` : ''}
 
   <div class="double-line"></div>
 
@@ -397,12 +444,28 @@ export function generateReceiptHtml({
     <span>Amount Paid:</span>
     <span class="bold">₹${paid.toFixed(2)}</span>
   </div>
-  ${due > 0 ? `
+  ${isBalanceActive && previousDue > 0 ? `
+    <div class="summary-row bold" style="color: ${netBalanceDue > 0 ? '#dc2626' : '#059669'}; font-size: 11px;">
+      <span>Net Balance Due:</span>
+      <span>₹${netBalanceDue.toFixed(2)}</span>
+    </div>
+  ` : isBalanceActive && advancePayment > 0 ? `
+    <div class="summary-row bold" style="color: ${netDue > 0 ? '#dc2626' : '#059669'}; font-size: 11px;">
+      <span>Balance Due:</span>
+      <span>₹${netDue.toFixed(2)}</span>
+    </div>
+    ${remainingAdvance > 0 ? `
+      <div class="summary-row bold" style="color: #2563eb; font-size: 10px;">
+        <span>Remaining Advance:</span>
+        <span>₹${remainingAdvance.toFixed(2)}</span>
+      </div>
+    ` : ''}
+  ` : (due > 0 ? `
     <div class="summary-row bold" style="color: #dc2626;">
       <span>Balance Due:</span>
       <span>₹${due.toFixed(2)}</span>
     </div>
-  ` : ''}
+  ` : '')}
 
   ${showQrCode ? `
     <div class="qr-container">
@@ -636,13 +699,55 @@ export function generateReceiptHtml({
           </tr>
         ` : ''}
         <tr class="grand-total-row">
-          <td style="color: #fff; font-weight: bold;">TOTAL:</td>
+          <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'TOTAL:'}</td>
           <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: bold;">₹${total.toFixed(2)}</td>
         </tr>
+        ${isBalanceActive && previousDue > 0 ? `
+          <tr>
+            <td style="color: #dc2626; font-weight: bold;">Previous Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#dc2626'};">+₹${previousDue.toFixed(2)}</td>
+          </tr>
+          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
+            <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'};">TOTAL PAYABLE:</td>
+            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">₹${totalPayable.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        ${isBalanceActive && advancePayment > 0 ? `
+          <tr>
+            <td style="color: #16a34a; font-weight: bold;">Advance Adjusted:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#16a34a'};">-₹${adjustedAdvance.toFixed(2)}</td>
+          </tr>
+          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
+            <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'};">NET PAYABLE:</td>
+            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">₹${netPayable.toFixed(2)}</td>
+          </tr>
+        ` : ''}
         <tr>
           <td style="color: #64748b;">Received:</td>
           <td style="text-align: right; font-weight: bold;">₹${paid.toFixed(2)}</td>
         </tr>
+        ${isBalanceActive && previousDue > 0 ? `
+          <tr>
+            <td style="color: #64748b; font-weight: bold;">Net Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
+          </tr>
+        ` : isBalanceActive && advancePayment > 0 ? `
+          <tr>
+            <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
+          </tr>
+          ${remainingAdvance > 0 ? `
+          <tr>
+            <td style="color: #2563eb; font-weight: bold;">Remaining Adv:</td>
+            <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
+          </tr>
+          ` : ''}
+        ` : `
+          <tr>
+            <td style="color: #64748b;">Balance Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
+          </tr>
+        `}
       </table>
 
       ${showQrCode ? `
@@ -928,17 +1033,55 @@ export function generateReceiptHtml({
           </tr>
         ` : ''}
         <tr class="grand-total-row">
-          <td style="color: #fff; font-weight: bold;">TOTAL AMOUNT:</td>
+          <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}</td>
           <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: bold;">₹${total.toFixed(2)}</td>
         </tr>
+        ${isBalanceActive && previousDue > 0 ? `
+          <tr>
+            <td style="color: #dc2626; font-weight: bold;">Previous Due Balance:</td>
+            <td style="text-align: right; color: #dc2626; font-weight: bold;">+₹${previousDue.toFixed(2)}</td>
+          </tr>
+          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
+            <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">TOTAL PAYABLE:</td>
+            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10.5px;">₹${totalPayable.toFixed(2)}</td>
+          </tr>
+        ` : ''}
+        ${isBalanceActive && advancePayment > 0 ? `
+          <tr>
+            <td style="color: #16a34a; font-weight: bold;">Previous Advance Available:</td>
+            <td style="text-align: right; color: #16a34a; font-weight: bold;">-₹${adjustedAdvance.toFixed(2)}</td>
+          </tr>
+          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
+            <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">NET PAYABLE:</td>
+            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10.5px;">₹${netPayable.toFixed(2)}</td>
+          </tr>
+        ` : ''}
         <tr>
           <td style="color: #64748b;">Amount Received:</td>
           <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#059669'}; font-weight: bold;">₹${paid.toFixed(2)}</td>
         </tr>
-        <tr>
-          <td style="color: #64748b;">Balance Due:</td>
-          <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
-        </tr>
+        ${isBalanceActive && previousDue > 0 ? `
+          <tr>
+            <td style="color: #64748b; font-weight: bold;">Net Balance Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
+          </tr>
+        ` : isBalanceActive && advancePayment > 0 ? `
+          <tr>
+            <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
+          </tr>
+          ${remainingAdvance > 0 ? `
+          <tr>
+            <td style="color: #2563eb; font-weight: bold;">Remaining Advance:</td>
+            <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
+          </tr>
+          ` : ''}
+        ` : `
+          <tr>
+            <td style="color: #64748b;">Balance Due:</td>
+            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
+          </tr>
+        `}
       </table>
 
       ${showQrCode ? `
@@ -1046,6 +1189,15 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const [showSignatures, setShowSignatures] = useState(true);
   const [zoomScale, setZoomScale] = useState(1);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPreviousBalance, setShowPreviousBalance] = useState<boolean>(
+    data?.showPreviousBalance !== undefined ? Boolean(data.showPreviousBalance) : true
+  );
+
+  useEffect(() => {
+    if (data?.showPreviousBalance !== undefined) {
+      setShowPreviousBalance(Boolean(data.showPreviousBalance));
+    }
+  }, [data?.showPreviousBalance]);
 
   // Print execution handler for Web & Mobile using clean isolated HTML iframe
   const handlePrint = () => {
@@ -1065,6 +1217,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
           showQrCode,
           showTerms,
           showSignatures,
+          showPreviousBalance,
         });
 
         printHtmlViaIframe(htmlContent);
@@ -1100,6 +1253,21 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const biller = data.biller || 'Cashier';
   const paymentMethod = data.paymentMethod || 'Cash';
   const items = data.items || [];
+
+  // Previous balance calculations for preview
+  const previousDue = Number(data.previousDue || 0);
+  const advancePayment = Number(data.advancePayment || 0);
+  const isBalanceActive = Boolean(
+    showPreviousBalance && (previousDue > 0 || advancePayment > 0)
+  );
+
+  const totalPayable = total + (isBalanceActive && previousDue > 0 ? previousDue : 0);
+  const netBalanceDue = Math.max(0, totalPayable - paid);
+
+  const adjustedAdvance = Math.min(advancePayment, total);
+  const netPayable = Math.max(0, total - adjustedAdvance);
+  const netDue = Math.max(0, netPayable - paid);
+  const remainingAdvance = Math.max(0, advancePayment - adjustedAdvance);
 
   const isWholesale = customerType === 'wholesale';
   const isThermal = paperFormat === '80mm';
@@ -1275,6 +1443,18 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                   Terms & Sign
                 </Text>
               </TouchableOpacity>
+
+              {((previousDue > 0) || (advancePayment > 0) || data.showPreviousBalance !== undefined) && (
+                <TouchableOpacity
+                  style={[styles.toggleChip, showPreviousBalance && styles.toggleChipActive]}
+                  onPress={() => setShowPreviousBalance(!showPreviousBalance)}
+                >
+                  {showPreviousBalance && <Check size={12} color="#2563EB" />}
+                  <Text style={[styles.toggleChipText, showPreviousBalance && styles.toggleChipTextActive]}>
+                    {previousDue > 0 ? 'Prev Due' : advancePayment > 0 ? 'Advance' : 'Prev Balance'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -1429,9 +1609,37 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                     {/* Grand Total */}
                     <View style={styles.thermalGrandTotalRow}>
-                      <Text style={styles.thermalGrandTotalLabel}>GRAND TOTAL:</Text>
+                      <Text style={styles.thermalGrandTotalLabel}>
+                        {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'GRAND TOTAL:'}
+                      </Text>
                       <Text style={styles.thermalGrandTotalValue}>₹{total.toFixed(2)}</Text>
                     </View>
+
+                    {isBalanceActive && previousDue > 0 && (
+                      <>
+                        <View style={styles.thermalSummaryRow}>
+                          <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>Previous Due:</Text>
+                          <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>+₹{previousDue.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.thermalGrandTotalRow, { marginTop: 2 }]}>
+                          <Text style={[styles.thermalGrandTotalLabel, { fontSize: 13 }]}>TOTAL PAYABLE:</Text>
+                          <Text style={[styles.thermalGrandTotalValue, { fontSize: 13 }]}>₹{totalPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+
+                    {isBalanceActive && advancePayment > 0 && (
+                      <>
+                        <View style={styles.thermalSummaryRow}>
+                          <Text style={[styles.thermalMonoBold, { color: '#16A34A' }]}>Advance Credit:</Text>
+                          <Text style={[styles.thermalMonoBold, { color: '#16A34A' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.thermalGrandTotalRow, { marginTop: 2 }]}>
+                          <Text style={[styles.thermalGrandTotalLabel, { fontSize: 13 }]}>NET PAYABLE:</Text>
+                          <Text style={[styles.thermalGrandTotalValue, { fontSize: 13 }]}>₹{netPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
 
                     <View style={styles.thermalDoubleLine} />
 
@@ -1441,11 +1649,31 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                         <Text style={styles.thermalMono}>Amount Paid:</Text>
                         <Text style={styles.thermalMonoBold}>₹{paid.toFixed(2)}</Text>
                       </View>
-                      {due > 0 && (
+                      {isBalanceActive && previousDue > 0 ? (
                         <View style={styles.thermalSummaryRow}>
-                          <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>Balance Due:</Text>
-                          <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>₹{due.toFixed(2)}</Text>
+                          <Text style={[styles.thermalMonoBold, { color: netBalanceDue > 0 ? '#DC2626' : '#059669' }]}>Net Balance Due:</Text>
+                          <Text style={[styles.thermalMonoBold, { color: netBalanceDue > 0 ? '#DC2626' : '#059669' }]}>₹{netBalanceDue.toFixed(2)}</Text>
                         </View>
+                      ) : isBalanceActive && advancePayment > 0 ? (
+                        <>
+                          <View style={styles.thermalSummaryRow}>
+                            <Text style={[styles.thermalMonoBold, { color: netDue > 0 ? '#DC2626' : '#059669' }]}>Balance Due:</Text>
+                            <Text style={[styles.thermalMonoBold, { color: netDue > 0 ? '#DC2626' : '#059669' }]}>₹{netDue.toFixed(2)}</Text>
+                          </View>
+                          {remainingAdvance > 0 && (
+                            <View style={styles.thermalSummaryRow}>
+                              <Text style={[styles.thermalMonoBold, { color: '#2563EB' }]}>Remaining Advance:</Text>
+                              <Text style={[styles.thermalMonoBold, { color: '#2563EB' }]}>₹{remainingAdvance.toFixed(2)}</Text>
+                            </View>
+                          )}
+                        </>
+                      ) : (
+                        due > 0 && (
+                          <View style={styles.thermalSummaryRow}>
+                            <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>Balance Due:</Text>
+                            <Text style={[styles.thermalMonoBold, { color: '#DC2626' }]}>₹{due.toFixed(2)}</Text>
+                          </View>
+                        )
                       )}
                     </View>
 
@@ -1732,11 +1960,40 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                             </>
                           )}
                           <View style={[styles.lsTotalRow, colorMode === 'bw' && { backgroundColor: '#000000' }]}>
-                            <Text style={styles.lsTotalKey}>TOTAL AMOUNT:</Text>
+                            <Text style={styles.lsTotalKey}>
+                              {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}
+                            </Text>
                             <Text style={[styles.lsTotalVal, colorMode === 'bw' && { color: '#FFFFFF' }]}>
                               ₹{total.toFixed(2)}
                             </Text>
                           </View>
+
+                          {isBalanceActive && previousDue > 0 && (
+                            <>
+                              <View style={styles.lsSumRow}>
+                                <Text style={[styles.lsSumKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due Balance:</Text>
+                                <Text style={[styles.lsSumVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
+                              </View>
+                              <View style={[styles.lsTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 3 }]}>
+                                <Text style={[styles.lsTotalKey, { color: '#991B1B', fontSize: 10 }]}>TOTAL PAYABLE:</Text>
+                                <Text style={[styles.lsTotalVal, { color: '#991B1B', fontSize: 11 }]}>₹{totalPayable.toFixed(2)}</Text>
+                              </View>
+                            </>
+                          )}
+
+                          {isBalanceActive && advancePayment > 0 && (
+                            <>
+                              <View style={styles.lsSumRow}>
+                                <Text style={[styles.lsSumKey, { color: '#16A34A', fontWeight: '700' }]}>Previous Advance Credit:</Text>
+                                <Text style={[styles.lsSumVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
+                              </View>
+                              <View style={[styles.lsTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 3 }]}>
+                                <Text style={[styles.lsTotalKey, { color: '#166534', fontSize: 10 }]}>NET PAYABLE:</Text>
+                                <Text style={[styles.lsTotalVal, { color: '#166534', fontSize: 11 }]}>₹{netPayable.toFixed(2)}</Text>
+                              </View>
+                            </>
+                          )}
+
                           <View style={styles.lsSumRow}>
                             <Text style={styles.lsSumKey}>Amount Received:</Text>
                             <Text
@@ -1748,20 +2005,60 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               ₹{paid.toFixed(2)}
                             </Text>
                           </View>
-                          <View style={styles.lsSumRow}>
-                            <Text style={styles.lsSumKey}>Balance Due:</Text>
-                            <Text
-                              style={[
-                                styles.lsSumVal,
-                                {
-                                  color: colorMode === 'bw' ? '#000000' : (due > 0 ? '#DC2626' : '#64748B'),
-                                  fontWeight: '700',
-                                },
-                              ]}
-                            >
-                              ₹{due.toFixed(2)}
-                            </Text>
-                          </View>
+                          {isBalanceActive && previousDue > 0 ? (
+                            <View style={styles.lsSumRow}>
+                              <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
+                              <Text
+                                style={[
+                                  styles.lsSumVal,
+                                  {
+                                    color: colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#DC2626' : '#059669'),
+                                    fontWeight: '700',
+                                  },
+                                ]}
+                              >
+                                ₹{netBalanceDue.toFixed(2)}
+                              </Text>
+                            </View>
+                          ) : isBalanceActive && advancePayment > 0 ? (
+                            <>
+                              <View style={styles.lsSumRow}>
+                                <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Balance Due:</Text>
+                                <Text
+                                  style={[
+                                    styles.lsSumVal,
+                                    {
+                                      color: colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#DC2626' : '#059669'),
+                                      fontWeight: '700',
+                                    },
+                                  ]}
+                                >
+                                  ₹{netDue.toFixed(2)}
+                                </Text>
+                              </View>
+                              {remainingAdvance > 0 && (
+                                <View style={styles.lsSumRow}>
+                                  <Text style={[styles.lsSumKey, { color: '#2563EB', fontWeight: '700' }]}>Remaining Advance:</Text>
+                                  <Text style={[styles.lsSumVal, { color: '#2563EB', fontWeight: '700' }]}>₹{remainingAdvance.toFixed(2)}</Text>
+                                </View>
+                              )}
+                            </>
+                          ) : (
+                            <View style={styles.lsSumRow}>
+                              <Text style={styles.lsSumKey}>Balance Due:</Text>
+                              <Text
+                                style={[
+                                  styles.lsSumVal,
+                                  {
+                                    color: colorMode === 'bw' ? '#000000' : (due > 0 ? '#DC2626' : '#64748B'),
+                                    fontWeight: '700',
+                                  },
+                                ]}
+                              >
+                                ₹{due.toFixed(2)}
+                              </Text>
+                            </View>
+                          )}
                         </View>
 
                         {/* UPI QR & Quick Verification */}

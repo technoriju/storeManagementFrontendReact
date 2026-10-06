@@ -110,6 +110,7 @@ export type PaymentMethod = 'cash' | 'card' | 'upi' | 'other' | 'split';
 export type PaymentType = 'receive' | 'pay';
 
 export interface Payment extends BaseEntity {
+  backendId?: number;
   amount: number;
   method: PaymentMethod;
   type: PaymentType;
@@ -205,6 +206,9 @@ export interface Sale extends BaseEntity {
   paymentStatus: 'Paid' | 'Unpaid' | 'Overdue' | 'Partial';
   biller?: string;
   notes?: string;
+  previousDue?: number;
+  advancePayment?: number;
+  showPreviousBalance?: boolean;
   items?: SaleItem[];
 }
 

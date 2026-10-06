@@ -25,10 +25,12 @@ import {
   ShoppingCart,
   AlertCircle,
   User,
+  Check,
 } from 'lucide-react-native';
 import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
 import { useCustomerStore } from '../../customers/store/customerStore';
 import { Customer } from '../../../types/models';
+import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
@@ -99,6 +101,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const [customerModalError, setCustomerModalError] = useState<string | null>(null);
   const [isSavingCustomer, setIsSavingCustomer] = useState<boolean>(false);
   const [localAddedCustomers, setLocalAddedCustomers] = useState<Customer[]>([]);
+
+  // Customer Previous Balance / Advance in Invoice State
+  const [showPreviousBalance, setShowPreviousBalance] = useState<boolean>(false);
+  const [balanceType, setBalanceType] = useState<'due' | 'advance'>('due');
+  const [previousBalanceAmount, setPreviousBalanceAmount] = useState<string>('0');
+  const [customerRawBalance, setCustomerRawBalance] = useState<number>(0);
+  const [unpaidInvoicesCount, setUnpaidInvoicesCount] = useState<number>(0);
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
+
+  // Payment Status & Received Amount State
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Paid');
+  const [amountReceived, setAmountReceived] = useState<string>('');
 
   // Product Search & Items Table
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -210,6 +224,72 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     return allCustomers.find((c) => String(c.id) === String(customerId));
   }, [allCustomers, customerId]);
 
+  useEffect(() => {
+    if (!customerId || !selectedCustomer) {
+      setShowPreviousBalance(false);
+      setPreviousBalanceAmount('0');
+      setCustomerRawBalance(0);
+      setUnpaidInvoicesCount(0);
+      return;
+    }
+
+    setIsLoadingBalance(true);
+    saleRepository
+      .getCustomerPreviousBalance(selectedCustomer.id, selectedCustomer.name)
+      .then((res) => {
+        setUnpaidInvoicesCount(res.unpaidCount || 0);
+        if (res.totalDue > 0) {
+          setCustomerRawBalance(res.totalDue);
+          setBalanceType('due');
+          setPreviousBalanceAmount(String(res.totalDue));
+          setShowPreviousBalance(true);
+        } else if (res.advance > 0) {
+          setCustomerRawBalance(-res.advance);
+          setBalanceType('advance');
+          setPreviousBalanceAmount(String(res.advance));
+          setShowPreviousBalance(true);
+        } else {
+          // Fallback to customer's own outstandingBalance if set
+          const bal = Number(selectedCustomer.outstandingBalance || 0);
+          setCustomerRawBalance(bal);
+          if (bal > 0) {
+            setBalanceType('due');
+            setPreviousBalanceAmount(String(bal));
+            setShowPreviousBalance(true);
+          } else if (bal < 0) {
+            setBalanceType('advance');
+            setPreviousBalanceAmount(String(Math.abs(bal)));
+            setShowPreviousBalance(true);
+          } else {
+            setBalanceType('due');
+            setPreviousBalanceAmount('0');
+            setShowPreviousBalance(false);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch customer invoice dues:', err);
+        const bal = Number(selectedCustomer.outstandingBalance || 0);
+        setCustomerRawBalance(bal);
+        if (bal > 0) {
+          setBalanceType('due');
+          setPreviousBalanceAmount(String(bal));
+          setShowPreviousBalance(true);
+        } else if (bal < 0) {
+          setBalanceType('advance');
+          setPreviousBalanceAmount(String(Math.abs(bal)));
+          setShowPreviousBalance(true);
+        } else {
+          setBalanceType('due');
+          setPreviousBalanceAmount('0');
+          setShowPreviousBalance(false);
+        }
+      })
+      .finally(() => {
+        setIsLoadingBalance(false);
+      });
+  }, [customerId, selectedCustomer]);
+
   const selectedSupplier = useMemo(() => {
     return suppliers.find((s) => String(s.id) === String(supplierId));
   }, [suppliers, supplierId]);
@@ -218,6 +298,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     { label: 'Completed', value: 'Completed' },
     { label: 'Pending', value: 'Pending' },
     { label: 'Ordered', value: 'Ordered' },
+  ];
+
+  const paymentStatusOptions = [
+    { label: 'Paid (Cash / Full)', value: 'Paid' },
+    { label: 'Unpaid (Due / Udhar)', value: 'Unpaid' },
+    { label: 'Partial (Partial Due)', value: 'Partial' },
   ];
 
   const brandsMap = useMemo(() => {
@@ -396,7 +482,32 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     }
 
     try {
-      setIsSubmitting(true);
+      const parsedBalanceAmt = Math.abs(parseFloat(previousBalanceAmount) || 0);
+      const prevDueVal = showPreviousBalance && balanceType === 'due' ? parsedBalanceAmt : 0;
+      const advPaymentVal = showPreviousBalance && balanceType === 'advance' ? parsedBalanceAmt : 0;
+
+      let finalPaid = grandTotal;
+      let finalDue = 0;
+      let effectivePaymentStatus: 'Paid' | 'Unpaid' | 'Partial' = paymentStatus;
+
+      if (paymentStatus === 'Paid') {
+        finalPaid = grandTotal;
+        finalDue = 0;
+      } else if (paymentStatus === 'Unpaid') {
+        finalPaid = 0;
+        finalDue = grandTotal;
+      } else if (paymentStatus === 'Partial') {
+        const parsed = parseFloat(amountReceived);
+        finalPaid = !isNaN(parsed) && parsed > 0 ? Math.min(grandTotal, parsed) : 0;
+        finalDue = Math.max(0, grandTotal - finalPaid);
+        if (finalPaid >= grandTotal) effectivePaymentStatus = 'Paid';
+        else if (finalPaid === 0) effectivePaymentStatus = 'Unpaid';
+      } else {
+        finalPaid = status === 'Completed' ? grandTotal : 0;
+        finalDue = status === 'Completed' ? 0 : grandTotal;
+        effectivePaymentStatus = status === 'Completed' ? 'Paid' : 'Unpaid';
+      }
+
       await createSaleMutation.mutateAsync({
         sale: {
           invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
@@ -412,12 +523,15 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
           shipping: shippingNum,
           gst: itemsTax,
           total: grandTotal,
-          paid: status === 'Completed' ? grandTotal : 0,
-          due: status === 'Completed' ? 0 : grandTotal,
+          paid: finalPaid,
+          due: finalDue,
           status,
-          paymentStatus: status === 'Completed' ? 'Paid' : 'Unpaid',
+          paymentStatus: effectivePaymentStatus,
           biller: biller || 'Admin',
           notes: notes || undefined,
+          previousDue: prevDueVal,
+          advancePayment: advPaymentVal,
+          showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
         },
         items: calculatedItems.map((item) => ({
           productId: item.productId,
@@ -452,9 +566,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         gst: itemsTax + orderTaxNum,
         shipping: shippingNum,
         total: grandTotal,
-        paid: status === 'Completed' ? grandTotal : 0,
-        due: status === 'Completed' ? 0 : grandTotal,
+        paid: finalPaid,
+        due: finalDue,
         paymentMethod: 'Cash',
+        previousDue: prevDueVal,
+        advancePayment: advPaymentVal,
+        showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
         notes: notes ? `${notes} [${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]` : `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
         items: calculatedItems.map((item) => ({
           productId: item.productId,
@@ -476,6 +593,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       setSupplierId('');
       setSearchQuery('');
       setNotes('');
+      setShowPreviousBalance(false);
+      setPreviousBalanceAmount('0');
+      setCustomerRawBalance(0);
+      setUnpaidInvoicesCount(0);
+      setPaymentStatus('Paid');
+      setAmountReceived('');
       onClose();
 
       setPrintData(receiptData);
@@ -584,6 +707,146 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                   />
                 </View>
               </View>
+
+              {/* Customer Previous Due / Advance Invoice Option */}
+              {selectedCustomer && (
+                <View
+                  style={[
+                    styles.balanceCard,
+                    {
+                      borderColor: showPreviousBalance
+                        ? (balanceType === 'due' ? '#FCA5A5' : '#86EFAC')
+                        : theme.colors.border,
+                      backgroundColor: showPreviousBalance
+                        ? (balanceType === 'due' ? '#FFF5F5' : '#F0FDF4')
+                        : '#F8FAFC',
+                    },
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 240 }}>
+                      <View
+                        style={[
+                          styles.balanceIndicatorDot,
+                          {
+                            backgroundColor: customerRawBalance > 0
+                              ? '#DC2626'
+                              : customerRawBalance < 0
+                              ? '#16A34A'
+                              : '#64748B',
+                          },
+                        ]}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text }}>
+                          {selectedCustomer.name} Balance:{' '}
+                          <Text
+                            style={{
+                              color: customerRawBalance > 0
+                                ? '#DC2626'
+                                : customerRawBalance < 0
+                                ? '#16A34A'
+                                : '#64748B',
+                            }}
+                          >
+                            {customerRawBalance > 0
+                              ? `₹${customerRawBalance.toFixed(2)} Due`
+                              : customerRawBalance < 0
+                              ? `₹${Math.abs(customerRawBalance).toFixed(2)} Advance`
+                              : '₹0.00 (Cleared)'}
+                          </Text>
+                        </Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 }}>
+                          {isLoadingBalance
+                            ? 'Fetching previous invoice dues...'
+                            : customerRawBalance > 0
+                            ? unpaidInvoicesCount > 0
+                              ? `Fetched ₹${customerRawBalance.toFixed(2)} due from ${unpaidInvoicesCount} previous invoice(s)`
+                              : 'Customer has outstanding due from prior transactions'
+                            : customerRawBalance < 0
+                            ? 'Customer has excess advance credit available'
+                            : 'No prior balance recorded for this customer'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Toggle: Show on invoice or not */}
+                    <TouchableOpacity
+                      style={[
+                        styles.invoiceOptionToggle,
+                        showPreviousBalance && styles.invoiceOptionToggleActive,
+                      ]}
+                      onPress={() => setShowPreviousBalance(!showPreviousBalance)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkboxBox, showPreviousBalance && styles.checkboxBoxActive]}>
+                        {showPreviousBalance && <Check size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.invoiceOptionToggleText, showPreviousBalance && { color: '#2563EB', fontWeight: '700' }]}>
+                        Show on Invoice
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Config details when toggled ON */}
+                  {showPreviousBalance && (
+                    <View style={[styles.balanceConfigRow, { borderTopColor: theme.colors.border }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          {/* Due vs Advance Selector */}
+                          <View style={styles.miniSegmentGroup}>
+                            <TouchableOpacity
+                              style={[styles.miniSegmentBtn, balanceType === 'due' && styles.miniSegmentBtnRedActive]}
+                              onPress={() => setBalanceType('due')}
+                            >
+                              <Text style={[styles.miniSegmentText, balanceType === 'due' && styles.miniSegmentTextActive]}>
+                                Previous Due
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.miniSegmentBtn, balanceType === 'advance' && styles.miniSegmentBtnGreenActive]}
+                              onPress={() => setBalanceType('advance')}
+                            >
+                              <Text style={[styles.miniSegmentText, balanceType === 'advance' && styles.miniSegmentTextActive]}>
+                                Advance Payment
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Editable Amount */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>Amount:</Text>
+                            <View style={[styles.miniAmountInputContainer, { borderColor: theme.colors.border }]}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary }}>₹</Text>
+                              <TextInput
+                                style={[styles.miniAmountInput, { color: theme.colors.text }]}
+                                keyboardType="numeric"
+                                value={previousBalanceAmount}
+                                onChangeText={setPreviousBalanceAmount}
+                                placeholder="0.00"
+                              />
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Live calculation preview */}
+                        <View
+                          style={[
+                            styles.livePreviewBadge,
+                            { backgroundColor: balanceType === 'due' ? '#FEE2E2' : '#DCFCE7' },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: balanceType === 'due' ? '#991B1B' : '#166534' }}>
+                            {balanceType === 'due'
+                              ? `Current Bill ₹${grandTotal.toFixed(2)} + Prev Due ₹${(parseFloat(previousBalanceAmount) || 0).toFixed(2)} = Total ₹${(grandTotal + (parseFloat(previousBalanceAmount) || 0)).toFixed(2)}`
+                              : `Current Bill ₹${grandTotal.toFixed(2)} - Advance ₹${(parseFloat(previousBalanceAmount) || 0).toFixed(2)} = Net ₹${Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0)).toFixed(2)}`}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Pricing Mode Toggle (Wholesale vs Retailer) */}
               <View style={[styles.tierRow, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
@@ -1020,9 +1283,32 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                     placeholder="Select Status"
                     options={statusOptions}
                     value={status}
-                    onSelect={(val) => setStatus(val)}
+                    onSelect={(val) => {
+                      setStatus(val);
+                      if (val === 'Pending') setPaymentStatus('Unpaid');
+                    }}
                   />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <AppSelect
+                    label="Payment Status *"
+                    placeholder="Select Payment"
+                    options={paymentStatusOptions}
+                    value={paymentStatus}
+                    onSelect={(val) => setPaymentStatus(val as any)}
+                  />
+                </View>
+                {paymentStatus === 'Partial' && (
+                  <View style={{ flex: 1 }}>
+                    <AppInput
+                      label="Amount Paid (₹) *"
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      value={amountReceived}
+                      onChangeText={setAmountReceived}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* Bottom Section: Notes & Live Grand Total Summary */}
@@ -1479,5 +1765,102 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  balanceCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 4,
+  },
+  balanceIndicatorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  invoiceOptionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceOptionToggleActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxBoxActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#2563EB',
+  },
+  invoiceOptionToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  balanceConfigRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  miniSegmentGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+    padding: 2,
+  },
+  miniSegmentBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  miniSegmentBtnRedActive: {
+    backgroundColor: '#DC2626',
+  },
+  miniSegmentBtnGreenActive: {
+    backgroundColor: '#16A34A',
+  },
+  miniSegmentText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  miniSegmentTextActive: {
+    color: '#FFFFFF',
+  },
+  miniAmountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    height: 32,
+    backgroundColor: '#FFFFFF',
+  },
+  miniAmountInput: {
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 60,
+    height: 30,
+    padding: 0,
+    marginLeft: 2,
+  },
+  livePreviewBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
 });
