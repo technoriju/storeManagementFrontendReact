@@ -17,9 +17,11 @@ import {
   Printer, 
   CreditCard,
   PlusCircle, 
+  Share2,
 } from 'lucide-react-native';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { AddSalesModal } from '../components/AddSalesModal';
+import { ShareSaleModal } from '../components/ShareSaleModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -32,6 +34,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [shareData, setShareData] = useState<any | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -233,6 +237,13 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     setViewInvoice({ ...invoice, items: invItems });
   };
 
+  const handleOpenShare = async (invoice: any) => {
+    if (!invoice) return;
+    const invItems = await loadInvoiceItems(invoice);
+    setShareData({ ...invoice, items: invItems });
+    setShowShareModal(true);
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status) {
       case 'Paid': return { bg: '#ECFDF5', text: '#10B981', dot: '#10B981' };
@@ -315,11 +326,14 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     {
       key: 'actions',
       title: 'Actions',
-      width: 100,
+      width: 130,
       render: (_: any, item: any) => (
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Pressable onPress={() => handleOpenPrintPreview(item)} style={{ padding: 4 }}>
             <Printer size={16} color={theme.colors.primary} />
+          </Pressable>
+          <Pressable onPress={() => handleOpenShare(item)} style={{ padding: 4 }}>
+            <Share2 size={16} color="#10B981" />
           </Pressable>
           <Pressable onPress={() => handleViewInvoice(item)} style={{ padding: 4 }}>
             <Eye size={16} color={theme.colors.textSecondary} />
@@ -443,8 +457,17 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                 </View>
               </ScrollView>
 
-              {/* Modal footer with Print action */}
-              <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
+              {/* Modal footer with Share and Print actions */}
+              <View style={[styles.modalFooter, { borderTopColor: theme.colors.border, gap: 10 }]}>
+                <Pressable
+                  style={[styles.printButton, { backgroundColor: '#10B981' }]}
+                  onPress={() => {
+                    handleOpenShare(viewInvoice);
+                  }}
+                >
+                  <Share2 size={16} color="white" />
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Share</Text>
+                </Pressable>
                 <Pressable
                   style={[styles.printButton, { backgroundColor: theme.colors.primary }]}
                   onPress={() => {
@@ -466,6 +489,19 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
         onClose={() => {
           setShowPrintModal(false);
           setPrintData(null);
+        }}
+      />
+
+      <ShareSaleModal
+        visible={showShareModal}
+        sale={shareData}
+        onClose={() => {
+          setShowShareModal(false);
+          setShareData(null);
+        }}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview(shareData);
         }}
       />
 

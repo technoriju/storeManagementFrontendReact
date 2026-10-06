@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 import { QR_CODE_DATA_URI } from '../../../assets/qrCodeAsset';
+import { ShareSaleModal } from './ShareSaleModal';
 
 // Helper: Convert numbers to Indian Rupees in words
 export function amountToWords(amount: number): string {
@@ -1044,6 +1045,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const [showTerms, setShowTerms] = useState(true);
   const [showSignatures, setShowSignatures] = useState(true);
   const [zoomScale, setZoomScale] = useState(1);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Print execution handler for Web & Mobile using clean isolated HTML iframe
   const handlePrint = () => {
@@ -1130,6 +1132,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
             </View>
 
             <View style={styles.topActions}>
+              <TouchableOpacity style={[styles.printButton, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
+                <Share2 size={16} color="#FFFFFF" />
+                <Text style={styles.printButtonText}>Share</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.printButton} onPress={handlePrint}>
                 <Printer size={16} color="#FFFFFF" />
                 <Text style={styles.printButtonText}>Print Receipt</Text>
@@ -1813,6 +1819,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
               <TouchableOpacity style={styles.secondaryBtn} onPress={onClose}>
                 <Text style={styles.secondaryBtnText}>Close</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryPrintBtn, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
+                <Share2 size={16} color="#FFFFFF" />
+                <Text style={styles.primaryPrintBtnText}>Share</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.primaryPrintBtn} onPress={handlePrint}>
                 <Printer size={16} color="#FFFFFF" />
                 <Text style={styles.primaryPrintBtnText}>Print Invoice</Text>
@@ -1821,6 +1831,12 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
           </View>
         </View>
       </View>
+
+      <ShareSaleModal
+        visible={showShareModal}
+        sale={data}
+        onClose={() => setShowShareModal(false)}
+      />
     </Modal>
   );
 };

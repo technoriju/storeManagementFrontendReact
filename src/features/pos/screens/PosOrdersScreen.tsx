@@ -20,8 +20,10 @@ import {
   Trash2,
   X,
   Printer,
+  Share2,
 } from 'lucide-react-native';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
+import { ShareSaleModal } from '../components/ShareSaleModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -40,12 +42,14 @@ const ActionMenu = ({
   onDelete,
   onView,
   onPrint,
+  onShare,
 }: {
   item: any;
   theme: any;
   onDelete: (item: any) => void;
   onView: (item: any) => void;
   onPrint: (item: any) => void;
+  onShare: (item: any) => void;
 }) => {
   const [visible, setVisible] = useState(false);
   const [layout, setLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
@@ -90,6 +94,14 @@ const ActionMenu = ({
               }}
             />
             <MenuItem
+              icon={<Share2 size={16} color="#10B981" />}
+              label="Share Sale"
+              onPress={() => {
+                setVisible(false);
+                onShare(item);
+              }}
+            />
+            <MenuItem
               icon={<Trash2 size={16} color="#EF4444" />}
               label="Delete Sale"
               onPress={() => {
@@ -111,6 +123,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [printOrderData, setPrintOrderData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [shareOrderData, setShareOrderData] = useState<any | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -223,6 +237,13 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     if (!order) return;
     const ordItems = await loadOrderItems(order);
     setSelectedOrder({ ...order, items: ordItems });
+  };
+
+  const handleOpenShare = async (order: any) => {
+    if (!order) return;
+    const ordItems = await loadOrderItems(order);
+    setShareOrderData({ ...order, items: ordItems });
+    setShowShareModal(true);
   };
 
   // Initial demo orders if DB has no sales yet
@@ -440,6 +461,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       onDelete={handleDelete}
       onView={handleViewOrder}
       onPrint={handleOpenPrintPreview}
+      onShare={handleOpenShare}
     />
   );
 
@@ -507,8 +529,17 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                 </View>
               </ScrollView>
 
-              {/* Modal Footer with Print Action */}
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+              {/* Modal Footer with Share and Print Actions */}
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#10B981' }}
+                  onPress={() => {
+                    handleOpenShare(selectedOrder);
+                  }}
+                >
+                  <Share2 size={16} color="white" />
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Share</Text>
+                </Pressable>
                 <Pressable
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' }}
                   onPress={() => {
@@ -530,6 +561,19 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         onClose={() => {
           setShowPrintModal(false);
           setPrintOrderData(null);
+        }}
+      />
+
+      <ShareSaleModal
+        visible={showShareModal}
+        sale={shareOrderData}
+        onClose={() => {
+          setShowShareModal(false);
+          setShareOrderData(null);
+        }}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview(shareOrderData);
         }}
       />
     </View>
