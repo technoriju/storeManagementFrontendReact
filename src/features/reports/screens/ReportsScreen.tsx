@@ -6,9 +6,12 @@ import { ReportsService, ReportFilters } from '../services/reports.service';
 const REPORT_TYPES = [
   { id: 'sales', name: 'Sales Register' },
   { id: 'purchases', name: 'Purchases Register' },
+  { id: 'customer_outstanding', name: 'Customer Ledger / Due' },
+  { id: 'supplier_outstanding', name: 'Supplier Ledger / Due' },
+  { id: 'payments', name: 'Payments In / Out' },
+  { id: 'balance_sheet', name: 'Balance Sheet' },
   { id: 'inventory', name: 'Inventory & Units' },
   { id: 'profit_loss', name: 'Profit & Loss' },
-  { id: 'balance_sheet', name: 'Balance Sheet' },
   { id: 'gst', name: 'GST Summary' },
   { id: 'expenses', name: 'Expense Log' },
 ];
@@ -30,6 +33,15 @@ export const ReportsScreen = () => {
           break;
         case 'purchases':
           result = await ReportsService.getPurchasesReport(filters);
+          break;
+        case 'customer_outstanding':
+          result = await ReportsService.getCustomerOutstandingReport(filters);
+          break;
+        case 'supplier_outstanding':
+          result = await ReportsService.getSupplierOutstandingReport(filters);
+          break;
+        case 'payments':
+          result = await ReportsService.getPaymentReport(filters);
           break;
         case 'inventory':
           result = await ReportsService.getInventoryReport(filters);

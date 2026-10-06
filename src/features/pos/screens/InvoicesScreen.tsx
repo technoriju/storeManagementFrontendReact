@@ -228,7 +228,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       due: Number(invoice.due !== undefined ? invoice.due : 0),
       previousDue: invoice.previousDue !== undefined ? Number(invoice.previousDue) : undefined,
       advancePayment: invoice.advancePayment !== undefined ? Number(invoice.advancePayment) : undefined,
-      showPreviousBalance: invoice.showPreviousBalance !== undefined ? Boolean(invoice.showPreviousBalance) : undefined,
+      showPreviousBalance: invoice.showPreviousBalance !== undefined ? Boolean(invoice.showPreviousBalance) : (Number(invoice.previousDue || 0) > 0 || Number(invoice.advancePayment || 0) > 0),
       paymentMethod: invoice.paymentMethod || 'Cash',
       items: itemsForPrint,
     };

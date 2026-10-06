@@ -1,4 +1,5 @@
 import { db } from '../../../core/database/db';
+import { apiClient } from '../../../core/api/api-client';
 
 export interface ReportFilters {
   startDate?: string;
@@ -24,8 +25,25 @@ export class ReportsService {
   }
 
   static async getSalesReport(filters: ReportFilters) {
+    try {
+      const apiRes = await apiClient.get('/reports/sales', { params: filters });
+      if (apiRes.data?.data && Array.isArray(apiRes.data.data)) {
+        return apiRes.data.data;
+      }
+    } catch {}
+
     let query = `
-      SELECT s.id, s.invoiceNumber, s.createdAt, s.total, s.status, c.name as customerName
+      SELECT 
+        s.id, 
+        s.invoiceNumber, 
+        COALESCE(s.date, SUBSTR(s.createdAt, 1, 10)) as date, 
+        s.total, 
+        COALESCE(s.paid, 0) as paid, 
+        COALESCE(s.due, 0) as due, 
+        COALESCE(s.previousDue, 0) as previousDue,
+        COALESCE(s.paymentStatus, 'Unpaid') as paymentStatus, 
+        s.status, 
+        COALESCE(s.customerName, c.name, 'Walk-in Customer') as customerName
       FROM sales s
       LEFT JOIN customers c ON s.customerId = c.id
       WHERE ${this.buildDateCondition('s.createdAt', filters)}
@@ -35,14 +53,30 @@ export class ReportsService {
       query += ` AND s.customerId = '${filters.customerId}'`;
     }
     
-    query += ' ORDER BY s.createdAt DESC';
+    query += ' ORDER BY s.id DESC';
     const res = await db.execute(query);
     return res.rows || [];
   }
 
   static async getPurchasesReport(filters: ReportFilters) {
+    try {
+      const apiRes = await apiClient.get('/reports/purchases', { params: filters });
+      if (apiRes.data?.data && Array.isArray(apiRes.data.data)) {
+        return apiRes.data.data;
+      }
+    } catch {}
+
     let query = `
-      SELECT p.id, p.invoiceNumber, p.createdAt, p.total, p.status, s.name as supplierName
+      SELECT 
+        p.id, 
+        p.invoiceNumber, 
+        COALESCE(p.date, SUBSTR(p.createdAt, 1, 10)) as date, 
+        p.total, 
+        COALESCE(p.paid, 0) as paid, 
+        COALESCE(p.due, 0) as due, 
+        COALESCE(p.paymentStatus, 'Unpaid') as paymentStatus, 
+        p.status, 
+        COALESCE(p.supplierName, s.name, 'Supplier') as supplierName
       FROM purchases p
       LEFT JOIN suppliers s ON p.supplierId = s.id
       WHERE ${this.buildDateCondition('p.createdAt', filters)}
@@ -52,7 +86,7 @@ export class ReportsService {
       query += ` AND p.supplierId = '${filters.supplierId}'`;
     }
     
-    query += ' ORDER BY p.createdAt DESC';
+    query += ' ORDER BY p.id DESC';
     const res = await db.execute(query);
     return res.rows || [];
   }
@@ -155,49 +189,96 @@ export class ReportsService {
   }
 
   static async getBalanceSheetReport(filters: ReportFilters) {
-    // Current Assets:
-    // a. Stock Valuation: base units * box cost
+    try {
+      const apiRes = await apiClient.get('/reports/balance-sheet', { params: filters });
+      const apiData = apiRes.data?.data || apiRes.data?.statement;
+      if (Array.isArray(apiData) && apiData.length > 0) {
+        return apiData;
+      }
+    } catch {}
+
+    // Offline / Local SQLite calculation:
+    // 1. Current Assets:
+    // a. Stock Valuation: base units * cost
     const stockRes = await db.execute(`
       SELECT SUM(stockQuantity * cost) as stockValuation FROM products
     `);
     const stockValuation = Number(stockRes.rows[0]?.stockValuation || 0);
 
-    // b. Cash & Bank (Collected Sales - Paid Purchases - Expenses)
-    const cashInRes = await db.execute(`
-      SELECT SUM(paid) as totalCashIn FROM sales WHERE status != 'cancelled'
-    `);
-    const cashIn = Number(cashInRes.rows[0]?.totalCashIn || 0);
+    // b. Cash & Liquid Balance from payments table & sales/purchases
+    let totalCashIn = 0;
+    let totalCashOut = 0;
+    try {
+      const payInRes = await db.execute(`
+        SELECT SUM(amount) as cashIn FROM payments WHERE (type IS NULL OR LOWER(type) = 'receive')
+      `);
+      totalCashIn = Number(payInRes.rows[0]?.cashIn || 0);
 
-    const cashOutPurchasesRes = await db.execute(`
-      SELECT SUM(paid) as totalPurchasesPaid FROM purchases WHERE status != 'cancelled'
-    `);
-    const purchasesPaid = Number(cashOutPurchasesRes.rows[0]?.totalPurchasesPaid || 0);
+      const payOutRes = await db.execute(`
+        SELECT SUM(amount) as cashOut FROM payments WHERE LOWER(type) = 'pay'
+      `);
+      totalCashOut = Number(payOutRes.rows[0]?.cashOut || 0);
+    } catch {}
+
+    // If payments table was empty, fallback to sales.paid & purchases.paid
+    if (totalCashIn === 0) {
+      const cashInRes = await db.execute(`
+        SELECT SUM(paid) as totalCashIn FROM sales WHERE status != 'cancelled'
+      `);
+      totalCashIn = Number(cashInRes.rows[0]?.totalCashIn || 0);
+    }
+    if (totalCashOut === 0) {
+      const cashOutPurchasesRes = await db.execute(`
+        SELECT SUM(paid) as totalPurchasesPaid FROM purchases WHERE status != 'cancelled'
+      `);
+      totalCashOut = Number(cashOutPurchasesRes.rows[0]?.totalPurchasesPaid || 0);
+    }
 
     const expensesRes = await db.execute(`
       SELECT SUM(amount) as totalExpenses FROM expenses
     `);
     const totalExpenses = Number(expensesRes.rows[0]?.totalExpenses || 0);
 
-    const netCashAndBank = Math.max(0, cashIn - purchasesPaid - totalExpenses);
+    const netCashAndBank = Number(Math.max(0, totalCashIn - totalCashOut - totalExpenses).toFixed(2));
 
     // c. Accounts Receivable (Customer Outstanding)
-    const arRes = await db.execute(`
-      SELECT SUM(due) as accountsReceivable FROM sales WHERE status != 'cancelled'
-    `);
-    const accountsReceivable = Number(arRes.rows[0]?.accountsReceivable || 0);
+    let accountsReceivable = 0;
+    try {
+      const custRes = await db.execute(`
+        SELECT SUM(outstandingBalance) as totalDue FROM customers WHERE outstandingBalance > 0
+      `);
+      accountsReceivable = Number(custRes.rows[0]?.totalDue || 0);
+    } catch {}
 
-    const totalCurrentAssets = stockValuation + netCashAndBank + accountsReceivable;
+    if (accountsReceivable === 0) {
+      const arRes = await db.execute(`
+        SELECT SUM(due) as accountsReceivable FROM sales WHERE status != 'cancelled'
+      `);
+      accountsReceivable = Number(arRes.rows[0]?.accountsReceivable || 0);
+    }
 
-    // Current Liabilities:
+    const totalCurrentAssets = Number((stockValuation + netCashAndBank + accountsReceivable).toFixed(2));
+
+    // 2. Current Liabilities:
     // Accounts Payable (Supplier Outstanding)
-    const apRes = await db.execute(`
-      SELECT SUM(due) as accountsPayable FROM purchases WHERE status != 'cancelled'
-    `);
-    const accountsPayable = Number(apRes.rows[0]?.accountsPayable || 0);
+    let accountsPayable = 0;
+    try {
+      const suppRes = await db.execute(`
+        SELECT SUM(outstandingBalance) as totalDue FROM suppliers WHERE outstandingBalance > 0
+      `);
+      accountsPayable = Number(suppRes.rows[0]?.totalDue || 0);
+    } catch {}
+
+    if (accountsPayable === 0) {
+      const apRes = await db.execute(`
+        SELECT SUM(due) as accountsPayable FROM purchases WHERE status != 'cancelled'
+      `);
+      accountsPayable = Number(apRes.rows[0]?.accountsPayable || 0);
+    }
     const totalCurrentLiabilities = accountsPayable;
 
-    // Equity: Net Working Capital
-    const workingCapital = totalCurrentAssets - totalCurrentLiabilities;
+    // 3. Equity: Net Working Capital
+    const workingCapital = Number((totalCurrentAssets - totalCurrentLiabilities).toFixed(2));
 
     return [
       { category: 'ASSETS', item: 'Inventory Valuation (Stock in Box/Pcs)', amount: stockValuation, type: 'Current Asset' },
@@ -208,6 +289,88 @@ export class ReportsService {
       { category: 'LIABILITIES', item: 'TOTAL LIABILITIES', amount: totalCurrentLiabilities, type: 'Subtotal' },
       { category: 'EQUITY', item: 'Net Working Capital (Assets - Liabilities)', amount: workingCapital, type: 'Equity / Net Worth' },
     ];
+  }
+
+  static async getCustomerOutstandingReport(filters: ReportFilters) {
+    try {
+      const apiRes = await apiClient.get('/reports/customer-outstanding', { params: filters });
+      if (apiRes.data?.data && Array.isArray(apiRes.data.data)) {
+        return apiRes.data.data;
+      }
+    } catch {}
+
+    const query = `
+      SELECT 
+        c.id as customerId,
+        c.name as customerName,
+        COALESCE(c.phone, '') as phone,
+        COALESCE(c.outstandingBalance, 0) as outstandingBalance,
+        COUNT(s.id) as totalSalesCount,
+        COALESCE(SUM(s.total), 0) as totalBilled,
+        COALESCE(SUM(s.paid), 0) as totalPaid,
+        COALESCE(SUM(s.due), 0) as totalDue
+      FROM customers c
+      LEFT JOIN sales s ON (s.customerId = c.id AND s.status != 'cancelled')
+      GROUP BY c.id
+      ORDER BY c.outstandingBalance DESC, totalDue DESC
+    `;
+    const res = await db.execute(query);
+    return res.rows || [];
+  }
+
+  static async getSupplierOutstandingReport(filters: ReportFilters) {
+    try {
+      const apiRes = await apiClient.get('/reports/supplier-outstanding', { params: filters });
+      if (apiRes.data?.data && Array.isArray(apiRes.data.data)) {
+        return apiRes.data.data;
+      }
+    } catch {}
+
+    const query = `
+      SELECT 
+        s.id as supplierId,
+        s.name as supplierName,
+        COALESCE(s.phone, '') as phone,
+        COALESCE(s.outstandingBalance, 0) as outstandingBalance,
+        COUNT(p.id) as totalPurchasesCount,
+        COALESCE(SUM(p.total), 0) as totalPurchased,
+        COALESCE(SUM(p.paid), 0) as totalPaid,
+        COALESCE(SUM(p.due), 0) as totalDue
+      FROM suppliers s
+      LEFT JOIN purchases p ON (p.supplierId = s.id AND p.status != 'cancelled')
+      GROUP BY s.id
+      ORDER BY s.outstandingBalance DESC, totalDue DESC
+    `;
+    const res = await db.execute(query);
+    return res.rows || [];
+  }
+
+  static async getPaymentReport(filters: ReportFilters) {
+    try {
+      const apiRes = await apiClient.get('/reports/payments', { params: filters });
+      if (apiRes.data?.data && Array.isArray(apiRes.data.data)) {
+        return apiRes.data.data;
+      }
+    } catch {}
+
+    const query = `
+      SELECT 
+        p.id,
+        COALESCE(SUBSTR(p.createdAt, 1, 10), '') as date,
+        p.amount,
+        p.method as paymentMethod,
+        COALESCE(p.type, 'receive') as type,
+        COALESCE(p.reference, '') as reference,
+        COALESCE(c.name, s.name, 'N/A') as partyName,
+        COALESCE(p.notes, '') as notes
+      FROM payments p
+      LEFT JOIN customers c ON p.customerId = c.id
+      LEFT JOIN suppliers s ON p.supplierId = s.id
+      WHERE ${this.buildDateCondition('p.createdAt', filters)}
+      ORDER BY p.id DESC
+    `;
+    const res = await db.execute(query);
+    return res.rows || [];
   }
 
   static async getGSTReport(filters: ReportFilters) {

@@ -335,6 +335,13 @@ export class SaleRepository extends BaseRepository<Sale> {
         grandTotal: Number(entity.total || 0),
         paymentAmount: Number(entity.paid || 0),
         paymentMethod: 'CASH',
+        paid: Number(entity.paid || 0),
+        due: Number(entity.due || 0),
+        previousDue: Number(entity.previousDue || 0),
+        advancePayment: Number(entity.advancePayment || 0),
+        showPreviousBalance: Boolean(entity.showPreviousBalance),
+        notes: entity.notes || undefined,
+        paymentStatus: entity.paymentStatus || 'Unpaid',
         items: items.map((it) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
@@ -409,7 +416,7 @@ export class SaleRepository extends BaseRepository<Sale> {
     return [];
   }
 
-  private normalizeApiSale(s: any): { sale: Sale; items: SaleItem[] } {
+  private normalizeApiSale(s: any, existingSale?: Sale | null): { sale: Sale; items: SaleItem[] } {
     const saleId = Number(s.id);
     const total = Number(s.grandTotal ?? s.total ?? 0);
     const paid = Number(
@@ -417,10 +424,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         s.paid ??
         (Array.isArray(s.payments)
           ? s.payments.reduce((sum: number, pay: any) => sum + Number(pay.amount || pay.payment?.amount || 0), 0)
-          : 0)
+          : (existingSale?.paid ?? 0))
     );
     const due = Number(s.due ?? Math.max(0, total - paid));
-    let paymentStatus = s.paymentStatus;
+    let paymentStatus = s.paymentStatus || existingSale?.paymentStatus;
     if (!paymentStatus) {
       if (paid >= total && total > 0) paymentStatus = 'Paid';
       else if (paid > 0) paymentStatus = 'Partial';
@@ -432,6 +439,18 @@ export class SaleRepository extends BaseRepository<Sale> {
       : s.date
       ? String(s.date).slice(0, 10)
       : new Date().toISOString().slice(0, 10);
+
+    const prevDue = s.previousDue !== undefined && Number(s.previousDue) > 0
+      ? Number(s.previousDue)
+      : Number(existingSale?.previousDue || 0);
+
+    const advPay = s.advancePayment !== undefined && Number(s.advancePayment) > 0
+      ? Number(s.advancePayment)
+      : Number(existingSale?.advancePayment || 0);
+
+    const showPrev = s.showPreviousBalance !== undefined
+      ? Boolean(s.showPreviousBalance)
+      : Boolean(existingSale?.showPreviousBalance || (prevDue > 0 || advPay > 0));
 
     const sale: Sale = {
       id: saleId,
@@ -453,11 +472,11 @@ export class SaleRepository extends BaseRepository<Sale> {
       status: (s.status === 'COMPLETED' ? 'Completed' : s.status || 'Completed') as any,
       paymentStatus: paymentStatus as any,
       biller: s.biller || 'Admin',
-      notes: s.notes ? String(s.notes) : undefined,
-      previousDue: Number(s.previousDue || 0),
-      advancePayment: Number(s.advancePayment || 0),
-      showPreviousBalance: Boolean(s.showPreviousBalance),
-      createdAt: s.createdAt ? String(s.createdAt) : new Date().toISOString(),
+      notes: s.notes || existingSale?.notes,
+      previousDue: prevDue,
+      advancePayment: advPay,
+      showPreviousBalance: showPrev,
+      createdAt: s.createdAt ? String(s.createdAt) : (existingSale?.createdAt || new Date().toISOString()),
       updatedAt: s.updatedAt ? String(s.updatedAt) : new Date().toISOString(),
       syncStatus: 'synced',
     };
@@ -508,16 +527,16 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       for (const raw of rawList) {
         if (!raw.id) continue;
-        const { sale, items } = this.normalizeApiSale(raw);
+        const rawId = Number(raw.id);
 
         // Check if existing locally by server ID first
-        let existing = await super.getById(sale.id);
+        let existing = await super.getById(rawId);
 
         // If not found by server ID, check if a local row exists with the same invoiceNumber or reference
-        if (!existing && (sale.invoiceNumber || sale.reference)) {
+        if (!existing && (raw.invoiceNumber || raw.reference)) {
           const matchRes = await db.execute(
             `SELECT id FROM sales WHERE invoiceNumber = ? OR (reference IS NOT NULL AND reference = ?)`,
-            [sale.invoiceNumber, sale.invoiceNumber]
+            [raw.invoiceNumber, raw.invoiceNumber]
           );
           let matchedRows: any[] = [];
           if (matchRes.rows && Array.isArray(matchRes.rows)) matchedRows = matchRes.rows;
@@ -525,13 +544,17 @@ export class SaleRepository extends BaseRepository<Sale> {
 
           for (const m of matchedRows) {
             const oldId = Number(m.id);
-            if (oldId && oldId !== sale.id) {
+            if (oldId && oldId !== rawId) {
+              const oldSale = await super.getById(oldId);
+              if (oldSale && !existing) existing = oldSale;
               await db.execute(`DELETE FROM sale_items WHERE saleId = ?`, [oldId]);
               await db.execute(`DELETE FROM sales WHERE id = ?`, [oldId]);
               await outboxRepo.removeForEntity(this.tableName, oldId);
             }
           }
         }
+
+        const { sale, items } = this.normalizeApiSale(raw, existing);
 
         if (existing && existing.syncStatus !== 'synced') {
           // Do not overwrite local pending changes
@@ -606,8 +629,8 @@ export class SaleRepository extends BaseRepository<Sale> {
       const raw = response.data?.data || response.data;
       if (!raw || !raw.id) return await this.getById(id);
 
-      const { sale, items } = this.normalizeApiSale(raw);
-      const existing = await super.getById(sale.id);
+      const existing = await super.getById(id);
+      const { sale, items } = this.normalizeApiSale(raw, existing);
       if (!existing || existing.syncStatus === 'synced') {
         if (existing) {
           await super.update(sale, false);
@@ -729,6 +752,45 @@ export class SaleRepository extends BaseRepository<Sale> {
         } catch (stockErr) {
           console.error(`Failed to deduct stock for product ${item.productId}:`, stockErr);
         }
+      }
+    }
+
+    // If sale has due, update customer's outstanding balance
+    if (sale.customerId && Number(sale.customerId) > 0) {
+      try {
+        const cId = Number(sale.customerId);
+        const saleDue = Number(sale.due || 0);
+        if (saleDue > 0) {
+          await db.execute(
+            `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+            [saleDue, now, cId]
+          );
+        }
+      } catch (custErr) {
+        console.warn('Failed to update customer balance on sale creation:', custErr);
+      }
+    }
+
+    // If sale has paid amount, record in payments table
+    if (sale.paid && Number(sale.paid) > 0) {
+      try {
+        await db.execute(
+          `INSERT INTO payments (amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Number(sale.paid),
+            'cash',
+            'receive',
+            sale.invoiceNumber,
+            `Payment for Invoice ${sale.invoiceNumber}`,
+            sale.customerId ? Number(sale.customerId) : null,
+            now,
+            now,
+            'pending_insert'
+          ]
+        );
+      } catch (payErr) {
+        console.warn('Failed to insert payment for sale:', payErr);
       }
     }
 

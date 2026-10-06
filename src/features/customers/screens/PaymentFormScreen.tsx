@@ -14,6 +14,7 @@ import {
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
+import { db } from '../../../core/database/db';
 import { PaymentMethod, PaymentType, Payment, Customer, Supplier } from '../../../types/models';
 import { useCustomerStore } from '../store/customerStore';
 import { useSupplierStore } from '../../suppliers/store/supplierStore';
@@ -157,7 +158,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
       await paymentRepository.insert(newPayment);
 
-      // Update party balances
+      // Update party balances and allocate towards unpaid invoices
       if (activeEntityType === 'customer') {
         const customer = await customerRepository.getById(selectedPartyId);
         if (customer) {
@@ -172,6 +173,44 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           await customerRepository.update(updatedCustomer);
           updateCustomer(updatedCustomer);
         }
+
+        // Allocate received payment towards customer's unpaid sales invoices (oldest first)
+        if (activePaymentType === 'receive') {
+          try {
+            const unpaidSalesRes = await db.execute(
+              `SELECT id, total, paid, due, paymentStatus FROM sales 
+               WHERE (customerId = ? OR customerId = ?) AND (status IS NULL OR LOWER(status) != 'cancelled')
+               ORDER BY id ASC`,
+              [selectedPartyId, String(selectedPartyId)]
+            );
+            let rawSales: any[] = [];
+            if (unpaidSalesRes.rows && Array.isArray(unpaidSalesRes.rows)) rawSales = unpaidSalesRes.rows;
+            else if (unpaidSalesRes.rows && typeof unpaidSalesRes.rows === 'object' && '_array' in unpaidSalesRes.rows) rawSales = (unpaidSalesRes.rows as any)._array;
+
+            let remainingToAllocate = parsedAmount;
+            for (const sRow of rawSales) {
+              if (remainingToAllocate <= 0) break;
+              const sTotal = Number(sRow.total || 0);
+              const sPaid = Number(sRow.paid || 0);
+              let sDue = Number(sRow.due !== undefined && sRow.due !== null ? sRow.due : Math.max(0, sTotal - sPaid));
+              if (sDue <= 0 && sTotal > sPaid && String(sRow.paymentStatus || '').toLowerCase() !== 'paid') sDue = sTotal - sPaid;
+              if (sDue <= 0) continue;
+
+              const alloc = Math.min(sDue, remainingToAllocate);
+              const newPaid = sPaid + alloc;
+              const newDue = Math.max(0, sDue - alloc);
+              const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+
+              await db.execute(
+                `UPDATE sales SET paid = ?, due = ?, paymentStatus = ?, syncStatus = 'pending_update', updatedAt = ? WHERE id = ?`,
+                [newPaid, newDue, newStatus, now, sRow.id]
+              );
+              remainingToAllocate -= alloc;
+            }
+          } catch (allocErr) {
+            console.warn('Failed to allocate payment to unpaid sales:', allocErr);
+          }
+        }
       } else {
         const supplier = await supplierRepository.getById(selectedPartyId);
         if (supplier) {
@@ -185,6 +224,44 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           };
           await supplierRepository.update(updatedSupplier);
           updateSupplier(updatedSupplier);
+        }
+
+        // Allocate payment towards supplier's unpaid purchase bills (oldest first)
+        if (activePaymentType === 'pay') {
+          try {
+            const unpaidPurRes = await db.execute(
+              `SELECT id, total, paid, due, paymentStatus FROM purchases 
+               WHERE (supplierId = ? OR supplierId = ?) AND (status IS NULL OR LOWER(status) != 'cancelled')
+               ORDER BY id ASC`,
+              [selectedPartyId, String(selectedPartyId)]
+            );
+            let rawPurs: any[] = [];
+            if (unpaidPurRes.rows && Array.isArray(unpaidPurRes.rows)) rawPurs = unpaidPurRes.rows;
+            else if (unpaidPurRes.rows && typeof unpaidPurRes.rows === 'object' && '_array' in unpaidPurRes.rows) rawPurs = (unpaidPurRes.rows as any)._array;
+
+            let remainingToAllocate = parsedAmount;
+            for (const pRow of rawPurs) {
+              if (remainingToAllocate <= 0) break;
+              const pTotal = Number(pRow.total || 0);
+              const pPaid = Number(pRow.paid || 0);
+              let pDue = Number(pRow.due !== undefined && pRow.due !== null ? pRow.due : Math.max(0, pTotal - pPaid));
+              if (pDue <= 0 && pTotal > pPaid && String(pRow.paymentStatus || '').toLowerCase() !== 'paid') pDue = pTotal - pPaid;
+              if (pDue <= 0) continue;
+
+              const alloc = Math.min(pDue, remainingToAllocate);
+              const newPaid = pPaid + alloc;
+              const newDue = Math.max(0, pDue - alloc);
+              const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+
+              await db.execute(
+                `UPDATE purchases SET paid = ?, due = ?, paymentStatus = ?, syncStatus = 'pending_update', updatedAt = ? WHERE id = ?`,
+                [newPaid, newDue, newStatus, now, pRow.id]
+              );
+              remainingToAllocate -= alloc;
+            }
+          } catch (allocErr) {
+            console.warn('Failed to allocate payment to unpaid purchases:', allocErr);
+          }
         }
       }
 

@@ -180,6 +180,10 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         grandTotal: Number(entity.total || 0),
         paymentAmount: Number(entity.paid || 0),
         paymentMethod: 'CASH',
+        paid: Number(entity.paid || 0),
+        due: Number(entity.due || 0),
+        paymentStatus: entity.paymentStatus || 'Unpaid',
+        notes: entity.notes || undefined,
         items: items.map((it) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
@@ -537,6 +541,45 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         } catch (stockErr) {
           console.error(`Failed to update stock for product ${item.productId}:`, stockErr);
         }
+      }
+    }
+
+    // If purchase has due, update supplier's outstanding balance
+    if (purchase.supplierId && Number(purchase.supplierId) > 0) {
+      try {
+        const sId = Number(purchase.supplierId);
+        const purDue = Number(purchase.due || 0);
+        if (purDue > 0) {
+          await db.execute(
+            `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+            [purDue, now, sId]
+          );
+        }
+      } catch (suppErr) {
+        console.warn('Failed to update supplier balance on purchase creation:', suppErr);
+      }
+    }
+
+    // If purchase has paid amount, record in payments table (type = 'pay')
+    if (purchase.paid && Number(purchase.paid) > 0) {
+      try {
+        await db.execute(
+          `INSERT INTO payments (amount, method, type, reference, notes, supplierId, createdAt, updatedAt, syncStatus)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Number(purchase.paid),
+            'cash',
+            'pay',
+            purchase.invoiceNumber || purchase.reference,
+            `Payment for Purchase ${purchase.invoiceNumber || purchase.reference}`,
+            purchase.supplierId ? Number(purchase.supplierId) : null,
+            now,
+            now,
+            'pending_insert'
+          ]
+        );
+      } catch (payErr) {
+        console.warn('Failed to insert payment for purchase:', payErr);
       }
     }
 
