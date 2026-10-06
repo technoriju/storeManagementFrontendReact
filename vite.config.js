@@ -13,6 +13,8 @@ export default defineConfig({
       '@env': path.resolve(__dirname, '__mocks__/@env.js'),
       'react-native-document-picker': path.resolve(__dirname, '__mocks__/react-native-document-picker.js'),
       '@react-native-community/netinfo': path.resolve(__dirname, '__mocks__/@react-native-community/netinfo.js'),
+      'react-native-view-shot': path.resolve(__dirname, '__mocks__/react-native-view-shot.js'),
+      'react-native-share': path.resolve(__dirname, '__mocks__/react-native-share.js'),
     },
     extensions: ['.web.mjs', '.mjs', '.web.js', '.js', '.web.mts', '.mts', '.web.ts', '.ts', '.web.jsx', '.jsx', '.web.tsx', '.tsx', '.json'],
   },

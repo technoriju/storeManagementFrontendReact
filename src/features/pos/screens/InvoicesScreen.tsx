@@ -499,6 +499,10 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           setShowShareModal(false);
           setShareData(null);
         }}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview(shareData);
+        }}
       />
 
       <AddSalesModal

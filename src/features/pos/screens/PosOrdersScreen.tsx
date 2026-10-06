@@ -571,6 +571,10 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           setShowShareModal(false);
           setShareOrderData(null);
         }}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview(shareOrderData);
+        }}
       />
     </View>
   );
