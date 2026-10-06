@@ -17,6 +17,7 @@ import { purchaseReturnRepository } from '../repositories/PurchaseReturnReposito
 import { saleReturnRepository } from '../repositories/SaleReturnRepository';
 import { purchaseOrderRepository } from '../repositories/PurchaseOrderRepository';
 import { quotationRepository } from '../repositories/QuotationRepository';
+import { paymentRepository } from '../repositories/PaymentRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -138,6 +139,7 @@ class SyncEngine {
       'sale_returns',
       'purchase_orders',
       'quotations',
+      'payments',
     ]) {
       await outboxRepo.removeDeletedInvalidIds(entityType);
     }
@@ -182,6 +184,9 @@ class SyncEngine {
         } else if (item.entityType === 'sale_returns') {
           await saleReturnRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'payments') {
+          await paymentRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);
         }
@@ -210,6 +215,7 @@ class SyncEngine {
         saleReturnRepository.fetchFromApi(),
         purchaseOrderRepository.fetchFromApi(),
         quotationRepository.fetchFromApi(),
+        paymentRepository.fetchFromApi(),
       ]);
     } catch (e) {
       console.warn('[SyncEngine] pullServerChanges error:', e);

@@ -69,4 +69,8 @@ export const API_ENDPOINTS = {
     BASE: '/users',
     BY_ID: (id: string | number) => `/users/${id}`,
   },
+  PAYMENTS: {
+    BASE: '/payments',
+    BY_ID: (id: string | number) => `/payments/${id}`,
+  },
 };

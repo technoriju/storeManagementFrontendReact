@@ -110,6 +110,7 @@ export type PaymentMethod = 'cash' | 'card' | 'upi' | 'other' | 'split';
 export type PaymentType = 'receive' | 'pay';
 
 export interface Payment extends BaseEntity {
+  backendId?: number;
   amount: number;
   method: PaymentMethod;
   type: PaymentType;

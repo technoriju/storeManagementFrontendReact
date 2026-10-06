@@ -201,6 +201,11 @@ export const initializeDatabase = () => {
       'ALTER TABLE purchase_return_items ADD COLUMN syncStatus TEXT DEFAULT \'synced\'',
       'ALTER TABLE products ADD COLUMN categoryName TEXT',
       'ALTER TABLE products ADD COLUMN brandName TEXT',
+      'ALTER TABLE payments ADD COLUMN backendId INTEGER',
+      'ALTER TABLE payments ADD COLUMN type TEXT DEFAULT \'receive\'',
+      'ALTER TABLE payments ADD COLUMN notes TEXT',
+      'ALTER TABLE payments ADD COLUMN customerId INTEGER',
+      'ALTER TABLE payments ADD COLUMN supplierId INTEGER',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -287,6 +292,7 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         amount REAL NOT NULL,
         method TEXT NOT NULL,
         type TEXT NOT NULL,

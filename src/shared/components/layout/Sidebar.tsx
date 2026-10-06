@@ -112,6 +112,7 @@ const menuSections: MenuSection[] = [
     title: 'Peoples',
     items: [
       { id: 'customers', label: 'Customers', icon: 'users' },
+      { id: 'customer_payment', label: 'Customer Payment', icon: 'dollar-sign' },
       { id: 'suppliers', label: 'Suppliers', icon: 'user' },
       { id: 'stores', label: 'Stores', icon: 'home' },
       { id: 'warehouses', label: 'Warehouses', icon: 'archive' },
