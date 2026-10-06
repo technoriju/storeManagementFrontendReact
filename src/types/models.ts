@@ -206,6 +206,9 @@ export interface Sale extends BaseEntity {
   paymentStatus: 'Paid' | 'Unpaid' | 'Overdue' | 'Partial';
   biller?: string;
   notes?: string;
+  previousDue?: number;
+  advancePayment?: number;
+  showPreviousBalance?: boolean;
   items?: SaleItem[];
 }
 

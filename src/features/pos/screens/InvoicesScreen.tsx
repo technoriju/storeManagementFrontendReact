@@ -93,6 +93,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           biller: s.biller || 'Admin',
           notes: s.notes,
           items: s.items || [],
+          previousDue: s.previousDue,
+          advancePayment: s.advancePayment,
+          showPreviousBalance: s.showPreviousBalance,
           syncStatus: s.syncStatus || 'synced',
         });
       }
@@ -223,6 +226,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       total: Number(invoice.total || 0),
       paid: Number(invoice.paid !== undefined ? invoice.paid : invoice.total || 0),
       due: Number(invoice.due !== undefined ? invoice.due : 0),
+      previousDue: invoice.previousDue !== undefined ? Number(invoice.previousDue) : undefined,
+      advancePayment: invoice.advancePayment !== undefined ? Number(invoice.advancePayment) : undefined,
+      showPreviousBalance: invoice.showPreviousBalance !== undefined ? Boolean(invoice.showPreviousBalance) : undefined,
       paymentMethod: invoice.paymentMethod || 'Cash',
       items: itemsForPrint,
     };
@@ -442,18 +448,74 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                     <Text style={{ color: theme.colors.textSecondary }}>Taxes & GST:</Text>
                     <Text style={{ color: theme.colors.text }}>₹{Number((viewInvoice.orderTax || 0) + (viewInvoice.gst || 0)).toFixed(2)}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
-                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total:</Text>
-                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{Number(viewInvoice.total).toFixed(2)}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
-                    <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>Balance Due:</Text>
-                    <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>₹{Number(viewInvoice.due).toFixed(2)}</Text>
-                  </View>
+                  {viewInvoice.showPreviousBalance && Number(viewInvoice.previousDue || 0) > 0 ? (
+                    <>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 14 }}>Current Bill:</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 14 }}>₹{Number(viewInvoice.total).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#EF4444', fontWeight: '600' }}>Previous Due:</Text>
+                        <Text style={{ color: '#EF4444', fontWeight: '600' }}>+₹{Number(viewInvoice.previousDue).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 4 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Total Payable:</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{(Number(viewInvoice.total) + Number(viewInvoice.previousDue)).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#EF4444', fontWeight: '700' }}>Net Balance Due:</Text>
+                        <Text style={{ color: '#EF4444', fontWeight: '700' }}>₹{Math.max(0, Number(viewInvoice.total) + Number(viewInvoice.previousDue) - Number(viewInvoice.paid)).toFixed(2)}</Text>
+                      </View>
+                    </>
+                  ) : viewInvoice.showPreviousBalance && Number(viewInvoice.advancePayment || 0) > 0 ? (
+                    <>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 14 }}>Current Bill:</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 14 }}>₹{Number(viewInvoice.total).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Advance Credit:</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>-₹{Math.min(Number(viewInvoice.advancePayment), Number(viewInvoice.total)).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 4 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Net Payable:</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{Math.max(0, Number(viewInvoice.total) - Math.min(Number(viewInvoice.advancePayment), Number(viewInvoice.total))).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>Balance Due:</Text>
+                        <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>₹{Math.max(0, Math.max(0, Number(viewInvoice.total) - Math.min(Number(viewInvoice.advancePayment), Number(viewInvoice.total))) - Number(viewInvoice.paid)).toFixed(2)}</Text>
+                      </View>
+                      {Number(viewInvoice.advancePayment) > Number(viewInvoice.total) && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: '#3B82F6', fontWeight: '600' }}>Remaining Advance:</Text>
+                          <Text style={{ color: '#3B82F6', fontWeight: '600' }}>₹{(Number(viewInvoice.advancePayment) - Number(viewInvoice.total)).toFixed(2)}</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
+                        <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total:</Text>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{Number(viewInvoice.total).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>Balance Due:</Text>
+                        <Text style={{ color: viewInvoice.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>₹{Number(viewInvoice.due).toFixed(2)}</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
               </ScrollView>
 

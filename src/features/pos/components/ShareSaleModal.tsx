@@ -101,6 +101,9 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
     due,
     paymentMethod: sale.paymentMethod || 'Cash',
     notes: sale.notes,
+    previousDue: Number(sale.previousDue || 0),
+    advancePayment: Number(sale.advancePayment || 0),
+    showPreviousBalance: Boolean(sale.showPreviousBalance),
     items,
   };
 }
@@ -149,6 +152,22 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
     return toReceiptPrintData(sale);
   }, [sale]);
 
+  // Previous balance calculations
+  const previousDue = Number(receiptData?.previousDue || 0);
+  const advancePayment = Number(receiptData?.advancePayment || 0);
+  const isBalanceActive = Boolean(
+    receiptData?.showPreviousBalance && (previousDue > 0 || advancePayment > 0)
+  );
+
+  const totalPayable = (receiptData?.total || 0) + (isBalanceActive && previousDue > 0 ? previousDue : 0);
+  const paidAmt = Number(receiptData?.paid !== undefined ? receiptData.paid : (receiptData?.total || 0));
+  const netBalanceDue = Math.max(0, totalPayable - paidAmt);
+
+  const adjustedAdvance = Math.min(advancePayment, receiptData?.total || 0);
+  const netPayable = Math.max(0, (receiptData?.total || 0) - adjustedAdvance);
+  const netDue = Math.max(0, netPayable - paidAmt);
+  const remainingAdvance = Math.max(0, advancePayment - adjustedAdvance);
+
   const htmlContent = useMemo(() => {
     if (!receiptData) return '';
     return generateReceiptHtml({
@@ -164,8 +183,9 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
       showQrCode: true,
       showTerms: true,
       showSignatures: true,
+      showPreviousBalance: isBalanceActive,
     });
-  }, [receiptData, business, invoiceSettings, paperFormat]);
+  }, [receiptData, business, invoiceSettings, paperFormat, isBalanceActive]);
 
   if (!visible || !receiptData) return null;
 
@@ -309,7 +329,18 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
       // Fallback: direct WhatsApp URL
       const rawPhone = customerPhone.trim() || receiptData.customerPhone || '';
       const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
-      const msg = `🧾 *Invoice #${invNumber}*\nStore: *${business.businessName}*\nTotal: *₹${receiptData.total.toFixed(2)}*\nStatus: *${(receiptData.due ?? 0) === 0 ? 'PAID' : 'DUE ₹' + (receiptData.due ?? 0).toFixed(2)}*`;
+      let msgStatus = (receiptData.due ?? 0) === 0 ? 'PAID' : 'DUE ₹' + (receiptData.due ?? 0).toFixed(2);
+      let totalLine = `Total: *₹${receiptData.total.toFixed(2)}*`;
+
+      if (isBalanceActive && previousDue > 0) {
+        totalLine = `Current Bill: *₹${receiptData.total.toFixed(2)}*\nPrevious Due: *+₹${previousDue.toFixed(2)}*\nTotal Payable: *₹${totalPayable.toFixed(2)}*`;
+        msgStatus = netBalanceDue === 0 ? 'PAID' : 'DUE ₹' + netBalanceDue.toFixed(2);
+      } else if (isBalanceActive && advancePayment > 0) {
+        totalLine = `Current Bill: *₹${receiptData.total.toFixed(2)}*\nAdvance Credit: *-₹${adjustedAdvance.toFixed(2)}*\nNet Payable: *₹${netPayable.toFixed(2)}*`;
+        msgStatus = netDue === 0 ? 'PAID' : 'DUE ₹' + netDue.toFixed(2);
+      }
+
+      const msg = `🧾 *Invoice #${invNumber}*\nStore: *${business.businessName}*\n${totalLine}\nStatus: *${msgStatus}*`;
       const waUrl = cleanPhone
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
         : `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -328,7 +359,18 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
   const handleEmail = async () => {
     const targetEmail = customerEmail.trim() || receiptData.customerEmail || '';
     const subject = `Invoice ${invNumber} - ${business.businessName}`;
-    const body = `Please find invoice #${invNumber} from ${business.businessName}.\n\nTotal Amount: ₹${receiptData.total.toFixed(2)}\nDate: ${receiptData.date}\nPayment Status: ${(receiptData.due ?? 0) === 0 ? 'Paid' : 'Due ₹' + (receiptData.due ?? 0).toFixed(2)}\n\nThank you for your business!`;
+    let emailSummary = `Total Amount: ₹${receiptData.total.toFixed(2)}`;
+    let emailStatus = (receiptData.due ?? 0) === 0 ? 'Paid' : 'Due ₹' + (receiptData.due ?? 0).toFixed(2);
+
+    if (isBalanceActive && previousDue > 0) {
+      emailSummary = `Current Bill: ₹${receiptData.total.toFixed(2)}\nPrevious Due: +₹${previousDue.toFixed(2)}\nTotal Payable: ₹${totalPayable.toFixed(2)}`;
+      emailStatus = netBalanceDue === 0 ? 'Paid' : 'Due ₹' + netBalanceDue.toFixed(2);
+    } else if (isBalanceActive && advancePayment > 0) {
+      emailSummary = `Current Bill: ₹${receiptData.total.toFixed(2)}\nAdvance Credit: -₹${adjustedAdvance.toFixed(2)}\nNet Payable: ₹${netPayable.toFixed(2)}`;
+      emailStatus = netDue === 0 ? 'Paid' : 'Due ₹' + netDue.toFixed(2);
+    }
+
+    const body = `Please find invoice #${invNumber} from ${business.businessName}.\n\n${emailSummary}\nDate: ${receiptData.date}\nPayment Status: ${emailStatus}\n\nThank you for your business!`;
     const mailtoUrl = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     if (Platform.OS === 'web') {
@@ -533,36 +575,140 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
                   <View style={styles.dashedDivider} />
 
-                  <View style={[styles.sumRow, { marginTop: 4 }]}>
-                    <Text style={styles.grandTotalLabel}>GRAND TOTAL:</Text>
-                    <Text style={styles.grandTotalVal}>₹{receiptData.total.toFixed(2)}</Text>
-                  </View>
+                  {isBalanceActive && previousDue > 0 ? (
+                    <>
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Current Bill Total:</Text>
+                        <Text style={styles.sumVal}>₹{receiptData.total.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.sumRow}>
+                        <Text style={[styles.sumLabel, { color: '#DC2626', fontWeight: 'bold' }]}>
+                          Previous Due:
+                        </Text>
+                        <Text style={[styles.sumVal, { color: '#DC2626', fontWeight: 'bold' }]}>
+                          +₹{previousDue.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={[styles.sumRow, { marginTop: 4 }]}>
+                        <Text style={styles.grandTotalLabel}>TOTAL PAYABLE:</Text>
+                        <Text style={styles.grandTotalVal}>₹{totalPayable.toFixed(2)}</Text>
+                      </View>
 
-                  <Text style={styles.wordsText}>Amount: {amountToWords(receiptData.total)}</Text>
+                      <Text style={styles.wordsText}>Amount: {amountToWords(totalPayable)}</Text>
 
-                  <View style={styles.dashedDivider} />
+                      <View style={styles.dashedDivider} />
 
-                  <View style={styles.sumRow}>
-                    <Text style={styles.sumLabel}>Paid Amount:</Text>
-                    <Text style={[styles.sumVal, { color: '#059669', fontWeight: 'bold' }]}>
-                      ₹{(receiptData.paid ?? receiptData.total).toFixed(2)}
-                    </Text>
-                  </View>
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Paid Amount:</Text>
+                        <Text style={[styles.sumVal, { color: '#059669', fontWeight: 'bold' }]}>
+                          ₹{paidAmt.toFixed(2)}
+                        </Text>
+                      </View>
 
-                  <View style={styles.sumRow}>
-                    <Text style={styles.sumLabel}>Balance Due:</Text>
-                    <Text
-                      style={[
-                        styles.sumVal,
-                        {
-                          color: (receiptData.due || 0) > 0 ? '#DC2626' : '#111827',
-                          fontWeight: 'bold',
-                        },
-                      ]}
-                    >
-                      ₹{(receiptData.due || 0).toFixed(2)}
-                    </Text>
-                  </View>
+                      <View style={styles.sumRow}>
+                        <Text style={[styles.sumLabel, { fontWeight: 'bold' }]}>Net Balance Due:</Text>
+                        <Text
+                          style={[
+                            styles.sumVal,
+                            {
+                              color: netBalanceDue > 0 ? '#DC2626' : '#059669',
+                              fontWeight: 'bold',
+                            },
+                          ]}
+                        >
+                          ₹{netBalanceDue.toFixed(2)}
+                        </Text>
+                      </View>
+                    </>
+                  ) : isBalanceActive && advancePayment > 0 ? (
+                    <>
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Current Bill Total:</Text>
+                        <Text style={styles.sumVal}>₹{receiptData.total.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.sumRow}>
+                        <Text style={[styles.sumLabel, { color: '#16A34A', fontWeight: 'bold' }]}>
+                          Advance Credit:
+                        </Text>
+                        <Text style={[styles.sumVal, { color: '#16A34A', fontWeight: 'bold' }]}>
+                          -₹{adjustedAdvance.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={[styles.sumRow, { marginTop: 4 }]}>
+                        <Text style={styles.grandTotalLabel}>NET PAYABLE:</Text>
+                        <Text style={styles.grandTotalVal}>₹{netPayable.toFixed(2)}</Text>
+                      </View>
+
+                      <Text style={styles.wordsText}>Amount: {amountToWords(netPayable)}</Text>
+
+                      <View style={styles.dashedDivider} />
+
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Paid Amount:</Text>
+                        <Text style={[styles.sumVal, { color: '#059669', fontWeight: 'bold' }]}>
+                          ₹{paidAmt.toFixed(2)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.sumRow}>
+                        <Text style={[styles.sumLabel, { fontWeight: 'bold' }]}>Balance Due:</Text>
+                        <Text
+                          style={[
+                            styles.sumVal,
+                            {
+                              color: netDue > 0 ? '#DC2626' : '#059669',
+                              fontWeight: 'bold',
+                            },
+                          ]}
+                        >
+                          ₹{netDue.toFixed(2)}
+                        </Text>
+                      </View>
+                      {remainingAdvance > 0 && (
+                        <View style={styles.sumRow}>
+                          <Text style={[styles.sumLabel, { color: '#2563EB', fontWeight: 'bold' }]}>
+                            Remaining Advance:
+                          </Text>
+                          <Text style={[styles.sumVal, { color: '#2563EB', fontWeight: 'bold' }]}>
+                            ₹{remainingAdvance.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <View style={[styles.sumRow, { marginTop: 4 }]}>
+                        <Text style={styles.grandTotalLabel}>GRAND TOTAL:</Text>
+                        <Text style={styles.grandTotalVal}>₹{receiptData.total.toFixed(2)}</Text>
+                      </View>
+
+                      <Text style={styles.wordsText}>Amount: {amountToWords(receiptData.total)}</Text>
+
+                      <View style={styles.dashedDivider} />
+
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Paid Amount:</Text>
+                        <Text style={[styles.sumVal, { color: '#059669', fontWeight: 'bold' }]}>
+                          ₹{(receiptData.paid ?? receiptData.total).toFixed(2)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.sumRow}>
+                        <Text style={styles.sumLabel}>Balance Due:</Text>
+                        <Text
+                          style={[
+                            styles.sumVal,
+                            {
+                              color: (receiptData.due || 0) > 0 ? '#DC2626' : '#111827',
+                              fontWeight: 'bold',
+                            },
+                          ]}
+                        >
+                          ₹{(receiptData.due || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 <View style={styles.dashedDivider} />

@@ -169,7 +169,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
   const handleSetDefaultInDb = (type: DefaultPreviewType) => {
     setDefaultPreviewType(type);
     let label = '140 mm × 210 mm Portrait Invoice';
-    if (type === '80mm' || type === 'receipt') label = '80 mm Thermal Receipt';
+    if ((type as string) === '80mm' || type === 'receipt') label = '80 mm Thermal Receipt';
     if (type === 'halfA4Landscape' || type === 'invoice') label = 'Half A4 Landscape Invoice';
 
     setDbSuccessToast(`Saved in Local DB! Default template updated to "${label}".`);
@@ -213,7 +213,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
 
   // Helper check for active default
   const is140Default = activeDefault === '140x210mm';
-  const is80Default = activeDefault === 'receipt' || activeDefault === '80mm';
+  const is80Default = activeDefault === 'receipt' || (activeDefault as string) === '80mm';
   const isLandscapeDefault = activeDefault === 'halfA4Landscape' || activeDefault === 'invoice';
 
   return (
