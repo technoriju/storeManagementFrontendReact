@@ -34,6 +34,7 @@ import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
 import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
+import { useBrands } from '../../brands/api/useBrand';
 import { Product } from '../../products/types';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from './ReceiptPrintPreviewModal';
 import { PriceType, getProductPriceByType } from '../utils/priceUtils';
@@ -75,6 +76,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const { products, fetchProducts } = useProductStore();
   const { data: unitList = [] } = useUnits();
   const { data: subUnitList = [] } = useSubUnits();
+  const { data: brandsList = [] } = useBrands();
   const createSaleMutation = useCreateSale();
   const addCustomerMutation = useAddCustomer();
 
@@ -218,6 +220,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
     { label: 'Ordered', value: 'Ordered' },
   ];
 
+  const brandsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    brandsList.forEach((b: any) => {
+      if (b && b.id && b.name) map[String(b.id)] = b.name;
+    });
+    return map;
+  }, [brandsList]);
+
+  const getBrandName = (p: Product) => {
+    return p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : undefined) || 'N/A';
+  };
+
   // Filtered Products for Live Search
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -226,9 +240,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       const matchName = p.name?.toLowerCase().includes(query);
       const matchSku = p.sku?.toLowerCase().includes(query);
       const matchBarcode = p.barcode?.toLowerCase().includes(query);
-      return matchName || matchSku || matchBarcode;
+      const bName = p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : '') || '';
+      const matchBrand = bName.toLowerCase().includes(query);
+      return matchName || matchSku || matchBarcode || matchBrand;
     }).slice(0, 10);
-  }, [searchQuery, products]);
+  }, [searchQuery, products, brandsMap]);
 
   // Add Product to Table
   const handleAddProduct = (product: Product) => {
@@ -686,7 +702,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
                                 {p.name}
                               </Text>
                               <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                                SKU: {p.sku || 'N/A'} | Tax: {p.gst || 0}% | Stock: {p.stockQuantity}
+                                Brand: {getBrandName(p)} | Stock: {p.stockQuantity ?? 0} | Tax: {p.gst || 0}% | SKU: {p.sku || 'N/A'}
                               </Text>
                             </View>
                             <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>

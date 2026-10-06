@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
+import { useBrands } from '../../brands/api/useBrand';
 import { useCreatePurchaseOrder } from '../api/usePurchaseOrders';
 import { Product } from '../../products/types';
 
@@ -49,6 +50,7 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
 
   const { data: suppliers = [] } = useSuppliers();
   const { products, fetchProducts } = useProductStore();
+  const { data: brandsList = [] } = useBrands();
   const createPOMutation = useCreatePurchaseOrder();
 
   const [supplierId, setSupplierId] = useState<string>('');
@@ -93,15 +95,29 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
     { label: 'Received', value: 'Received' },
   ];
 
+  const brandsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    brandsList.forEach((b: any) => {
+      if (b && b.id && b.name) map[String(b.id)] = b.name;
+    });
+    return map;
+  }, [brandsList]);
+
+  const getBrandName = (p: Product) => {
+    return p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : undefined) || 'N/A';
+  };
+
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
     return products.filter((p) => {
       const matchName = p.name?.toLowerCase().includes(q);
       const matchSku = p.sku?.toLowerCase().includes(q);
-      return matchName || matchSku;
+      const bName = p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : '') || '';
+      const matchBrand = bName.toLowerCase().includes(q);
+      return matchName || matchSku || matchBrand;
     }).slice(0, 10);
-  }, [searchQuery, products]);
+  }, [searchQuery, products, brandsMap]);
 
   const handleSelectProduct = (product: Product) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
@@ -350,7 +366,9 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
                       >
                         <View style={{ flex: 1, marginRight: 8 }}>
                           <Text style={{ color: theme.colors.text, fontWeight: '500' }} numberOfLines={1}>{p.name}</Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }} numberOfLines={1}>Stock: {p.stockQuantity} | SKU: {p.sku}</Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                            Brand: {getBrandName(p)} | Stock: {p.stockQuantity ?? 0} | Tax: {p.gst || 0}% | SKU: {p.sku || 'N/A'}
+                          </Text>
                         </View>
                         <Text style={{ color: '#F59E0B', fontWeight: '600', flexShrink: 0 }}>
                           ₹{Number(p.purchasePrice || p.cost || 0).toFixed(2)}
