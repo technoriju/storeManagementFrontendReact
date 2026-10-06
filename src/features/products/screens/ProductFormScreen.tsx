@@ -7,6 +7,7 @@ import { ProductScreenType } from '../ProductsModule';
 import { Product } from '../types';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AddCategoryModal } from '../components/AddCategoryModal';
+import { AddBrandModal } from '../components/AddBrandModal';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { AppRadio } from '../../../shared/components/forms/AppRadio';
@@ -30,10 +31,12 @@ import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
 import { productRepository } from '../../../core/repositories/ProductRepository';
 import { categoryRepository } from '../../../core/repositories/CategoryRepository';
+import { brandRepository } from '../../../core/repositories/BrandRepository';
 import { subCategoryRepository } from '../../../core/repositories/SubCategoryRepository';
 import { unitRepository } from '../../../core/repositories/UnitRepository';
 import { subUnitRepository } from '../../../core/repositories/SubUnitRepository';
 import { useSubCategoryStore } from '../../sub_category/store/subCategoryStore';
+import { useBrandStore } from '../../brands/store/brandStore';
 
 interface Props {
   productId?: string | number | null;
@@ -143,6 +146,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [discountValue, setDiscountValue] = useState('');
 
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [isBrandModalVisible, setBrandModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const [variants, setVariants] = useState([
@@ -173,7 +177,17 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         prod.subCategoryId ? String(prod.subCategoryId) : 
         (prod.sub_category_id ? String(prod.sub_category_id) : '')
       );
-      setSelectedBrand(prod.brandId ? String(prod.brandId) : '');
+      const brandVal = prod.brandId ? String(prod.brandId) : (prod.brand_id ? String(prod.brand_id) : (prod.brand?.id ? String(prod.brand?.id) : ''));
+      setSelectedBrand(brandVal);
+      const bName = prod.brandName || prod.brand?.name;
+      if (brandVal && bName) {
+        setBrands(prev => {
+          if (!prev.some(b => String(b.value) === String(brandVal))) {
+            return [{ label: bName, value: String(brandVal) }, ...prev];
+          }
+          return prev;
+        });
+      }
       
       const unitVal = prod.unitId || prod.baseUnitId || prod.unit_id || prod.base_unit_id;
       setSelectedUnit(unitVal ? String(unitVal) : '');
@@ -232,60 +246,175 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
   // Fetch initial dropdown data
   useEffect(() => {
-    const fetchInitialData = async () => {
+    let isMounted = true;
+
+    const extractList = (raw: any): any[] => {
+      if (Array.isArray(raw)) return raw;
+      if (!raw || typeof raw !== 'object') return [];
+      if (Array.isArray(raw.data)) return raw.data;
+      if (Array.isArray(raw.items)) return raw.items;
+      if (Array.isArray(raw.results)) return raw.results;
+      if (Array.isArray(raw.brands)) return raw.brands;
+      if (Array.isArray(raw.categories)) return raw.categories;
+      if (Array.isArray(raw.units)) return raw.units;
+      for (const v of Object.values(raw)) {
+        if (Array.isArray(v)) return v;
+      }
+      return [];
+    };
+
+    const loadDropdownData = async () => {
+      // 1. Instant local read from SQLite repositories (Fast offline-first load)
+      try {
+        const [localCats, localBrands, localUnits] = await Promise.all([
+          categoryRepository.getAll().catch(() => []),
+          brandRepository.getAll().catch(() => []),
+          unitRepository.getAll().catch(() => []),
+        ]);
+
+        if (isMounted) {
+          if (localCats && localCats.length > 0) {
+            setCategories(localCats.filter((c: any) => c && c.name).map((c: any) => ({
+              label: c.name,
+              value: String(c.id ?? c.backendId)
+            })));
+          }
+          if (localBrands && localBrands.length > 0) {
+            setBrands(localBrands.filter((b: any) => b && b.name).map((b: any) => ({
+              label: b.name,
+              value: String(b.id ?? b.backendId)
+            })));
+          }
+          if (localUnits && localUnits.length > 0) {
+            setUnits(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({
+              label: u.name || u.shortName,
+              value: String(u.id ?? u.backendId)
+            })));
+          }
+        }
+      } catch (localErr) {
+        console.warn('Error loading local dropdown data:', localErr);
+      }
+
+      // 2. Network fetch & sync
       try {
         const [catRes, brandRes, unitRes] = await Promise.allSettled([
           apiClient.get(API_ENDPOINTS.CATEGORIES.BASE),
           apiClient.get(API_ENDPOINTS.BRANDS.BASE),
           apiClient.get(API_ENDPOINTS.UNITS.BASE)
         ]);
-        
-        const getList = (res: PromiseSettledResult<any>) => {
-          if (res.status === 'fulfilled') {
-            return res.value.data?.data || res.value.data || [];
-          }
-          return [];
-        };
-        
-        let cats = getList(catRes).map((c: any) => ({ label: c.name, value: c.id?.toString() }));
+
+        if (!isMounted) return;
+
+        // Categories
+        let catItems = catRes.status === 'fulfilled' ? extractList(catRes.value.data) : [];
+        let cats = catItems
+          .filter((c: any) => c && c.name)
+          .map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }));
         if (cats.length === 0) {
-          try {
-            const localCats = await categoryRepository.getAll();
-            if (localCats.length > 0) {
-              cats = localCats.map((c: any) => ({ label: c.name, value: c.id?.toString() }));
-            }
-          } catch (e) {}
+          const localCats = await categoryRepository.getAll().catch(() => []);
+          if (localCats.length > 0) {
+            cats = localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }));
+          }
         }
-        if (cats.length === 0) cats = [{label: 'Electronics', value: '1'}, {label: 'Groceries', value: '2'}];
-        
-        let brnds = getList(brandRes).map((b: any) => ({ label: b.name, value: b.id?.toString() }));
-        if (brnds.length === 0) brnds = [{label: 'Generic', value: '1'}];
-        
-        let unts = getList(unitRes).map((u: any) => ({ label: u.name || u.shortName, value: u.id?.toString() }));
-        if (unts.length === 0) {
-          // Check local unitRepository
-          try {
-            const localUnits = await unitRepository.getAll();
-            if (localUnits.length > 0) {
-              unts = localUnits.map((u: any) => ({ label: u.name || u.shortName, value: u.id?.toString() }));
-            }
-          } catch (e) {}
+        if (cats.length === 0) {
+          cats = [{ label: 'Electronics', value: '1' }, { label: 'Groceries', value: '2' }];
         }
-        if (unts.length === 0) {
-          unts = [{label: 'Box', value: '1'}, {label: 'Dozen', value: '2'}, {label: 'Kg', value: '3'}, {label: 'Piece', value: '4'}];
-        }
-        
         setCategories(cats);
-        setBrands(brnds);
+
+        // Brands
+        let brandItems = brandRes.status === 'fulfilled' ? extractList(brandRes.value.data) : [];
+        let brnds = brandItems
+          .filter((b: any) => b && (b.name || b.brandName || b.title))
+          .map((b: any) => ({ label: b.name || b.brandName || b.title, value: String(b.id ?? b.backendId) }));
+
+        // Fallback 1: Local SQLite repository
+        if (brnds.length === 0) {
+          const localBrands = await brandRepository.getAll().catch(() => []);
+          if (localBrands.length > 0) {
+            brnds = localBrands
+              .filter((b: any) => b && b.name)
+              .map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) }));
+          }
+        }
+
+        // Fallback 2: Product store brands
+        if (brnds.length === 0) {
+          const storeBrands = useProductStore.getState().brands || [];
+          if (storeBrands.length > 0) {
+            brnds = storeBrands
+              .filter((b: any) => b && b.name)
+              .map((b: any) => ({ label: b.name, value: String(b.id) }));
+          }
+        }
+
+        // Fallback 3: Brand store brands
+        if (brnds.length === 0) {
+          const defBrands = useBrandStore.getState().brands || [];
+          if (defBrands.length > 0) {
+            brnds = defBrands
+              .filter((b: any) => b && b.name)
+              .map((b: any) => ({ label: b.name, value: String(b.id) }));
+          }
+        }
+
+        if (brnds.length > 0) {
+          setBrands(prev => {
+            const map = new Map<string, string>();
+            prev.forEach(p => map.set(p.value, p.label));
+            brnds.forEach(b => map.set(b.value, b.label));
+            return Array.from(map.entries()).map(([value, label]) => ({ label, value }));
+          });
+        }
+
+        // Units
+        let unitItems = unitRes.status === 'fulfilled' ? extractList(unitRes.value.data) : [];
+        let unts = unitItems
+          .filter((u: any) => u && (u.name || u.shortName))
+          .map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }));
+        if (unts.length === 0) {
+          const localUnits = await unitRepository.getAll().catch(() => []);
+          if (localUnits.length > 0) {
+            unts = localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }));
+          }
+        }
+        if (unts.length === 0) {
+          unts = [{ label: 'Box', value: '1' }, { label: 'Dozen', value: '2' }, { label: 'Kg', value: '3' }, { label: 'Piece', value: '4' }];
+        }
         setUnits(unts);
+
+        // Sync API brands to local repository in background
+        if (brandRes.status === 'fulfilled') {
+          void brandRepository.fetchFromApi().catch(() => {});
+        }
       } catch (error) {
         console.error("Error fetching form data:", error);
-        setCategories([{label: 'Electronics', value: '1'}, {label: 'Groceries', value: '2'}]);
-        setBrands([{label: 'Generic', value: '1'}]);
-        setUnits([{label: 'Box', value: '1'}, {label: 'Dozen', value: '2'}, {label: 'Kg', value: '3'}, {label: 'Piece', value: '4'}]);
+        if (isMounted) {
+          try {
+            const [localCats, localBrands, localUnits] = await Promise.all([
+              categoryRepository.getAll().catch(() => []),
+              brandRepository.getAll().catch(() => []),
+              unitRepository.getAll().catch(() => []),
+            ]);
+            if (localCats.length > 0) {
+              setCategories(localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) })));
+            }
+            if (localBrands.length > 0) {
+              setBrands(localBrands.filter((b: any) => b && b.name).map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) })));
+            }
+            if (localUnits.length > 0) {
+              setUnits(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) })));
+            }
+          } catch (_) {}
+        }
       }
     };
-    fetchInitialData();
+
+    loadDropdownData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Handle category change
@@ -766,7 +895,16 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </FormGroup>
             )}
 
-            <FormGroup width="50%" label="Brand">
+            <FormGroup 
+              width="50%" 
+              label="Brand"
+              actionRight={
+                <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}} onPress={() => setBrandModalVisible(true)}>
+                  <Plus size={14} color={ORANGE} />
+                  <Text style={{color: ORANGE, fontSize: 13, marginLeft: 4}}>Add New</Text>
+                </TouchableOpacity>
+              }
+            >
               <AppSelect 
                 options={brands} 
                 placeholder="Select Brand" 
@@ -1195,6 +1333,42 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           onSubmit={(name) => {
             setCategories([...categories, { label: name, value: Date.now().toString() }]);
             setCategoryModalVisible(false);
+          }} 
+        />
+        <AddBrandModal 
+          visible={isBrandModalVisible} 
+          onClose={() => setBrandModalVisible(false)} 
+          onSubmit={async (name) => {
+            const tempId = Math.floor(Math.random() * -1000000000);
+            const brandItem: any = {
+              id: tempId,
+              name,
+              status: 'Active',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              syncStatus: 'pending_insert' as const,
+            };
+            try {
+              await brandRepository.insert(brandItem);
+            } catch (e) {
+              console.warn('Failed to insert brand locally:', e);
+            }
+            try {
+              const res = await apiClient.post(API_ENDPOINTS.BRANDS.BASE, { name, status: 'Active' });
+              const created = res.data?.data || res.data;
+              if (created?.id) {
+                brandItem.id = Number(created.id);
+                brandItem.syncStatus = 'synced';
+                await brandRepository.update(brandItem, false).catch(() => {});
+              }
+            } catch (e) {
+              console.warn('Failed to sync brand to API:', e);
+            }
+
+            const val = String(brandItem.id);
+            setBrands(prev => [...prev, { label: name, value: val }]);
+            setSelectedBrand(val);
+            setBrandModalVisible(false);
           }} 
         />
       </ScrollView>
