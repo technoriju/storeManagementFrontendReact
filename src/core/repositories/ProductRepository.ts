@@ -2,6 +2,8 @@ import { BaseRepository } from './BaseRepository';
 import { Product } from '../../types/models';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
+import { db } from '../database/db';
+import { tombstoneRepo } from '../sync/outbox';
 
 export class ProductRepository extends BaseRepository<Product> {
   protected tableName = 'products';
@@ -228,6 +230,10 @@ export class ProductRepository extends BaseRepository<Product> {
         syncStatus: 'synced',
       };
 
+      if (await tombstoneRepo.isDeleted(this.tableName, product.id)) {
+        continue;
+      }
+
       const existing = await this.getById(product.id);
       if (existing) {
         await this.update(product, false);
@@ -237,7 +243,29 @@ export class ProductRepository extends BaseRepository<Product> {
       normalizedProducts.push(product);
     }
 
+    // Cleanup local records deleted from server
+    const serverIds = rawProducts.map((x: any) => Number(x.id)).filter((id: number) => !isNaN(id) && id > 0);
+    if (serverIds.length > 0) {
+      const placeholders = serverIds.map(() => '?').join(',');
+      await db.execute(
+        `DELETE FROM products WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+        serverIds
+      );
+    }
+
     return normalizedProducts;
+  }
+
+  public override async delete(id: number, shouldSync = true): Promise<void> {
+    await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    if (shouldSync) {
+      await tombstoneRepo.add(this.tableName, id);
+      try {
+        await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
+      } catch (e) {
+        console.warn(`Failed to delete product ${id} from API:`, e);
+      }
+    }
   }
 
   public async fetchFromApi(): Promise<Product[]> {

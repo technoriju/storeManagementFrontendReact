@@ -33,7 +33,7 @@ import { Customer } from '../../../types/models';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
-import { useCreateSale } from '../api/useSales';
+import { useCreateSale, useUpdateSale } from '../api/useSales';
 import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
 import { useBrands } from '../../brands/api/useBrand';
@@ -66,9 +66,10 @@ interface SaleItemRow {
 interface Props {
   visible: boolean;
   onClose: () => void;
+  editSaleId?: number | string | null;
 }
 
-export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId }) => {
   const theme = useTheme();
   const { isMobile, windowHeight } = useResponsive();
 
@@ -80,6 +81,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
   const { data: subUnitList = [] } = useSubUnits();
   const { data: brandsList = [] } = useBrands();
   const createSaleMutation = useCreateSale();
+  const updateSaleMutation = useUpdateSale();
   const addCustomerMutation = useAddCustomer();
 
   // Form State
@@ -128,15 +130,102 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
       if (products.length === 0) {
         fetchProducts().catch(() => {});
       }
-      setDate(new Date().toISOString().split('T')[0]);
-      setReference(`SL-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
       setNewCustomerName('');
       setCustomerModalError(null);
+
+      if (editSaleId) {
+        const numericId = Number(editSaleId);
+        (async () => {
+          try {
+            let existingSale: any = null;
+            let existingItems: any[] = [];
+            if (/^\d+$/.test(String(editSaleId)) && numericId > 0 && numericId < 1000000000000) {
+              try {
+                existingSale = await saleRepository.fetchByIdFromApi(numericId);
+                if (existingSale?.items && existingSale.items.length > 0) {
+                  existingItems = existingSale.items;
+                }
+              } catch (e) {
+                console.warn('API fetch for edit sale fallback:', e);
+              }
+            }
+            if (!existingSale) {
+              existingSale = await saleRepository.getById(numericId);
+            }
+            if (!existingItems || existingItems.length === 0) {
+              existingItems = await saleRepository.getItemsForSale(numericId);
+            }
+
+            if (existingSale) {
+              setCustomerId(existingSale.customerId ? String(existingSale.customerId) : '');
+              setSupplierId(existingSale.supplierId ? String(existingSale.supplierId) : '');
+              setDate(existingSale.date ? existingSale.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+              setReference(existingSale.reference || existingSale.invoiceNumber || `SL-${numericId}`);
+              setStatus((existingSale.status as any) || 'Completed');
+              setOrderTax(String(existingSale.orderTax || 0));
+              setOrderDiscount(String(existingSale.discount || 0));
+              setShipping(String(existingSale.shipping || 0));
+              setBiller(existingSale.biller || 'Admin');
+              setNotes(existingSale.notes || '');
+              const paidNum = Number(existingSale.paid || 0);
+              const totalNum = Number(existingSale.total || 0);
+              setPaymentStatus((existingSale.paymentStatus as any) || (paidNum >= totalNum && totalNum > 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Unpaid'));
+              setAmountReceived(paidNum > 0 ? String(paidNum) : '');
+
+              if (existingItems && existingItems.length > 0) {
+                const mappedItems: SaleItemRow[] = existingItems.map((item: any) => {
+                  const prod = products.find((p) => p.id === Number(item.productId));
+                  const wholesaleP = prod ? getProductPriceByType(prod, 'wholesale') : Number(item.unitPrice || 0);
+                  const retailP = prod ? getProductPriceByType(prod, 'retail') : Number(item.unitPrice || 0);
+                  const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
+
+                  return {
+                    productId: Number(item.productId),
+                    productName: item.productName || prod?.name || `Product #${item.productId}`,
+                    sku: item.sku || prod?.sku,
+                    quantity: Number(item.quantity || 1),
+                    unitPrice: Number(item.unitPrice || 0),
+                    discount: Number(item.discount || 0),
+                    gst: Number(item.gst || 0),
+                    unit: item.unit || (item.unitType === 'base' ? 'Box' : 'Pcs'),
+                    unitType: (item.unitType as any) || 'sub',
+                    baseUnitName: item.baseUnitName || 'Box',
+                    subUnitName: item.subUnitName || 'Pcs',
+                    conversionRate: cRate,
+                    basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
+                    subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
+                    wholesalePrice: wholesaleP,
+                    retailPrice: retailP,
+                    unitCost: Number(item.unitCost || 0),
+                  };
+                });
+                setItems(mappedItems);
+              } else {
+                setItems([]);
+              }
+            }
+          } catch (err) {
+            console.warn('Error loading sale for editing:', err);
+          }
+        })();
+      } else {
+        setDate(new Date().toISOString().split('T')[0]);
+        setReference(`SL-${Math.floor(100000 + Math.random() * 900000)}`);
+        setItems([]);
+        setCustomerId('');
+        setSupplierId('');
+        setOrderTax('0');
+        setOrderDiscount('0');
+        setShipping('0');
+        setNotes('');
+        setPaymentStatus('Paid');
+        setAmountReceived('');
+      }
     }
-  }, [visible, products.length, fetchProducts]);
+  }, [visible, editSaleId, products.length, fetchProducts]);
 
   // Handle Wholesale vs Retail Price Type Switching
   const handlePriceTypeChange = (newType: PriceType) => {
@@ -508,46 +597,58 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
         effectivePaymentStatus = status === 'Completed' ? 'Paid' : 'Unpaid';
       }
 
-      await createSaleMutation.mutateAsync({
-        sale: {
-          invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
-          reference: reference || `SL-${Date.now().toString().slice(-6)}`,
-          customerId: Number(customerId),
-          customerName: selectedCustomer?.name || 'Walk-in Customer',
-          supplierId: supplierId ? Number(supplierId) : undefined,
-          supplierName: selectedSupplier?.name || undefined,
-          date: date || new Date().toISOString().split('T')[0],
-          subtotal: itemsSubtotal,
-          discount: totalDiscount,
-          orderTax: orderTaxNum,
-          shipping: shippingNum,
-          gst: itemsTax,
-          total: grandTotal,
-          paid: finalPaid,
-          due: finalDue,
-          status,
-          paymentStatus: effectivePaymentStatus,
-          biller: biller || 'Admin',
-          notes: notes || undefined,
-          previousDue: prevDueVal,
-          advancePayment: advPaymentVal,
-          showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
-        },
-        items: calculatedItems.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          gst: item.gst,
-          taxAmount: item.taxAmount,
-          unitCost: item.unitCost,
-          total: item.total,
-          unit: item.unit,
-          unitType: item.unitType,
-          conversionRate: item.conversionRate,
-        })),
-      });
+      const salePayload = {
+        invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
+        reference: reference || `SL-${Date.now().toString().slice(-6)}`,
+        customerId: Number(customerId),
+        customerName: selectedCustomer?.name || 'Walk-in Customer',
+        supplierId: supplierId ? Number(supplierId) : undefined,
+        supplierName: selectedSupplier?.name || undefined,
+        date: date || new Date().toISOString().split('T')[0],
+        subtotal: itemsSubtotal,
+        discount: totalDiscount,
+        orderTax: orderTaxNum,
+        shipping: shippingNum,
+        gst: itemsTax,
+        total: grandTotal,
+        paid: finalPaid,
+        due: finalDue,
+        status,
+        paymentStatus: effectivePaymentStatus,
+        biller: biller || 'Admin',
+        notes: notes || undefined,
+        previousDue: prevDueVal,
+        advancePayment: advPaymentVal,
+        showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
+      };
+
+      const itemsPayload = calculatedItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        gst: item.gst,
+        taxAmount: item.taxAmount,
+        unitCost: item.unitCost,
+        total: item.total,
+        unit: item.unit,
+        unitType: item.unitType,
+        conversionRate: item.conversionRate,
+      }));
+
+      if (editSaleId) {
+        await updateSaleMutation.mutateAsync({
+          id: Number(editSaleId),
+          sale: salePayload,
+          items: itemsPayload,
+        });
+      } else {
+        await createSaleMutation.mutateAsync({
+          sale: salePayload,
+          items: itemsPayload,
+        });
+      }
 
       const customerObj = allCustomers.find((c) => String(c.id) === customerId);
 
@@ -631,7 +732,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <ShoppingCart size={20} color="#F97316" />
               <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: '700' }}>
-                Add Sales
+                {editSaleId ? 'Edit Sales' : 'Add Sales'}
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -1421,9 +1522,15 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose }) => {
               textStyle={{ color: 'white' }}
             />
             <AppButton
-              title={isSubmitting || createSaleMutation.isPending ? 'Saving...' : 'Submit Sale'}
+              title={
+                isSubmitting || createSaleMutation.isPending || updateSaleMutation.isPending
+                  ? 'Saving...'
+                  : editSaleId
+                  ? 'Update Sale'
+                  : 'Submit Sale'
+              }
               onPress={handleSubmit}
-              disabled={isSubmitting || createSaleMutation.isPending}
+              disabled={isSubmitting || createSaleMutation.isPending || updateSaleMutation.isPending}
               style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }}
             />
           </View>

@@ -157,11 +157,26 @@ export const tombstoneRepo = {
     );
   },
   isDeleted: async (entityType: string, entityId: number): Promise<boolean> => {
-    const res = await db.execute(
-      `SELECT 1 FROM tombstones WHERE entityType = ? AND entityId = ?`,
-      [entityType, entityId]
-    );
-    return (res.rows?.length || 0) > 0;
+    try {
+      const res = await db.execute(
+        `SELECT 1 FROM tombstones WHERE entityType = ? AND entityId = ?`,
+        [entityType, entityId]
+      );
+      if (!res) return false;
+      if (Array.isArray(res.rows)) return res.rows.length > 0;
+      if (res.rows && typeof res.rows === 'object') {
+        if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+          return (res.rows as any)._array.length > 0;
+        }
+        if (typeof (res.rows as any).length === 'number') {
+          return (res.rows as any).length > 0;
+        }
+      }
+      if (Array.isArray(res)) return res.length > 0;
+      return false;
+    } catch {
+      return false;
+    }
   },
 };
 

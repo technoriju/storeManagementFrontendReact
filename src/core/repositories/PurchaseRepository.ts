@@ -343,6 +343,10 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
       for (const raw of rawList) {
         if (!raw.id) continue;
+        const rawId = Number(raw.id);
+        if (await tombstoneRepo.isDeleted(this.tableName, rawId)) {
+          continue;
+        }
         const { purchase, items } = this.normalizeApiPurchase(raw);
 
         const existing = await super.getById(purchase.id);
@@ -590,7 +594,180 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     return { ...purchase, items: fullItems };
   }
 
+  public async updatePurchaseWithItems(
+    purchaseId: number,
+    purchaseData: Partial<Purchase>,
+    newItems: Array<Omit<PurchaseItem, 'id' | 'purchaseId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>
+  ): Promise<Purchase> {
+    const now = new Date().toISOString();
+    const existingPurchase = await this.getById(purchaseId);
+    const oldItems = await this.getItemsForPurchase(purchaseId);
+
+    // 1. Stock Adjustment:
+    // Reverse old items stock (subtract what was added):
+    if (existingPurchase && (existingPurchase.status === 'Received' || (existingPurchase.status as any) === 'COMPLETED')) {
+      for (const oldItem of oldItems) {
+        if (!oldItem.productId) continue;
+        const conversionRate = oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
+        const unitType = oldItem.unitType || 'base';
+        const baseQty = unitType === 'sub' ? Number(oldItem.quantity) / conversionRate : Number(oldItem.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
+            [baseQty, oldItem.productId]
+          );
+        } catch (e) {
+          console.warn('Stock reverse err:', e);
+        }
+      }
+    }
+
+    // Add new items stock:
+    const newStatus = purchaseData.status || existingPurchase?.status || 'Received';
+    if (newStatus === 'Received' || (newStatus as any) === 'COMPLETED') {
+      for (const newItem of newItems) {
+        if (!newItem.productId) continue;
+        const conversionRate = newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
+        const unitType = newItem.unitType || 'base';
+        const baseQty = unitType === 'sub' ? Number(newItem.quantity) / conversionRate : Number(newItem.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
+            [baseQty, newItem.productId]
+          );
+        } catch (e) {
+          console.warn('Stock add err:', e);
+        }
+      }
+    }
+
+    // 2. Adjust Supplier balance difference:
+    const oldDue = Number(existingPurchase?.due || 0);
+    const newDue = Number(purchaseData.due !== undefined ? purchaseData.due : oldDue);
+    const dueDiff = newDue - oldDue;
+    const suppId = purchaseData.supplierId || existingPurchase?.supplierId;
+    if (suppId && Number(suppId) > 0 && dueDiff !== 0) {
+      try {
+        await db.execute(
+          `UPDATE suppliers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) + ?), updatedAt = ? WHERE id = ?`,
+          [dueDiff, now, Number(suppId)]
+        );
+      } catch (e) {
+        console.warn('Supplier balance update err:', e);
+      }
+    }
+
+    // 3. Update purchase row in SQLite
+    const updatedPurchase: Purchase = {
+      ...existingPurchase!,
+      ...purchaseData,
+      id: purchaseId,
+      updatedAt: now,
+      syncStatus: 'pending_update',
+    };
+    await this.update(updatedPurchase, false);
+
+    // 4. Replace purchase items in SQLite
+    await db.execute('DELETE FROM purchase_items WHERE purchaseId = ?', [purchaseId]);
+    const fullItems: PurchaseItem[] = [];
+    for (const item of newItems) {
+      const itemId = Date.now() + Math.floor(Math.random() * 10000);
+      const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+      const unitType = item.unitType || 'base';
+      const fullItem: PurchaseItem = {
+        ...item,
+        id: itemId,
+        purchaseId,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending_insert',
+      };
+      fullItems.push(fullItem);
+
+      await db.execute(
+        `INSERT INTO purchase_items (
+          id, purchaseId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          itemId,
+          purchaseId,
+          item.productId,
+          item.productName || null,
+          item.quantity,
+          item.unitPrice,
+          item.discount || 0,
+          item.gst || 0,
+          item.taxAmount || 0,
+          item.unitCost || 0,
+          item.unit || null,
+          unitType,
+          conversionRate,
+          item.total,
+          now,
+          now,
+          'pending_insert'
+        ]
+      );
+    }
+
+    // 5. Outbox & API sync
+    await outboxRepo.add(this.tableName, purchaseId, 'UPDATE', { purchase: updatedPurchase, items: fullItems });
+    this.requestSync();
+
+    try {
+      const apiPayload = {
+        ...updatedPurchase,
+        items: fullItems.map(it => ({
+          productId: String(it.productId),
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          discount: Number(it.discount || 0),
+          taxAmount: Number(it.taxAmount || 0),
+          total: Number(it.total),
+        })),
+      };
+      await apiClient.put(API_ENDPOINTS.PURCHASES.BY_ID(purchaseId), apiPayload);
+    } catch (e) {
+      console.warn('Direct API purchase update error (will sync via outbox):', e);
+    }
+
+    return { ...updatedPurchase, items: fullItems };
+  }
+
   public override async delete(id: number, shouldSync = true): Promise<void> {
+    const purchase = await this.getById(id);
+    const items = await this.getItemsForPurchase(id);
+
+    // Adjust stock: reverse added stock for received purchase
+    if (purchase && (purchase.status === 'Received' || (purchase.status as any) === 'COMPLETED')) {
+      for (const item of items) {
+        if (!item.productId) continue;
+        const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+        const unitType = item.unitType || 'base';
+        const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
+            [baseQty, item.productId]
+          );
+        } catch (stockErr) {
+          console.warn(`Failed to deduct stock for product ${item.productId}:`, stockErr);
+        }
+      }
+    }
+
+    // Revert supplier balance if due was recorded
+    if (purchase && purchase.supplierId && Number(purchase.supplierId) > 0 && Number(purchase.due || 0) > 0) {
+      try {
+        await db.execute(
+          `UPDATE suppliers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) - ?), updatedAt = ? WHERE id = ?`,
+          [Number(purchase.due), new Date().toISOString(), Number(purchase.supplierId)]
+        );
+      } catch (suppErr) {
+        console.warn(`Failed to revert supplier balance:`, suppErr);
+      }
+    }
+
     await db.execute('DELETE FROM purchase_items WHERE purchaseId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
@@ -600,6 +777,9 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         await outboxRepo.add(this.tableName, id, 'DELETE', { id });
         this.requestSync();
       }
+      try {
+        await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(id));
+      } catch (_) {}
     }
   }
 }

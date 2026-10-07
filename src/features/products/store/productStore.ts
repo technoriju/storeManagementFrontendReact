@@ -16,7 +16,7 @@ interface ProductState {
   setProducts: (products: Product[]) => void;
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
-  deleteProduct: (id: number) => Promise<void>;
+  deleteProduct: (id: number | string) => Promise<void>;
 
   setCategories: (categories: Category[]) => void;
   addCategory: (category: Category) => void;
@@ -47,15 +47,20 @@ export const useProductStore = create<ProductState>((set, get) => ({
   updateProduct: (updated) => set((state) => ({
     products: state.products.map((p) => (String(p.id) === String(updated.id) ? { ...p, ...updated } : p)),
   })),
-  deleteProduct: async (id: number) => {
+  deleteProduct: async (id: number | string) => {
+    const numId = Number(id);
     set((state) => ({
       products: state.products.filter((p) => String(p.id) !== String(id)),
     }));
     try {
-      await productRepository.delete(id);
+      if (!isNaN(numId)) {
+        await productRepository.delete(numId);
+      }
     } catch (_) {}
     try {
-      await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
+      if (!isNaN(numId)) {
+        await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(numId));
+      }
     } catch (_) {}
   },
 

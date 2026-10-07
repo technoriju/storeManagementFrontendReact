@@ -16,6 +16,7 @@ import {
   PlusCircle, 
   Download,
   Eye,
+  Edit,
   Trash2,
   ChevronDown
 } from 'lucide-react-native';
@@ -28,6 +29,8 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editPurchaseId, setEditPurchaseId] = useState<number | string | null>(null);
+  const [dismissedPurchaseIds, setDismissedPurchaseIds] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
 
   const { data: dbPurchases = [], isLoading, refetch } = usePurchases();
@@ -50,21 +53,23 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   // Display DB purchases if any exist, otherwise fallback
   const allPurchases = useMemo(() => {
     if (dbPurchases && dbPurchases.length > 0) {
-      return dbPurchases.map((p) => ({
-        id: String(p.id),
-        supplierName: p.supplierName || 'Unknown Supplier',
-        reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
-        date: p.date || p.createdAt?.split('T')[0] || '',
-        status: p.status || 'Received',
-        total: Number(p.total || 0),
-        paid: Number(p.paid || 0),
-        due: Number(p.due || 0),
-        paymentStatus: p.paymentStatus || 'Unpaid',
-        syncStatus: p.syncStatus || 'synced',
-      }));
+      return dbPurchases
+        .filter((p) => !dismissedPurchaseIds.includes(String(p.id)))
+        .map((p) => ({
+          id: String(p.id),
+          supplierName: p.supplierName || 'Unknown Supplier',
+          reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
+          date: p.date || p.createdAt?.split('T')[0] || '',
+          status: p.status || 'Received',
+          total: Number(p.total || 0),
+          paid: Number(p.paid || 0),
+          due: Number(p.due || 0),
+          paymentStatus: p.paymentStatus || 'Unpaid',
+          syncStatus: p.syncStatus || 'synced',
+        }));
     }
-    return fallbackPurchases;
-  }, [dbPurchases, fallbackPurchases]);
+    return fallbackPurchases.filter((p) => !dismissedPurchaseIds.includes(String(p.id)));
+  }, [dbPurchases, fallbackPurchases, dismissedPurchaseIds]);
 
   // Filtered by search query
   const filteredData = useMemo(() => {
@@ -106,11 +111,15 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            setDismissedPurchaseIds((prev) => [...prev, String(item.id)]);
             const numericId = parseInt(item.id, 10);
-            if (!isNaN(numericId) && numericId > 10) {
-              await deletePurchaseMutation.mutateAsync(numericId);
-            } else {
-              Alert.alert('Notice', 'Demo record cannot be deleted from database.');
+            const isDbPurchase = dbPurchases.some((p) => String(p.id) === String(item.id));
+            if (!isNaN(numericId) && (isDbPurchase || dbPurchases.length > 0)) {
+              try {
+                await deletePurchaseMutation.mutateAsync(numericId);
+              } catch (err: any) {
+                console.warn('Failed to delete purchase from db:', err);
+              }
             }
           },
         },
@@ -229,6 +238,15 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
         <Eye size={16} color={theme.colors.textSecondary} />
       </Pressable>
+      <Pressable
+        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+        onPress={() => {
+          setEditPurchaseId(item.id);
+          setShowAddModal(true);
+        }}
+      >
+        <Edit size={16} color="#F59E0B" />
+      </Pressable>
       <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => handleDelete(item)}>
         <Trash2 size={16} color="#EF4444" />
       </Pressable>
@@ -248,7 +266,15 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         renderRowActions={renderRowActions}
         isLoading={isLoading}
       />
-      <AddPurchaseModal visible={showAddModal} onClose={() => setShowAddModal(false)} />
+      <AddPurchaseModal
+        visible={showAddModal}
+        editPurchaseId={editPurchaseId}
+        onClose={() => {
+          setShowAddModal(false);
+          setEditPurchaseId(null);
+          refetch();
+        }}
+      />
       <ImportPurchaseModal visible={showImportModal} onClose={() => setShowImportModal(false)} />
     </View>
   );
