@@ -26,7 +26,8 @@ import {
 } from 'lucide-react-native';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
-import { useCreatePurchase } from '../api/usePurchases';
+import { useCreatePurchase, useUpdatePurchase } from '../api/usePurchases';
+import { purchaseRepository } from '../../../core/repositories/PurchaseRepository';
 import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
 import { useBrands } from '../../brands/api/useBrand';
@@ -52,9 +53,10 @@ interface PurchaseItemRow {
 interface Props {
   visible: boolean;
   onClose: () => void;
+  editPurchaseId?: number | string | null;
 }
 
-export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurchaseId }) => {
   const theme = useTheme();
   const { isMobile, windowHeight } = useResponsive();
 
@@ -65,6 +67,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
   const { data: subUnitList = [] } = useSubUnits();
   const { data: brandsList = [] } = useBrands();
   const createPurchaseMutation = useCreatePurchase();
+  const updatePurchaseMutation = useUpdatePurchase();
 
   // Form State
   const [supplierId, setSupplierId] = useState<string>('');
@@ -87,12 +90,84 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
       if (products.length === 0) {
         fetchProducts().catch(() => {});
       }
-      // Reset form on open
-      setDate(new Date().toISOString().split('T')[0]);
-      setReference(`PO-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
+
+      if (editPurchaseId) {
+        const numericId = Number(editPurchaseId);
+        (async () => {
+          try {
+            let existingPurchase: any = null;
+            let existingItems: any[] = [];
+            if (/^\d+$/.test(String(editPurchaseId)) && numericId > 0 && numericId < 1000000000000) {
+              try {
+                existingPurchase = await purchaseRepository.fetchByIdFromApi(numericId);
+                if (existingPurchase?.items && existingPurchase.items.length > 0) {
+                  existingItems = existingPurchase.items;
+                }
+              } catch (e) {
+                console.warn('API fetch for edit purchase fallback:', e);
+              }
+            }
+            if (!existingPurchase) {
+              existingPurchase = await purchaseRepository.getById(numericId);
+            }
+            if (!existingItems || existingItems.length === 0) {
+              existingItems = await purchaseRepository.getItemsForPurchase(numericId);
+            }
+
+            if (existingPurchase) {
+              setSupplierId(existingPurchase.supplierId ? String(existingPurchase.supplierId) : '');
+              setDate(existingPurchase.date ? existingPurchase.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+              setReference(existingPurchase.reference || existingPurchase.invoiceNumber || `PO-${numericId}`);
+              setStatus((existingPurchase.status as any) || 'Received');
+              setOrderTax(String(existingPurchase.orderTax || 0));
+              setOrderDiscount(String(existingPurchase.discount || 0));
+              setShipping(String(existingPurchase.shipping || 0));
+              setDescription(existingPurchase.notes || '');
+
+              if (existingItems && existingItems.length > 0) {
+                const mappedItems: PurchaseItemRow[] = existingItems.map((item: any) => {
+                  const prod = products.find((p) => p.id === Number(item.productId));
+                  const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
+
+                  return {
+                    productId: Number(item.productId),
+                    productName: item.productName || prod?.name || `Product #${item.productId}`,
+                    sku: item.sku || prod?.sku,
+                    quantity: Number(item.quantity || 1),
+                    unitPrice: Number(item.unitPrice || 0),
+                    discount: Number(item.discount || 0),
+                    gst: Number(item.gst || 0),
+                    unit: item.unit || (item.unitType === 'base' ? 'Box' : 'Pcs'),
+                    unitType: (item.unitType as any) || 'sub',
+                    baseUnitName: item.baseUnitName || 'Box',
+                    subUnitName: item.subUnitName || 'Pcs',
+                    conversionRate: cRate,
+                    basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
+                    subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
+                  };
+                });
+                setItems(mappedItems);
+              } else {
+                setItems([]);
+              }
+            }
+          } catch (err) {
+            console.warn('Error loading purchase for editing:', err);
+          }
+        })();
+      } else {
+        setDate(new Date().toISOString().split('T')[0]);
+        setReference(`PO-${Math.floor(100000 + Math.random() * 900000)}`);
+        setItems([]);
+        setSupplierId('');
+        setOrderTax('0');
+        setOrderDiscount('0');
+        setShipping('0');
+        setDescription('');
+      }
     }
-  }, [visible, products.length, fetchProducts]);
+  }, [visible, editPurchaseId, products.length, fetchProducts]);
 
   // Supplier options
   const supplierOptions = useMemo(() => {
@@ -268,40 +343,52 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
     }
 
     try {
-      await createPurchaseMutation.mutateAsync({
-        purchase: {
-          invoiceNumber: reference || `PO-${Date.now().toString().slice(-6)}`,
-          reference: reference || `PO-${Date.now().toString().slice(-6)}`,
-          supplierId: Number(supplierId),
-          supplierName: selectedSupplier?.name || 'Unknown Supplier',
-          date: date || new Date().toISOString().split('T')[0],
-          subtotal: itemsSubtotal,
-          discount: totalDiscount,
-          orderTax: orderTaxNum,
-          shipping: shippingNum,
-          gst: itemsTax,
-          total: grandTotal,
-          paid: status === 'Received' ? grandTotal : 0,
-          due: status === 'Received' ? 0 : grandTotal,
-          status,
-          paymentStatus: status === 'Received' ? 'Paid' : 'Unpaid',
-          notes: description || undefined,
-        },
-        items: calculatedItems.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          gst: item.gst,
-          taxAmount: item.taxAmount,
-          unitCost: item.unitCost,
-          unit: item.unit,
-          unitType: item.unitType,
-          conversionRate: item.conversionRate,
-          total: item.total,
-        })),
-      });
+      const purchasePayload = {
+        invoiceNumber: reference || `PO-${Date.now().toString().slice(-6)}`,
+        reference: reference || `PO-${Date.now().toString().slice(-6)}`,
+        supplierId: Number(supplierId),
+        supplierName: selectedSupplier?.name || 'Unknown Supplier',
+        date: date || new Date().toISOString().split('T')[0],
+        subtotal: itemsSubtotal,
+        discount: totalDiscount,
+        orderTax: orderTaxNum,
+        shipping: shippingNum,
+        gst: itemsTax,
+        total: grandTotal,
+        paid: status === 'Received' ? grandTotal : 0,
+        due: status === 'Received' ? 0 : grandTotal,
+        status,
+        paymentStatus: (status === 'Received' ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid',
+        notes: description || undefined,
+      };
+
+      const itemsPayload = calculatedItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        gst: item.gst,
+        taxAmount: item.taxAmount,
+        unitCost: item.unitCost,
+        unit: item.unit,
+        unitType: item.unitType,
+        conversionRate: item.conversionRate,
+        total: item.total,
+      }));
+
+      if (editPurchaseId) {
+        await updatePurchaseMutation.mutateAsync({
+          id: Number(editPurchaseId),
+          purchase: purchasePayload,
+          items: itemsPayload,
+        });
+      } else {
+        await createPurchaseMutation.mutateAsync({
+          purchase: purchasePayload,
+          items: itemsPayload,
+        });
+      }
 
       // Reset & Close
       setItems([]);
@@ -309,7 +396,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
       setSearchQuery('');
       setDescription('');
       onClose();
-      Alert.alert('Success', 'Purchase created successfully!');
+      Alert.alert('Success', editPurchaseId ? 'Purchase updated successfully!' : 'Purchase created successfully!');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to save purchase.');
     }
@@ -335,7 +422,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <PackageCheck size={20} color="#F97316" />
               <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: '700' }}>
-                Add Purchase
+                {editPurchaseId ? 'Edit Purchase' : 'Add Purchase'}
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -858,9 +945,15 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
               textStyle={{ color: 'white' }}
             />
             <AppButton
-              title={createPurchaseMutation.isPending ? 'Saving...' : 'Submit Purchase'}
+              title={
+                createPurchaseMutation.isPending || updatePurchaseMutation.isPending
+                  ? 'Saving...'
+                  : editPurchaseId
+                  ? 'Update Purchase'
+                  : 'Submit Purchase'
+              }
               onPress={handleSubmit}
-              disabled={createPurchaseMutation.isPending}
+              disabled={createPurchaseMutation.isPending || updatePurchaseMutation.isPending}
               style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }}
             />
           </View>

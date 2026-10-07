@@ -17,6 +17,7 @@ import {
   ChevronDown,
   MoreVertical,
   Eye,
+  Edit,
   Trash2,
   X,
   Printer,
@@ -40,6 +41,7 @@ const ActionMenu = ({
   item,
   theme,
   onDelete,
+  onEdit,
   onView,
   onPrint,
   onShare,
@@ -47,6 +49,7 @@ const ActionMenu = ({
   item: any;
   theme: any;
   onDelete: (item: any) => void;
+  onEdit: (item: any) => void;
   onView: (item: any) => void;
   onPrint: (item: any) => void;
   onShare: (item: any) => void;
@@ -102,6 +105,14 @@ const ActionMenu = ({
               }}
             />
             <MenuItem
+              icon={<Edit size={16} color="#F59E0B" />}
+              label="Edit Sale"
+              onPress={() => {
+                setVisible(false);
+                onEdit(item);
+              }}
+            />
+            <MenuItem
               icon={<Trash2 size={16} color="#EF4444" />}
               label="Delete Sale"
               onPress={() => {
@@ -120,6 +131,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editSaleId, setEditSaleId] = useState<number | string | null>(null);
+  const [dismissedOrderIds, setDismissedOrderIds] = useState<string[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [printOrderData, setPrintOrderData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -263,6 +276,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       const seen = new Set<string>();
       const list: any[] = [];
       for (const s of dbSales) {
+        if (dismissedOrderIds.includes(String(s.id))) continue;
         const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
         if (invNum && seen.has(invNum)) continue;
         if (invNum) seen.add(invNum);
@@ -296,8 +310,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       }
       return list;
     }
-    return fallbackOrders;
-  }, [dbSales, fallbackOrders]);
+    return fallbackOrders.filter((item) => !dismissedOrderIds.includes(String(item.id)));
+  }, [dbSales, fallbackOrders, dismissedOrderIds]);
 
   const filteredOrders = useMemo(() => {
     if (!searchQuery.trim()) return allOrders;
@@ -321,11 +335,15 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            setDismissedOrderIds((prev) => [...prev, String(item.id)]);
             const numericId = parseInt(item.id, 10);
-            if (!isNaN(numericId) && numericId > 10) {
-              await deleteSaleMutation.mutateAsync(numericId);
-            } else {
-              Alert.alert('Notice', 'Demo record cannot be deleted from database.');
+            const isDbSale = dbSales.some((s) => String(s.id) === String(item.id));
+            if (!isNaN(numericId) && (isDbSale || dbSales.length > 0)) {
+              try {
+                await deleteSaleMutation.mutateAsync(numericId);
+              } catch (err: any) {
+                console.warn('Failed to delete sale from db:', err);
+              }
             }
           },
         },
@@ -465,6 +483,10 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       item={item}
       theme={theme}
       onDelete={handleDelete}
+      onEdit={(order) => {
+        setEditSaleId(order.id);
+        setShowAddModal(true);
+      }}
       onView={handleViewOrder}
       onPrint={handleOpenPrintPreview}
       onShare={handleOpenShare}
@@ -580,6 +602,16 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         onOpenFullPreview={() => {
           setShowShareModal(false);
           handleOpenPrintPreview(shareOrderData);
+        }}
+      />
+
+      <AddSalesModal
+        visible={showAddModal}
+        editSaleId={editSaleId}
+        onClose={() => {
+          setShowAddModal(false);
+          setEditSaleId(null);
+          refetch();
         }}
       />
     </View>

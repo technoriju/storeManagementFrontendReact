@@ -528,6 +528,9 @@ export class SaleRepository extends BaseRepository<Sale> {
       for (const raw of rawList) {
         if (!raw.id) continue;
         const rawId = Number(raw.id);
+        if (await tombstoneRepo.isDeleted(this.tableName, rawId)) {
+          continue;
+        }
 
         // Check if existing locally by server ID first
         let existing = await super.getById(rawId);
@@ -801,6 +804,146 @@ export class SaleRepository extends BaseRepository<Sale> {
     return { ...sale, items: fullItems };
   }
 
+  public async updateSaleWithItems(
+    saleId: number,
+    saleData: Partial<Sale>,
+    newItems: Array<Omit<SaleItem, 'id' | 'saleId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>
+  ): Promise<Sale> {
+    const now = new Date().toISOString();
+    const existingSale = await this.getById(saleId);
+    const oldItems = await this.getItemsForSale(saleId);
+
+    // 1. Stock Adjustment:
+    // Reverse old items stock:
+    if (existingSale && (existingSale.status === 'Completed' || (existingSale.status as any) === 'COMPLETED')) {
+      for (const oldItem of oldItems) {
+        if (!oldItem.productId) continue;
+        const conversionRate = oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
+        const unitType = oldItem.unitType || 'sub';
+        const baseQty = unitType === 'sub' ? Number(oldItem.quantity) / conversionRate : Number(oldItem.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
+            [baseQty, oldItem.productId]
+          );
+        } catch (e) {
+          console.warn('Stock reverse err:', e);
+        }
+      }
+    }
+
+    // Deduct new items stock:
+    const newStatus = saleData.status || existingSale?.status || 'Completed';
+    if (newStatus === 'Completed' || (newStatus as any) === 'COMPLETED') {
+      for (const newItem of newItems) {
+        if (!newItem.productId) continue;
+        const conversionRate = newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
+        const unitType = newItem.unitType || 'sub';
+        const baseQty = unitType === 'sub' ? Number(newItem.quantity) / conversionRate : Number(newItem.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
+            [baseQty, newItem.productId]
+          );
+        } catch (e) {
+          console.warn('Stock deduct err:', e);
+        }
+      }
+    }
+
+    // 2. Adjust Customer balance difference:
+    const oldDue = Number(existingSale?.due || 0);
+    const newDue = Number(saleData.due !== undefined ? saleData.due : oldDue);
+    const dueDiff = newDue - oldDue;
+    const custId = saleData.customerId || existingSale?.customerId;
+    if (custId && Number(custId) > 0 && dueDiff !== 0) {
+      try {
+        await db.execute(
+          `UPDATE customers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) + ?), updatedAt = ? WHERE id = ?`,
+          [dueDiff, now, Number(custId)]
+        );
+      } catch (e) {
+        console.warn('Customer balance update err:', e);
+      }
+    }
+
+    // 3. Update sale row in SQLite
+    const updatedSale: Sale = {
+      ...existingSale!,
+      ...saleData,
+      id: saleId,
+      updatedAt: now,
+      syncStatus: 'pending_update',
+    };
+    await this.update(updatedSale, false);
+
+    // 4. Replace sale items in SQLite
+    await db.execute('DELETE FROM sale_items WHERE saleId = ?', [saleId]);
+    const fullItems: SaleItem[] = [];
+    for (const item of newItems) {
+      const itemId = Date.now() + Math.floor(Math.random() * 10000);
+      const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+      const unitType = item.unitType || 'sub';
+      const fullItem: SaleItem = {
+        ...item,
+        id: itemId,
+        saleId,
+        createdAt: now,
+        updatedAt: now,
+        syncStatus: 'pending_insert',
+      };
+      fullItems.push(fullItem);
+
+      await db.execute(
+        `INSERT INTO sale_items (
+          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          itemId,
+          saleId,
+          item.productId,
+          item.productName || null,
+          item.quantity,
+          item.unitPrice,
+          item.discount || 0,
+          item.gst || 0,
+          item.taxAmount || 0,
+          item.unitCost || 0,
+          item.unit || null,
+          unitType,
+          conversionRate,
+          item.total,
+          now,
+          now,
+          'pending_insert'
+        ]
+      );
+    }
+
+    // 5. Outbox & API sync
+    await outboxRepo.add(this.tableName, saleId, 'UPDATE', { sale: updatedSale, items: fullItems });
+    this.requestSync();
+
+    try {
+      const apiPayload = {
+        ...updatedSale,
+        items: fullItems.map(it => ({
+          productId: String(it.productId),
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+          discount: Number(it.discount || 0),
+          taxAmount: Number(it.taxAmount || 0),
+          total: Number(it.total),
+        })),
+      };
+      await apiClient.put(API_ENDPOINTS.SALES.BY_ID(saleId), apiPayload);
+    } catch (e) {
+      console.warn('Direct API sale update error (will sync via outbox):', e);
+    }
+
+    return { ...updatedSale, items: fullItems };
+  }
+
   private extractRows(results: any): any[] {
     let rawRows: any[] = [];
     if (!results) return rawRows;
@@ -944,6 +1087,39 @@ export class SaleRepository extends BaseRepository<Sale> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
+    const sale = await this.getById(id);
+    const items = await this.getItemsForSale(id);
+
+    // Adjust stock: restore deducted items back to stock
+    if (sale && (sale.status === 'Completed' || (sale.status as any) === 'COMPLETED')) {
+      for (const item of items) {
+        if (!item.productId) continue;
+        const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+        const unitType = item.unitType || 'sub';
+        const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+        try {
+          await db.execute(
+            `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
+            [baseQty, item.productId]
+          );
+        } catch (stockErr) {
+          console.warn(`Failed to restore stock for product ${item.productId}:`, stockErr);
+        }
+      }
+    }
+
+    // Revert customer outstanding balance if due was recorded
+    if (sale && sale.customerId && Number(sale.customerId) > 0 && Number(sale.due || 0) > 0) {
+      try {
+        await db.execute(
+          `UPDATE customers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) - ?), updatedAt = ? WHERE id = ?`,
+          [Number(sale.due), new Date().toISOString(), Number(sale.customerId)]
+        );
+      } catch (custErr) {
+        console.warn(`Failed to revert customer balance:`, custErr);
+      }
+    }
+
     await db.execute('DELETE FROM sale_items WHERE saleId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
@@ -953,6 +1129,9 @@ export class SaleRepository extends BaseRepository<Sale> {
         await outboxRepo.add(this.tableName, id, 'DELETE', { id });
         this.requestSync();
       }
+      try {
+        await apiClient.delete(API_ENDPOINTS.SALES.BY_ID(id));
+      } catch (_) {}
     }
   }
 }

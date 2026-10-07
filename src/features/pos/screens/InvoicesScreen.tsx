@@ -12,6 +12,7 @@ import {
   RefreshCw, 
   Trash2, 
   Eye, 
+  Edit,
   X, 
   User, 
   Printer, 
@@ -34,6 +35,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editSaleId, setEditSaleId] = useState<number | string | null>(null);
+  const [dismissedInvoiceIds, setDismissedInvoiceIds] = useState<any[]>([]);
   const [shareData, setShareData] = useState<any | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -58,6 +61,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       const seen = new Set<string>();
       const list: any[] = [];
       for (const s of dbSales) {
+        if (dismissedInvoiceIds.includes(s.id)) continue;
         const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
         if (invNum && seen.has(invNum)) continue;
         if (invNum) seen.add(invNum);
@@ -101,8 +105,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       }
       return list;
     }
-    return fallbackInvoices;
-  }, [dbSales, fallbackInvoices]);
+    return fallbackInvoices.filter((item) => !dismissedInvoiceIds.includes(item.id));
+  }, [dbSales, fallbackInvoices, dismissedInvoiceIds]);
 
   const filteredData = useMemo(() => {
     if (!searchQuery.trim()) return allInvoices;
@@ -124,10 +128,11 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            setDismissedInvoiceIds((prev) => [...prev, item.id]);
             try {
               await deleteSaleMutation.mutateAsync(item.id);
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete');
+              console.warn('Failed to delete sale from db:', err);
             }
           },
         },
@@ -332,7 +337,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     {
       key: 'actions',
       title: 'Actions',
-      width: 130,
+      width: 160,
       render: (_: any, item: any) => (
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Pressable onPress={() => handleOpenPrintPreview(item)} style={{ padding: 4 }}>
@@ -340,6 +345,15 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           </Pressable>
           <Pressable onPress={() => handleOpenShare(item)} style={{ padding: 4 }}>
             <Share2 size={16} color="#10B981" />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setEditSaleId(item.id);
+              setShowAddModal(true);
+            }}
+            style={{ padding: 4 }}
+          >
+            <Edit size={16} color="#F59E0B" />
           </Pressable>
           <Pressable onPress={() => handleViewInvoice(item)} style={{ padding: 4 }}>
             <Eye size={16} color={theme.colors.textSecondary} />
@@ -569,8 +583,10 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 
       <AddSalesModal
         visible={showAddModal}
+        editSaleId={editSaleId}
         onClose={() => {
           setShowAddModal(false);
+          setEditSaleId(null);
           refetch();
         }}
       />

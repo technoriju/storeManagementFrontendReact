@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
@@ -27,8 +27,21 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
   }
 
   const handleDelete = () => {
-    deleteProduct(Number(productId));
-    onNavigate('list');
+    Alert.alert(
+      'Delete Product',
+      `Are you sure you want to delete "${product.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteProduct(Number(productId));
+            onNavigate('list');
+          },
+        },
+      ]
+    );
   };
 
   const InfoRow = ({ label, value }: { label: string, value: string | number | undefined }) => (

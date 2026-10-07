@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { Sale, SaleItem } from '../../../types/models';
+import { useProductStore } from '../../products/store/productStore';
 
 export const SALE_QUERY_KEY = ['sales'] as const;
 
@@ -80,6 +81,34 @@ export const useCreateSale = () => {
   });
 };
 
+export const useUpdateSale = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      sale,
+      items,
+    }: {
+      id: number;
+      sale: Partial<Sale>;
+      items: Array<Omit<SaleItem, 'id' | 'saleId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>;
+    }) => {
+      return await saleRepository.updateSaleWithItems(id, sale, items);
+    },
+    onSuccess: (updatedSale) => {
+      queryClient.setQueryData(SALE_QUERY_KEY, (old: Sale[] | undefined) => {
+        if (!old) return [updatedSale];
+        return old.map((item) => (item.id === updatedSale.id ? { ...item, ...updatedSale } : item));
+      });
+      queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      try {
+        useProductStore.getState().fetchProducts().catch(() => {});
+      } catch (_) {}
+    },
+  });
+};
+
 export const useDeleteSale = () => {
   const queryClient = useQueryClient();
 
@@ -93,6 +122,9 @@ export const useDeleteSale = () => {
         return old ? old.filter((item) => item.id !== deletedId) : [];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      try {
+        useProductStore.getState().fetchProducts().catch(() => {});
+      } catch (_) {}
     },
   });
 };

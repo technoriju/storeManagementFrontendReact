@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { usePurchase } from '../api/usePurchases';
-import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign } from 'lucide-react-native';
+import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit } from 'lucide-react-native';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
+import { AddPurchaseModal } from '../components/AddPurchaseModal';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
   const numericId = entityId ? parseInt(String(entityId), 10) : null;
   const { data: purchase, isLoading } = usePurchase(numericId);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -18,7 +20,16 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
           <ArrowLeft size={18} color={theme.colors.text} />
           <Text style={{ color: theme.colors.text, fontWeight: '600', marginLeft: 6 }}>Back to Purchases</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Purchase Details</Text>
+        <Text style={[styles.title, { color: theme.colors.text, flex: 1 }]}>Purchase Details</Text>
+        {purchase && (
+          <TouchableOpacity
+            style={[styles.editBtn, { backgroundColor: '#F97316' }]}
+            onPress={() => setShowEditModal(true)}
+          >
+            <Edit size={16} color="white" />
+            <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>Edit Purchase</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20 }}>
@@ -153,6 +164,12 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
           </View>
         )}
       </ScrollView>
+
+      <AddPurchaseModal
+        visible={showEditModal}
+        editPurchaseId={numericId}
+        onClose={() => setShowEditModal(false)}
+      />
     </View>
   );
 };
@@ -168,6 +185,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   backBtn: { flexDirection: 'row', alignItems: 'center' },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
   title: { fontSize: 18, fontWeight: '700' },
   card: { borderWidth: 1, borderRadius: 8, padding: 16 },
   cardHeader: {
