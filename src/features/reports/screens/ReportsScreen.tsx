@@ -14,6 +14,9 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { ProfitLossView } from '../components/ProfitLossView';
 import { AnnualReportView } from '../components/AnnualReportView';
 import { ReportExportModal } from '../components/ReportExportModal';
+import { DateFilterBar, DateRangeState, computePresetDates } from '../components/DateFilterBar';
+import { CustomerWiseReportView } from '../components/CustomerWiseReportView';
+import { SupplierWiseReportView } from '../components/SupplierWiseReportView';
 import {
   BarChart2,
   ShoppingBag,
@@ -41,6 +44,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  ChevronRight,
 } from 'lucide-react-native';
 
 interface ReportsScreenProps {
@@ -58,7 +62,9 @@ interface ReportTabConfig {
 
 const REPORT_TABS: ReportTabConfig[] = [
   { id: 'sales_report', label: 'Sales Report', subtitle: 'Detailed customer sales register, tax invoices, and collections', icon: BarChart2, category: 'core' },
+  { id: 'customer_wise', label: 'Customer-Wise', subtitle: 'Detailed customer sales register, invoices, and ledger breakdown', icon: Users, category: 'core' },
   { id: 'purchase_report', label: 'Purchase Report', subtitle: 'Procurement bills, purchase orders, and supplier payables', icon: ShoppingBag, category: 'core' },
+  { id: 'supplier_wise', label: 'Supplier-Wise', subtitle: 'Detailed supplier purchase bills, payments, and payable breakdown', icon: UserCheck, category: 'core' },
   { id: 'inventory_report', label: 'Inventory Report', subtitle: 'Current stock balances, unit conversions, and inventory valuation', icon: Filter, category: 'core' },
   { id: 'customer_report', label: 'Customer Report', subtitle: 'Customer ledger, lifetime billing, and receivables due balances', icon: Users, category: 'core' },
   { id: 'supplier_report', label: 'Supplier Report', subtitle: 'Supplier ledger, total procurement, and outstanding payables', icon: UserCheck, category: 'core' },
@@ -90,9 +96,23 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const [statementData, setStatementData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDateRange, setSelectedDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
   const [selectedFilterStatus, setSelectedFilterStatus] = useState<string | undefined>(undefined);
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
+
+  // Dynamic Date Range Filter State
+  const [dateRange, setDateRange] = useState<DateRangeState>(() => {
+    const init = computePresetDates('month');
+    return {
+      preset: 'month',
+      startDate: init.startDate,
+      endDate: init.endDate,
+      label: init.label,
+    };
+  });
+
+  // Selected customer / supplier for direct drill-down
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | string | null>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | string | null>(null);
 
   // Sync when initialReport changes from parent / sidebar
   useEffect(() => {
@@ -101,17 +121,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
   }, [initialReport]);
 
-  // Date range labels
-  const dateRangeLabel = useMemo(() => {
-    switch (selectedDateRange) {
-      case 'today': return 'Today';
-      case 'week': return 'This Week';
-      case 'month': return 'This Month (Oct 2026)';
-      case 'quarter': return 'This Quarter (Q3 2026)';
-      case 'year': return 'Financial Year 2026-27';
-      default: return 'All Recorded Dates';
-    }
-  }, [selectedDateRange]);
+  const dateRangeLabel = dateRange.label;
 
   const activeTabConfig = useMemo(() => {
     return REPORT_TABS.find((t) => t.id === activeReportId) || REPORT_TABS[0];
@@ -123,23 +133,14 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     try {
       const filters: ReportFilters = {};
       
-      // Calculate date filters
-      const now = new Date(2026, 9, 7); // Base current date
-      if (selectedDateRange === 'today') {
-        filters.startDate = '2026-10-07';
-        filters.endDate = '2026-10-07';
-      } else if (selectedDateRange === 'week') {
-        filters.startDate = '2026-10-01';
-        filters.endDate = '2026-10-07';
-      } else if (selectedDateRange === 'month') {
-        filters.startDate = '2026-10-01';
-        filters.endDate = '2026-10-31';
-      } else if (selectedDateRange === 'quarter') {
-        filters.startDate = '2026-07-01';
-        filters.endDate = '2026-09-30';
-      } else if (selectedDateRange === 'year') {
-        filters.startDate = '2026-04-01';
-        filters.endDate = '2027-03-31';
+      // Calculate date filters from dynamic dateRange state
+      filters.startDate = dateRange.startDate;
+      filters.endDate = dateRange.endDate;
+
+      if (activeReportId === 'customer_wise' || activeReportId === 'supplier_wise') {
+        // Handled by dedicated CustomerWiseReportView and SupplierWiseReportView
+        setIsLoading(false);
+        return;
       }
 
       switch (activeReportId) {
@@ -223,7 +224,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   useEffect(() => {
     loadReportData();
-  }, [activeReportId, selectedDateRange]);
+  }, [activeReportId, dateRange.startDate, dateRange.endDate]);
 
   const handleSelectTab = (tabId: string) => {
     setActiveReportId(tabId);
@@ -409,12 +410,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Helper status badge renderer
   const renderStatusBadge = (status: string) => {
-    const s = String(status || '').toUpperCase();
+    const raw = (status && String(status).trim()) || 'Completed';
+    const s = raw.toUpperCase();
     if (s === 'PAID' || s === 'COMPLETED' || s === 'RECEIVED' || s === 'CLEAR' || s === 'IN_STOCK' || s === 'RECEIPT') {
       return (
         <View style={[styles.badge, { backgroundColor: '#ECFDF5' }]}>
           <View style={[styles.badgeDot, { backgroundColor: '#10B981' }]} />
-          <Text style={[styles.badgeText, { color: '#10B981' }]}>{status}</Text>
+          <Text style={[styles.badgeText, { color: '#10B981' }]}>{raw}</Text>
         </View>
       );
     }
@@ -422,14 +424,14 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       return (
         <View style={[styles.badge, { backgroundColor: '#FFFBEB' }]}>
           <View style={[styles.badgeDot, { backgroundColor: '#F59E0B' }]} />
-          <Text style={[styles.badgeText, { color: '#D97706' }]}>{status}</Text>
+          <Text style={[styles.badgeText, { color: '#D97706' }]}>{raw}</Text>
         </View>
       );
     }
     return (
       <View style={[styles.badge, { backgroundColor: '#FEF2F2' }]}>
         <View style={[styles.badgeDot, { backgroundColor: '#EF4444' }]} />
-        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{status}</Text>
+        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{raw}</Text>
       </View>
     );
   };
@@ -441,7 +443,25 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'invoiceNumber', title: 'Invoice #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'customerName', title: 'Customer', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          {
+            key: 'customerName',
+            title: 'Customer',
+            flex: 2,
+            minWidth: 180,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.customerName && String(item.customerName).trim()) || (item.customer?.name && String(item.customer?.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (item.customerId) setSelectedCustomerId(item.customerId);
+                    handleSelectTab('customer_wise');
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{name}</Text>
+                </Pressable>
+              );
+            },
+          },
           { key: 'paymentMethod', title: 'Payment Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'subtotal', title: 'Subtotal', width: 100, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'tax', title: 'GST', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -455,7 +475,25 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'invoiceNumber', title: 'Bill / PO #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          {
+            key: 'supplierName',
+            title: 'Supplier Name',
+            flex: 2,
+            minWidth: 190,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.supplier?.name && String(item.supplier?.name).trim()) || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (item.supplierId) setSelectedSupplierId(item.supplierId);
+                    handleSelectTab('supplier_wise');
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{name}</Text>
+                </Pressable>
+              );
+            },
+          },
           { key: 'itemsCount', title: 'Items', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 1}</Text> },
           { key: 'subtotal', title: 'Subtotal', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'tax', title: 'Tax', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -469,7 +507,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'sku', title: 'SKU Code', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'name', title: 'Product Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 130,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || (item.category?.name && String(item.category?.name).trim()) || 'General';
+              return <Text style={{ color: theme.colors.textSecondary }}>{cat}</Text>;
+            },
+          },
           { key: 'stockWithUnits', title: 'Stock Available', width: 180, render: (val: string) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
           { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
           { key: 'price', title: 'Price (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
@@ -480,49 +526,118 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       case 'customer_report':
         return [
           { key: 'customerCode', title: 'Customer ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'customerName', title: 'Customer Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'phone', title: 'Contact Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'totalSalesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'customerName',
+            title: 'Customer Name',
+            flex: 2,
+            minWidth: 190,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.name && String(item.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Customer');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'phone', title: 'Contact Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'N/A'}</Text> },
+          { key: 'totalSalesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
           { key: 'totalBilled', title: 'Total Billed (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'totalPaid', title: 'Total Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'outstandingBalance', title: 'Balance Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'status', title: 'Status', width: 100, render: (val: string) => renderStatusBadge(val) },
+          {
+            key: 'action',
+            title: 'Action',
+            width: 130,
+            render: (_: any, item: any) => (
+              <Pressable
+                style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, paddingVertical: 4, paddingHorizontal: 8 }]}
+                onPress={() => {
+                  setSelectedCustomerId(item.id);
+                  handleSelectTab('customer_wise');
+                }}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '700' }}>Statement</Text>
+                <ChevronRight size={12} color={theme.colors.primary} />
+              </Pressable>
+            ),
+          },
         ];
 
       case 'supplier_report':
         return [
           { key: 'supplierCode', title: 'Supplier ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'supplierName',
+            title: 'Supplier Name',
+            flex: 2,
+            minWidth: 200,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.name && String(item.name).trim()) || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'N/A'}</Text> },
+          { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
           { key: 'totalPurchased', title: 'Purchased (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'totalPaid', title: 'Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'outstandingBalance', title: 'Payable Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'status', title: 'Status', width: 100, render: (val: string) => renderStatusBadge(val) },
+          {
+            key: 'action',
+            title: 'Action',
+            width: 130,
+            render: (_: any, item: any) => (
+              <Pressable
+                style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, paddingVertical: 4, paddingHorizontal: 8 }]}
+                onPress={() => {
+                  setSelectedSupplierId(item.id);
+                  handleSelectTab('supplier_wise');
+                }}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '700' }}>Statement</Text>
+                <ChevronRight size={12} color={theme.colors.primary} />
+              </Pressable>
+            ),
+          },
         ];
 
       case 'product_report':
         return [
           { key: 'sku', title: 'SKU', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'name', title: 'Product Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'unitsSold', title: 'Sold (Qty)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 120,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || (item.category?.name && String(item.category?.name).trim()) || 'General';
+              return <Text style={{ color: theme.colors.textSecondary }}>{cat}</Text>;
+            },
+          },
+          { key: 'unitsSold', title: 'Sold (Qty)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val || 0}</Text> },
           { key: 'revenue', title: 'Revenue (₹)', width: 120, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'profit', title: 'Profit (₹)', width: 110, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
-          { key: 'margin', title: 'Margin %', width: 90, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>{val}%</Text> },
-          { key: 'currentStock', title: 'In Stock', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'margin', title: 'Margin %', width: 90, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>{val || 0}%</Text> },
+          { key: 'currentStock', title: 'In Stock', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
         ];
 
       case 'invoice_report':
         return [
           { key: 'invoiceNumber', title: 'Invoice No', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date & Time', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'customerName', title: 'Customer', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          {
+            key: 'customerName',
+            title: 'Customer',
+            flex: 2,
+            minWidth: 180,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.customerName && String(item.customerName).trim()) || (item.customer?.name && String(item.customer?.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+              return <Text style={{ fontWeight: '500', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
           { key: 'taxableAmount', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'taxAmount', title: 'GST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'grandTotal', title: 'Grand Total', width: 120, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 100, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 100, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
         ];
 
@@ -531,9 +646,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
-          { key: 'partyName', title: 'Party (Customer/Supplier)', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'reference', title: 'Reference / UTR', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'partyName',
+            title: 'Party (Customer/Supplier)',
+            flex: 2,
+            minWidth: 190,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.partyName && String(item.partyName).trim()) || (item.customerName && String(item.customerName).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.type === 'Receipt' ? 'Customer' : 'Supplier');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
+          { key: 'reference', title: 'Reference / UTR', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
           { key: 'inflow', title: 'Inflow (+) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>{Number(val) > 0 ? `+₹${Number(val).toLocaleString()}` : '-'}</Text> },
           { key: 'outflow', title: 'Outflow (-) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>{Number(val) > 0 ? `-₹${Number(val).toLocaleString()}` : '-'}</Text> },
         ];
@@ -542,10 +666,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 150, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'vendor', title: 'Paid To', width: 160, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 150,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || 'General Expense';
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{cat}</Text>;
+            },
+          },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
+          { key: 'vendor', title: 'Paid To', width: 160, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val || 'Vendor'}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
         ];
 
@@ -553,10 +685,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 160, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'receivedFrom', title: 'Received From', width: 170, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 160, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val || 'Revenue'}</Text> },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
+          { key: 'receivedFrom', title: 'Received From', width: 170, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val || 'Customer'}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
         ];
 
@@ -565,8 +697,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           { key: 'invoiceNumber', title: 'Bill / INV #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
-          { key: 'partyName', title: 'Party Name', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
-          { key: 'gstin', title: 'GSTIN', width: 160, render: (val: string) => <Text style={{ color: theme.colors.textSecondary, fontFamily: 'monospace' }}>{val}</Text> },
+          {
+            key: 'partyName',
+            title: 'Party Name',
+            flex: 2,
+            minWidth: 180,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.partyName && String(item.partyName).trim()) || (item.customerName && String(item.customerName).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.type === 'PURCHASE' ? 'Supplier' : 'Customer');
+              return <Text style={{ fontWeight: '500', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'gstin', title: 'GSTIN', width: 160, render: (val: string) => <Text style={{ color: theme.colors.textSecondary, fontFamily: 'monospace' }}>{val || 'Unregistered'}</Text> },
           { key: 'taxableValue', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'cgst', title: 'CGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'sgst', title: 'SGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -618,39 +759,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     </View>
   );
 
-  // Date Range filter chips
+  // Date Range filter control
   const dateFilters = (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxWidth: '100%' }}>
-      <View style={styles.dateChipsRow}>
-        <Text style={[styles.filterGroupLabel, { color: theme.colors.textSecondary }]}>PERIOD:</Text>
-        {[
-          { id: 'all', label: 'All' },
-          { id: 'today', label: 'Today' },
-          { id: 'week', label: 'Week' },
-          { id: 'month', label: 'Month' },
-          { id: 'quarter', label: 'Quarter' },
-          { id: 'year', label: 'Year' },
-        ].map((range) => {
-          const isSelected = selectedDateRange === range.id;
-          return (
-            <Pressable
-              key={range.id}
-              style={[
-                styles.filterPill,
-                isSelected
-                  ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
-                  : { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
-              ]}
-              onPress={() => setSelectedDateRange(range.id as any)}
-            >
-              <Text style={[styles.filterPillText, isSelected ? { color: '#FFF' } : { color: theme.colors.text }]}>
-                {range.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </ScrollView>
+    <DateFilterBar currentRange={dateRange} onChangeRange={setDateRange} />
   );
 
   return (
@@ -698,7 +809,11 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* 2. Contextual KPI Cards Bar */}
-        {reportKPIs.length > 0 && activeReportId !== 'profit_loss' && activeReportId !== 'annual_report' && (
+        {reportKPIs.length > 0 &&
+          activeReportId !== 'profit_loss' &&
+          activeReportId !== 'annual_report' &&
+          activeReportId !== 'customer_wise' &&
+          activeReportId !== 'supplier_wise' && (
           <View style={styles.kpiGrid}>
             {reportKPIs.map((kpi, idx) => {
               const IconComp = kpi.icon;
@@ -725,7 +840,33 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         )}
 
         {/* 3. Conditional Screen Views */}
-        {activeReportId === 'profit_loss' ? (
+        {activeReportId === 'customer_wise' ? (
+          <CustomerWiseReportView
+            filters={{
+              startDate: dateRange.startDate,
+              endDate: dateRange.endDate,
+              customerId: selectedCustomerId ? String(selectedCustomerId) : undefined,
+              search: searchQuery,
+            }}
+            dateRangeLabel={dateRangeLabel}
+            selectedCustomerId={selectedCustomerId}
+            onSelectCustomer={setSelectedCustomerId}
+            onOpenExport={() => setIsExportModalVisible(true)}
+          />
+        ) : activeReportId === 'supplier_wise' ? (
+          <SupplierWiseReportView
+            filters={{
+              startDate: dateRange.startDate,
+              endDate: dateRange.endDate,
+              supplierId: selectedSupplierId ? String(selectedSupplierId) : undefined,
+              search: searchQuery,
+            }}
+            dateRangeLabel={dateRangeLabel}
+            selectedSupplierId={selectedSupplierId}
+            onSelectSupplier={setSelectedSupplierId}
+            onOpenExport={() => setIsExportModalVisible(true)}
+          />
+        ) : activeReportId === 'profit_loss' ? (
           <ProfitLossView data={statementData} dateRangeLabel={dateRangeLabel} />
         ) : activeReportId === 'annual_report' ? (
           <AnnualReportView data={statementData} dateRangeLabel={dateRangeLabel} />

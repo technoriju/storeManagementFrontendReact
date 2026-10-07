@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { CustomerScreenType } from '../CustomersModule';
@@ -38,6 +38,18 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
   const deleteMutation = useDeleteCustomer();
   const [searchQuery, setSearchQuery] = useState('');
 
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    const q = searchQuery.toLowerCase().trim();
+    return customers.filter((c: any) =>
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      (c.customerName && c.customerName.toLowerCase().includes(q)) ||
+      (c.email && c.email.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.toLowerCase().includes(q)) ||
+      (c.address && c.address.toLowerCase().includes(q))
+    );
+  }, [customers, searchQuery]);
+
   const columns = [
     { 
       key: 'code', 
@@ -53,9 +65,16 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       title: 'Customer', 
       flex: 2,
       minWidth: 200,
-      render: (value: string) => (
-        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{value}</Text>
-      )
+      render: (value: any, item: any) => {
+        const displayName =
+          value ||
+          item?.name ||
+          item?.customerName ||
+          item?.fullName ||
+          (item?.firstName ? `${item.firstName} ${item.lastName || ''}`.trim() : '') ||
+          'Unnamed Customer';
+        return <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{displayName}</Text>;
+      }
     },
     { 
       key: 'email', 
@@ -84,13 +103,20 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
     { 
       key: 'status', 
       title: 'Status', 
-      width: 100,
-      render: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'white', marginRight: 4 }} />
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>Active</Text>
-        </View>
-      )
+      width: 110,
+      render: (value: any, item: any) => {
+        const rawStatus = String(value || item?.status || 'Active').toUpperCase();
+        const isInactive = rawStatus === 'INACTIVE' || rawStatus === 'DISABLED';
+        const color = isInactive ? '#EF4444' : '#10B981';
+        const bg = isInactive ? '#FEF2F2' : '#ECFDF5';
+        const label = isInactive ? 'Inactive' : 'Active';
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, borderColor: color, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, marginRight: 6 }} />
+            <Text style={{ color, fontSize: 12, fontWeight: '600' }}>{label}</Text>
+          </View>
+        );
+      }
     },
     { 
       key: 'syncStatus', 
@@ -166,7 +192,7 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
         subtitle="Manage your customers"
         headerActions={headerActions}
         columns={columns}
-        data={customers}
+        data={filteredCustomers}
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}

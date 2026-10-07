@@ -56,7 +56,9 @@ const AuthenticatedApp = () => {
     if (
       activeTab === 'reports' ||
       activeTab === 'sales_report' ||
+      activeTab === 'customer_wise' ||
       activeTab === 'purchase_report' ||
+      activeTab === 'supplier_wise' ||
       activeTab === 'inventory_report' ||
       activeTab === 'invoice_report' ||
       activeTab === 'customer_report' ||

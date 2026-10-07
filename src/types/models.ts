@@ -94,6 +94,7 @@ export interface Customer extends BaseEntity {
   taxId?: string;
   gstin?: string;
   outstandingBalance?: number;
+  status?: string;
 }
 
 export interface Supplier extends BaseEntity {
