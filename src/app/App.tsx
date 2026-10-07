@@ -53,8 +53,23 @@ const AuthenticatedApp = () => {
     if (activeTab === 'dashboard') {
       return <DashboardModule />;
     }
-    if (activeTab === 'reports') {
-      return <ReportsModule />;
+    if (
+      activeTab === 'reports' ||
+      activeTab === 'sales_report' ||
+      activeTab === 'purchase_report' ||
+      activeTab === 'inventory_report' ||
+      activeTab === 'invoice_report' ||
+      activeTab === 'customer_report' ||
+      activeTab === 'supplier_report' ||
+      activeTab === 'product_report' ||
+      activeTab === 'payment_report' ||
+      activeTab === 'expense_report' ||
+      activeTab === 'income_report' ||
+      activeTab === 'tax_report' ||
+      activeTab === 'profit_loss' ||
+      activeTab === 'annual_report'
+    ) {
+      return <ReportsModule initialReport={activeTab} onNavigateReport={setActiveTab} />;
     }
     if (activeTab === 'products') {
       return <ProductsModule />;
@@ -62,8 +77,14 @@ const AuthenticatedApp = () => {
     if (activeTab === 'purchases' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
       return <PurchasesModule initialScreen={activeTab} />;
     }
-    if (activeTab === 'inventory') {
-      return <InventoryModule />;
+    if (
+      activeTab === 'manage_stock' ||
+      activeTab === 'inventory' ||
+      activeTab === 'stock_adjustment' ||
+      activeTab === 'stock_transfer' ||
+      activeTab === 'low_stocks'
+    ) {
+      return <InventoryModule initialScreen={activeTab} />;
     }
     if (activeTab === 'category') {
       return <CategoryModule />;

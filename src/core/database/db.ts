@@ -607,6 +607,27 @@ export const initializeDatabase = () => {
       );
     `);
 
+    // Stock Transactions Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS stock_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        productId INTEGER NOT NULL,
+        productName TEXT,
+        sku TEXT,
+        type TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        previousStock REAL NOT NULL,
+        newStock REAL NOT NULL,
+        reason TEXT,
+        reference TEXT,
+        notes TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
     // Outbox Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS outbox (

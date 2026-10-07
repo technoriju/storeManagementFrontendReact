@@ -1,200 +1,762 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { ReportsService, ReportFilters } from '../services/reports.service';
+import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
+import { ProfitLossView } from '../components/ProfitLossView';
+import { AnnualReportView } from '../components/AnnualReportView';
+import { ReportExportModal } from '../components/ReportExportModal';
+import {
+  BarChart2,
+  ShoppingBag,
+  Filter,
+  FileText,
+  Users,
+  UserCheck,
+  Box,
+  DollarSign,
+  FileMinus,
+  FilePlus,
+  Activity,
+  PieChart,
+  Calendar,
+  RefreshCw,
+  Printer,
+  FileSpreadsheet,
+  Download,
+  Search,
+  ArrowUpRight,
+  ArrowDownLeft,
+  TrendingUp,
+  TrendingDown,
+  Layers,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+} from 'lucide-react-native';
 
-const REPORT_TYPES = [
-  { id: 'sales', name: 'Sales Register' },
-  { id: 'purchases', name: 'Purchases Register' },
-  { id: 'customer_outstanding', name: 'Customer Ledger / Due' },
-  { id: 'supplier_outstanding', name: 'Supplier Ledger / Due' },
-  { id: 'payments', name: 'Payments In / Out' },
-  { id: 'balance_sheet', name: 'Balance Sheet' },
-  { id: 'inventory', name: 'Inventory & Units' },
-  { id: 'profit_loss', name: 'Profit & Loss' },
-  { id: 'gst', name: 'GST Summary' },
-  { id: 'expenses', name: 'Expense Log' },
+interface ReportsScreenProps {
+  initialReport?: string;
+  onNavigateReport?: (reportId: string) => void;
+}
+
+interface ReportTabConfig {
+  id: string;
+  label: string;
+  subtitle: string;
+  icon: any;
+  category: 'core' | 'accounting' | 'strategic';
+}
+
+const REPORT_TABS: ReportTabConfig[] = [
+  { id: 'sales_report', label: 'Sales Report', subtitle: 'Detailed customer sales register, tax invoices, and collections', icon: BarChart2, category: 'core' },
+  { id: 'purchase_report', label: 'Purchase Report', subtitle: 'Procurement bills, purchase orders, and supplier payables', icon: ShoppingBag, category: 'core' },
+  { id: 'inventory_report', label: 'Inventory Report', subtitle: 'Current stock balances, unit conversions, and inventory valuation', icon: Filter, category: 'core' },
+  { id: 'customer_report', label: 'Customer Report', subtitle: 'Customer ledger, lifetime billing, and receivables due balances', icon: Users, category: 'core' },
+  { id: 'supplier_report', label: 'Supplier Report', subtitle: 'Supplier ledger, total procurement, and outstanding payables', icon: UserCheck, category: 'core' },
+  { id: 'product_report', label: 'Product Report', subtitle: 'SKU sales volume, revenue breakdown, margins, and profit performance', icon: Box, category: 'core' },
+  { id: 'invoice_report', label: 'Invoice Report', subtitle: 'Complete invoice log with tax components and payment methods', icon: FileText, category: 'accounting' },
+  { id: 'payment_report', label: 'Payment Report', subtitle: 'Cash receipts, bank disbursements, and net cash flow transactions', icon: DollarSign, category: 'accounting' },
+  { id: 'expense_report', label: 'Expense Report', subtitle: 'Store operational costs, utilities, rent, salaries, and logistics', icon: FileMinus, category: 'accounting' },
+  { id: 'income_report', label: 'Income Report', subtitle: 'Operating sales inflows and miscellaneous revenue sources', icon: FilePlus, category: 'accounting' },
+  { id: 'tax_report', label: 'Tax Report', subtitle: 'GST output tax, input tax credit (ITC), and net GST liability', icon: Activity, category: 'accounting' },
+  { id: 'profit_loss', label: 'Profit & Loss', subtitle: 'Gross revenue, cost of goods, overhead expenses, and net profit', icon: PieChart, category: 'strategic' },
+  { id: 'annual_report', label: 'Annual Report', subtitle: '12-month comparative financial statement and YoY business growth', icon: Calendar, category: 'strategic' },
 ];
 
-export const ReportsScreen = () => {
+export const ReportsScreen: React.FC<ReportsScreenProps> = ({
+  initialReport = 'sales_report',
+  onNavigateReport,
+}) => {
   const theme = useTheme();
-  const [activeReport, setActiveReport] = useState('sales');
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<ReportFilters>({});
+  const { width } = useWindowDimensions();
 
-  const loadData = async () => {
-    setLoading(true);
+  // Normalize initial report ID
+  const normalizedInitial = useMemo(() => {
+    if (!initialReport || initialReport === 'reports') return 'sales_report';
+    return initialReport;
+  }, [initialReport]);
+
+  const [activeReportId, setActiveReportId] = useState<string>(normalizedInitial);
+  const [data, setData] = useState<any[]>([]);
+  const [statementData, setStatementData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDateRange, setSelectedDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'quarter' | 'year'>('month');
+  const [selectedFilterStatus, setSelectedFilterStatus] = useState<string | undefined>(undefined);
+  const [isExportModalVisible, setIsExportModalVisible] = useState(false);
+
+  // Sync when initialReport changes from parent / sidebar
+  useEffect(() => {
+    if (initialReport && initialReport !== 'reports') {
+      setActiveReportId(initialReport);
+    }
+  }, [initialReport]);
+
+  // Date range labels
+  const dateRangeLabel = useMemo(() => {
+    switch (selectedDateRange) {
+      case 'today': return 'Today';
+      case 'week': return 'This Week';
+      case 'month': return 'This Month (Oct 2026)';
+      case 'quarter': return 'This Quarter (Q3 2026)';
+      case 'year': return 'Financial Year 2026-27';
+      default: return 'All Recorded Dates';
+    }
+  }, [selectedDateRange]);
+
+  const activeTabConfig = useMemo(() => {
+    return REPORT_TABS.find((t) => t.id === activeReportId) || REPORT_TABS[0];
+  }, [activeReportId]);
+
+  // Fetch report data
+  const loadReportData = async () => {
+    setIsLoading(true);
     try {
-      let result: any[] = [];
-      switch (activeReport) {
-        case 'sales':
-          result = await ReportsService.getSalesReport(filters);
-          break;
-        case 'purchases':
-          result = await ReportsService.getPurchasesReport(filters);
-          break;
-        case 'customer_outstanding':
-          result = await ReportsService.getCustomerOutstandingReport(filters);
-          break;
-        case 'supplier_outstanding':
-          result = await ReportsService.getSupplierOutstandingReport(filters);
-          break;
-        case 'payments':
-          result = await ReportsService.getPaymentReport(filters);
-          break;
-        case 'inventory':
-          result = await ReportsService.getInventoryReport(filters);
-          break;
-        case 'profit_loss':
-          result = await ReportsService.getProfitAndLossReport(filters);
-          break;
-        case 'balance_sheet':
-          result = await ReportsService.getBalanceSheetReport(filters);
-          break;
-        case 'gst':
-          result = await ReportsService.getGSTReport(filters);
-          break;
-        case 'expenses':
-          result = await ReportsService.getExpensesReport(filters);
-          break;
+      const filters: ReportFilters = {};
+      
+      // Calculate date filters
+      const now = new Date(2026, 9, 7); // Base current date
+      if (selectedDateRange === 'today') {
+        filters.startDate = '2026-10-07';
+        filters.endDate = '2026-10-07';
+      } else if (selectedDateRange === 'week') {
+        filters.startDate = '2026-10-01';
+        filters.endDate = '2026-10-07';
+      } else if (selectedDateRange === 'month') {
+        filters.startDate = '2026-10-01';
+        filters.endDate = '2026-10-31';
+      } else if (selectedDateRange === 'quarter') {
+        filters.startDate = '2026-07-01';
+        filters.endDate = '2026-09-30';
+      } else if (selectedDateRange === 'year') {
+        filters.startDate = '2026-04-01';
+        filters.endDate = '2027-03-31';
       }
-      setData(result);
+
+      switch (activeReportId) {
+        case 'sales_report': {
+          const res = await ReportsService.getSalesReport(filters);
+          setData(res);
+          break;
+        }
+        case 'purchase_report': {
+          const res = await ReportsService.getPurchasesReport(filters);
+          setData(res);
+          break;
+        }
+        case 'inventory_report': {
+          const res = await ReportsService.getInventoryReport(filters);
+          setData(res);
+          break;
+        }
+        case 'customer_report': {
+          const res = await ReportsService.getCustomerReport(filters);
+          setData(res);
+          break;
+        }
+        case 'supplier_report': {
+          const res = await ReportsService.getSupplierReport(filters);
+          setData(res);
+          break;
+        }
+        case 'product_report': {
+          const res = await ReportsService.getProductReport(filters);
+          setData(res);
+          break;
+        }
+        case 'invoice_report': {
+          const res = await ReportsService.getInvoiceReport(filters);
+          setData(res);
+          break;
+        }
+        case 'payment_report': {
+          const res = await ReportsService.getPaymentReport(filters);
+          setData(res);
+          break;
+        }
+        case 'expense_report': {
+          const res = await ReportsService.getExpenseReport(filters);
+          setData(res);
+          break;
+        }
+        case 'income_report': {
+          const res = await ReportsService.getIncomeReport(filters);
+          setData(res);
+          break;
+        }
+        case 'tax_report': {
+          const res = await ReportsService.getTaxReport(filters);
+          setData(res);
+          break;
+        }
+        case 'profit_loss': {
+          const res = await ReportsService.getProfitAndLossReport(filters);
+          setStatementData(res);
+          break;
+        }
+        case 'annual_report': {
+          const res = await ReportsService.getAnnualReport(filters);
+          setStatementData(res);
+          break;
+        }
+        default: {
+          const res = await ReportsService.getSalesReport(filters);
+          setData(res);
+          break;
+        }
+      }
     } catch (e) {
       console.error('Error loading report', e);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, [activeReport, filters]);
+    loadReportData();
+  }, [activeReportId, selectedDateRange]);
 
-  const handleExport = () => {
-    // In a real app, generate CSV/PDF and share/download
-    console.log(`Exporting ${activeReport} report...`);
+  const handleSelectTab = (tabId: string) => {
+    setActiveReportId(tabId);
+    setSearchQuery('');
+    setSelectedFilterStatus(undefined);
+    if (onNavigateReport) {
+      onNavigateReport(tabId);
+    }
   };
 
-  const renderTableHeader = () => {
-    if (data.length === 0) return null;
-    const keys = Object.keys(data[0]).filter(k => k !== 'id');
+  // Client-side search and filtering
+  const filteredData = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+    let items = [...data];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      items = items.filter((item) => {
+        return Object.values(item).some((val) =>
+          String(val).toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (selectedFilterStatus) {
+      items = items.filter((item) => {
+        const statusVal = item.paymentStatus || item.status || item.type;
+        return String(statusVal).toLowerCase() === selectedFilterStatus.toLowerCase();
+      });
+    }
+
+    return items;
+  }, [data, searchQuery, selectedFilterStatus]);
+
+  // Contextual KPI cards calculation
+  const reportKPIs = useMemo(() => {
+    if (activeReportId === 'sales_report') {
+      const totalSales = filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
+      const totalPaid = filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
+      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
+      const invoiceCount = filteredData.length;
+      const avgValue = invoiceCount > 0 ? Math.round(totalSales / invoiceCount) : 0;
+
+      return [
+        { title: 'Total Sales Volume', value: `₹${totalSales.toLocaleString()}`, sub: `${invoiceCount} total invoices`, icon: DollarSign, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Collections Paid', value: `₹${totalPaid.toLocaleString()}`, sub: 'Settled receipts', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Outstanding Due', value: `₹${totalDue.toLocaleString()}`, sub: 'Receivables pending', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Avg Invoice Value', value: `₹${avgValue.toLocaleString()}`, sub: 'Per transaction', icon: TrendingUp, color: '#7C3AED', bg: '#F5F3FF' },
+      ];
+    }
+
+    if (activeReportId === 'purchase_report') {
+      const totalPurchase = filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
+      const totalPaid = filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
+      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
+
+      return [
+        { title: 'Total Procurement', value: `₹${totalPurchase.toLocaleString()}`, sub: `${filteredData.length} purchase orders`, icon: ShoppingBag, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Paid to Suppliers', value: `₹${totalPaid.toLocaleString()}`, sub: 'Disbursed payments', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Supplier Payables Due', value: `₹${totalDue.toLocaleString()}`, sub: 'Balance pending', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Purchase Orders', value: String(filteredData.length), sub: 'Active vendor POs', icon: Layers, color: '#7C3AED', bg: '#F5F3FF' },
+      ];
+    }
+
+    if (activeReportId === 'inventory_report') {
+      const totalSKUs = filteredData.length;
+      const totalUnits = filteredData.reduce((sum, i) => sum + Number(i.stockQuantity || 0), 0);
+      const totalValuation = filteredData.reduce((sum, i) => sum + Number(i.stockValuation || 0), 0);
+      const lowStockCount = filteredData.filter((i) => i.status === 'LOW_STOCK' || i.status === 'OUT_OF_STOCK').length;
+
+      return [
+        { title: 'Total Active SKUs', value: String(totalSKUs), sub: 'Catalogued products', icon: Box, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Stock In Hand', value: `${totalUnits} Units`, sub: 'Physical count', icon: Layers, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Inventory Valuation', value: `₹${totalValuation.toLocaleString()}`, sub: 'At purchase cost', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Low / Out of Stock', value: String(lowStockCount), sub: 'Requires replenishment', icon: AlertTriangle, color: '#D97706', bg: '#FFFBEB' },
+      ];
+    }
+
+    if (activeReportId === 'customer_report') {
+      const totalCust = filteredData.length;
+      const totalBilled = filteredData.reduce((sum, i) => sum + Number(i.totalBilled || 0), 0);
+      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
+      const overdueCust = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
+
+      return [
+        { title: 'Total Customers', value: String(totalCust), sub: 'Registered accounts', icon: Users, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Lifetime Billed', value: `₹${totalBilled.toLocaleString()}`, sub: 'Gross invoice volume', icon: TrendingUp, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Total Receivables Due', value: `₹${totalDue.toLocaleString()}`, sub: 'Owed by buyers', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Customers with Due', value: String(overdueCust), sub: 'Pending settlement', icon: Clock, color: '#D97706', bg: '#FFFBEB' },
+      ];
+    }
+
+    if (activeReportId === 'supplier_report') {
+      const totalSupp = filteredData.length;
+      const totalPurchased = filteredData.reduce((sum, i) => sum + Number(i.totalPurchased || 0), 0);
+      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
+      const pendingSupp = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
+
+      return [
+        { title: 'Total Suppliers', value: String(totalSupp), sub: 'Active vendors', icon: UserCheck, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Total Purchased', value: `₹${totalPurchased.toLocaleString()}`, sub: 'Procurement turnover', icon: ShoppingBag, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Accounts Payable Due', value: `₹${totalDue.toLocaleString()}`, sub: 'Owed to vendors', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Vendors with Due', value: String(pendingSupp), sub: 'Payment pending', icon: Clock, color: '#D97706', bg: '#FFFBEB' },
+      ];
+    }
+
+    if (activeReportId === 'product_report') {
+      const totalRevenue = filteredData.reduce((sum, i) => sum + Number(i.revenue || 0), 0);
+      const totalProfit = filteredData.reduce((sum, i) => sum + Number(i.profit || 0), 0);
+      const totalUnits = filteredData.reduce((sum, i) => sum + Number(i.unitsSold || 0), 0);
+      const avgMargin = totalRevenue > 0 ? Number(((totalProfit / totalRevenue) * 100).toFixed(1)) : 0;
+
+      return [
+        { title: 'Total Sold Units', value: `${totalUnits} Pcs`, sub: 'Across all SKUs', icon: Box, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Product Sales Revenue', value: `₹${totalRevenue.toLocaleString()}`, sub: 'Gross merchandise value', icon: TrendingUp, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Gross Product Profit', value: `₹${totalProfit.toLocaleString()}`, sub: 'Revenue minus cost', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Average Margin', value: `${avgMargin}%`, sub: 'Weighted gross margin', icon: ArrowUpRight, color: '#10B981', bg: '#ECFDF5' },
+      ];
+    }
+
+    if (activeReportId === 'invoice_report') {
+      const grandTotal = filteredData.reduce((sum, i) => sum + Number(i.grandTotal || 0), 0);
+      const taxAmount = filteredData.reduce((sum, i) => sum + Number(i.taxAmount || 0), 0);
+      const paidCount = filteredData.filter((i) => i.paymentStatus === 'Paid').length;
+      const unpaidCount = filteredData.filter((i) => i.paymentStatus !== 'Paid').length;
+
+      return [
+        { title: 'Invoiced Amount', value: `₹${grandTotal.toLocaleString()}`, sub: `${filteredData.length} tax bills`, icon: FileText, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'GST Collected', value: `₹${taxAmount.toLocaleString()}`, sub: 'Total tax component', icon: Activity, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Paid Invoices', value: String(paidCount), sub: 'Settled receipts', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Unpaid / Partial', value: String(unpaidCount), sub: 'Pending collection', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
+      ];
+    }
+
+    if (activeReportId === 'payment_report') {
+      const totalInflow = filteredData.reduce((sum, i) => sum + Number(i.inflow || 0), 0);
+      const totalOutflow = filteredData.reduce((sum, i) => sum + Number(i.outflow || 0), 0);
+      const netCash = totalInflow - totalOutflow;
+
+      return [
+        { title: 'Total Collections (In)', value: `₹${totalInflow.toLocaleString()}`, sub: 'Receipts from customers', icon: ArrowUpRight, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Total Payouts (Out)', value: `₹${totalOutflow.toLocaleString()}`, sub: 'Vendor & expense payouts', icon: ArrowDownLeft, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Net Cash Flow', value: `₹${netCash.toLocaleString()}`, sub: 'Inflow minus outflow', icon: DollarSign, color: netCash >= 0 ? '#10B981' : '#EF4444', bg: netCash >= 0 ? '#ECFDF5' : '#FEF2F2' },
+        { title: 'Total Transactions', value: String(filteredData.length), sub: 'Vouchers recorded', icon: Layers, color: '#2563EB', bg: '#EFF6FF' },
+      ];
+    }
+
+    if (activeReportId === 'expense_report') {
+      const totalExp = filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+
+      return [
+        { title: 'Total Expenses', value: `₹${totalExp.toLocaleString()}`, sub: `${filteredData.length} cost vouchers`, icon: FileMinus, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Top Category', value: 'Rent & Facility', sub: '₹25,000 monthly', icon: PieChart, color: '#D97706', bg: '#FFFBEB' },
+        { title: 'Operational Overhead', value: `₹${totalExp.toLocaleString()}`, sub: 'Direct business costs', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
+      ];
+    }
+
+    if (activeReportId === 'income_report') {
+      const totalInc = filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+
+      return [
+        { title: 'Total Inflow Recorded', value: `₹${totalInc.toLocaleString()}`, sub: `${filteredData.length} credit entries`, icon: FilePlus, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Primary Source', value: 'Sales Operations', sub: 'Core store revenues', icon: TrendingUp, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Other Inflows', value: '₹10,800', sub: 'Interest & scrap sales', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
+      ];
+    }
+
+    if (activeReportId === 'tax_report') {
+      const salesTax = filteredData.filter((i) => i.type === 'SALE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
+      const purchaseTax = filteredData.filter((i) => i.type === 'PURCHASE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
+      const netTaxPayable = Math.max(0, salesTax - purchaseTax);
+
+      return [
+        { title: 'Output GST (Sales)', value: `₹${salesTax.toLocaleString()}`, sub: 'Collected from buyers', icon: ArrowUpRight, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Input Tax Credit (ITC)', value: `₹${purchaseTax.toLocaleString()}`, sub: 'Paid to suppliers', icon: ArrowDownLeft, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Net GST Payable', value: `₹${netTaxPayable.toLocaleString()}`, sub: 'Government tax liability', icon: Activity, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Tax Invoices Logged', value: String(filteredData.length), sub: 'GSTR compliance ready', icon: FileText, color: '#7C3AED', bg: '#F5F3FF' },
+      ];
+    }
+
+    return [];
+  }, [activeReportId, filteredData]);
+
+  // Helper status badge renderer
+  const renderStatusBadge = (status: string) => {
+    const s = String(status || '').toUpperCase();
+    if (s === 'PAID' || s === 'COMPLETED' || s === 'RECEIVED' || s === 'CLEAR' || s === 'IN_STOCK' || s === 'RECEIPT') {
+      return (
+        <View style={[styles.badge, { backgroundColor: '#ECFDF5' }]}>
+          <View style={[styles.badgeDot, { backgroundColor: '#10B981' }]} />
+          <Text style={[styles.badgeText, { color: '#10B981' }]}>{status}</Text>
+        </View>
+      );
+    }
+    if (s === 'PARTIAL' || s === 'PENDING' || s === 'ORDERED' || s === 'LOW_STOCK') {
+      return (
+        <View style={[styles.badge, { backgroundColor: '#FFFBEB' }]}>
+          <View style={[styles.badgeDot, { backgroundColor: '#F59E0B' }]} />
+          <Text style={[styles.badgeText, { color: '#D97706' }]}>{status}</Text>
+        </View>
+      );
+    }
     return (
-      <View style={[styles.tableRow, styles.tableHeaderRow, { borderBottomColor: theme.colors.border }]}>
-        {keys.map(k => (
-          <Text key={k} style={[styles.tableCell, styles.tableHeaderCell, { color: theme.colors.textSecondary }]}>
-            {k.replace(/([A-Z])/g, ' $1').trim()}
-          </Text>
-        ))}
+      <View style={[styles.badge, { backgroundColor: '#FEF2F2' }]}>
+        <View style={[styles.badgeDot, { backgroundColor: '#EF4444' }]} />
+        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{status}</Text>
       </View>
     );
   };
 
-  const renderTableRows = () => {
-    if (data.length === 0 && !loading) {
-      return (
-        <View style={styles.emptyState}>
-          <Text style={{ color: theme.colors.textSecondary }}>No data found for this period.</Text>
-        </View>
-      );
+  // Define table columns tailored to each report type
+  const tableColumns = useMemo(() => {
+    switch (activeReportId) {
+      case 'sales_report':
+        return [
+          { key: 'invoiceNumber', title: 'Invoice #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'customerName', title: 'Customer', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Payment Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
+          { key: 'subtotal', title: 'Subtotal', width: 100, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'tax', title: 'GST', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'total', title: 'Total (₹)', width: 110, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'paid', title: 'Paid (₹)', width: 100, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'due', title: 'Due (₹)', width: 100, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'purchase_report':
+        return [
+          { key: 'invoiceNumber', title: 'Bill / PO #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          { key: 'itemsCount', title: 'Items', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 1}</Text> },
+          { key: 'subtotal', title: 'Subtotal', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'tax', title: 'Tax', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'total', title: 'Total (₹)', width: 120, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'paid', title: 'Paid (₹)', width: 100, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'due', title: 'Due (₹)', width: 100, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'paymentStatus', title: 'Payment', width: 110, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'inventory_report':
+        return [
+          { key: 'sku', title: 'SKU Code', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'name', title: 'Product Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'stockWithUnits', title: 'Stock Available', width: 180, render: (val: string) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
+          { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
+          { key: 'price', title: 'Price (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
+          { key: 'stockValuation', title: 'Valuation (₹)', width: 130, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'status', title: 'Stock Status', width: 130, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'customer_report':
+        return [
+          { key: 'customerCode', title: 'Customer ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'customerName', title: 'Customer Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'phone', title: 'Contact Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'totalSalesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'totalBilled', title: 'Total Billed (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'totalPaid', title: 'Total Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'outstandingBalance', title: 'Balance Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'status', title: 'Status', width: 100, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'supplier_report':
+        return [
+          { key: 'supplierCode', title: 'Supplier ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'totalPurchased', title: 'Purchased (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'totalPaid', title: 'Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'outstandingBalance', title: 'Payable Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'status', title: 'Status', width: 100, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'product_report':
+        return [
+          { key: 'sku', title: 'SKU', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'name', title: 'Product Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'unitsSold', title: 'Sold (Qty)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
+          { key: 'revenue', title: 'Revenue (₹)', width: 120, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'profit', title: 'Profit (₹)', width: 110, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'margin', title: 'Margin %', width: 90, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>{val}%</Text> },
+          { key: 'currentStock', title: 'In Stock', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+        ];
+
+      case 'invoice_report':
+        return [
+          { key: 'invoiceNumber', title: 'Invoice No', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'date', title: 'Date & Time', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'customerName', title: 'Customer', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          { key: 'taxableAmount', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'taxAmount', title: 'GST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'grandTotal', title: 'Grand Total', width: 120, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 100, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
+        ];
+
+      case 'payment_report':
+        return [
+          { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
+          { key: 'partyName', title: 'Party (Customer/Supplier)', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'reference', title: 'Reference / UTR', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'inflow', title: 'Inflow (+) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>{Number(val) > 0 ? `+₹${Number(val).toLocaleString()}` : '-'}</Text> },
+          { key: 'outflow', title: 'Outflow (-) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>{Number(val) > 0 ? `-₹${Number(val).toLocaleString()}` : '-'}</Text> },
+        ];
+
+      case 'expense_report':
+        return [
+          { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 150, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'vendor', title: 'Paid To', width: 160, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+        ];
+
+      case 'income_report':
+        return [
+          { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 160, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'receivedFrom', title: 'Received From', width: 170, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+        ];
+
+      case 'tax_report':
+        return [
+          { key: 'invoiceNumber', title: 'Bill / INV #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
+          { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
+          { key: 'partyName', title: 'Party Name', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          { key: 'gstin', title: 'GSTIN', width: 160, render: (val: string) => <Text style={{ color: theme.colors.textSecondary, fontFamily: 'monospace' }}>{val}</Text> },
+          { key: 'taxableValue', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'cgst', title: 'CGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'sgst', title: 'SGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'igst', title: 'IGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
+          { key: 'totalGst', title: 'Total GST (₹)', width: 120, render: (val: number) => <Text style={{ fontWeight: '700', color: '#7C3AED' }}>₹{Number(val || 0).toLocaleString()}</Text> },
+        ];
+
+      default:
+        return [
+          { key: 'id', title: 'ID', width: 80 },
+          { key: 'name', title: 'Name', flex: 1 },
+        ];
     }
-    
-    return data.map((item, index) => {
-      const keys = Object.keys(item).filter(k => k !== 'id');
-      return (
-        <View key={item.id || index} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
-          {keys.map(k => (
-            <Text key={k} style={[styles.tableCell, { color: theme.colors.text }]} numberOfLines={1}>
-              {typeof item[k] === 'number' ? (k.toLowerCase().includes('total') || k.toLowerCase().includes('gst') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('value') || k.toLowerCase().includes('cost') || k.toLowerCase().includes('valuation') ? `₹${Number(item[k]).toFixed(2)}` : item[k]) : item[k]}
-            </Text>
-          ))}
-        </View>
-      );
-    });
-  };
+  }, [activeReportId, theme]);
+
+  // Header action buttons
+  const headerActions = (
+    <View style={styles.actionButtonsRow}>
+      <Pressable
+        style={[styles.iconButton, { borderColor: theme.colors.border }]}
+        onPress={loadReportData}
+      >
+        <RefreshCw size={16} color={theme.colors.textSecondary} />
+      </Pressable>
+
+      <Pressable
+        style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+        onPress={() => setIsExportModalVisible(true)}
+      >
+        <FileText size={15} color="#EF4444" />
+        <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
+      </Pressable>
+
+      <Pressable
+        style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+        onPress={() => setIsExportModalVisible(true)}
+      >
+        <FileSpreadsheet size={15} color="#10B981" />
+        <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
+      </Pressable>
+
+      <Pressable
+        style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+        onPress={() => setIsExportModalVisible(true)}
+      >
+        <Printer size={15} color="#FFF" />
+        <Text style={styles.primaryActionText}>Print</Text>
+      </Pressable>
+    </View>
+  );
+
+  // Date Range filter chips
+  const dateFilters = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxWidth: '100%' }}>
+      <View style={styles.dateChipsRow}>
+        <Text style={[styles.filterGroupLabel, { color: theme.colors.textSecondary }]}>PERIOD:</Text>
+        {[
+          { id: 'all', label: 'All' },
+          { id: 'today', label: 'Today' },
+          { id: 'week', label: 'Week' },
+          { id: 'month', label: 'Month' },
+          { id: 'quarter', label: 'Quarter' },
+          { id: 'year', label: 'Year' },
+        ].map((range) => {
+          const isSelected = selectedDateRange === range.id;
+          return (
+            <Pressable
+              key={range.id}
+              style={[
+                styles.filterPill,
+                isSelected
+                  ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                  : { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+              ]}
+              onPress={() => setSelectedDateRange(range.id as any)}
+            >
+              <Text style={[styles.filterPillText, isSelected ? { color: '#FFF' } : { color: theme.colors.text }]}>
+                {range.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Sidebar for report types */}
-      <View style={[styles.sidebar, { borderRightColor: theme.colors.border }]}>
-        <Text style={[styles.sidebarTitle, { color: theme.colors.text }]}>Reports</Text>
-        <ScrollView>
-          {REPORT_TYPES.map(report => (
-            <TouchableOpacity
-              key={report.id}
-              style={[
-                styles.reportNavItem,
-                activeReport === report.id && { backgroundColor: theme.colors.primary + '1A', borderRightWidth: 3, borderRightColor: theme.colors.primary }
-              ]}
-              onPress={() => setActiveReport(report.id)}
-            >
-              <Text style={[
-                styles.reportNavText,
-                { color: activeReport === report.id ? theme.colors.primary : theme.colors.textSecondary,
-                  fontWeight: activeReport === report.id ? '600' : '400' }
-              ]}>
-                {report.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      
+      {/* 1. Top Report Category / Tabs Scrollbar */}
+      <View style={[styles.topTabsBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topTabsContent}>
+          {REPORT_TABS.map((tab) => {
+            const isSelected = activeReportId === tab.id;
+            const TabIcon = tab.icon;
+
+            return (
+              <Pressable
+                key={tab.id}
+                style={[
+                  styles.tabChip,
+                  isSelected && {
+                    backgroundColor: '#FFF4EC',
+                    borderColor: '#F89344',
+                  }
+                ]}
+                onPress={() => handleSelectTab(tab.id)}
+              >
+                <TabIcon
+                  size={16}
+                  color={isSelected ? '#F89344' : theme.colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabChipText,
+                    { color: isSelected ? '#F89344' : theme.colors.textSecondary },
+                    isSelected && styles.tabChipTextActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Main content area */}
-      <View style={styles.mainContent}>
-        <View style={[styles.toolbar, { borderBottomColor: theme.colors.border }]}>
-          <ScrollView style={{ flex: 1, marginRight: 16 }} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersArea}>
-            <TextInput 
-              style={[styles.filterInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Start Date (YYYY-MM-DD)"
-              placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={(text) => setFilters(prev => ({ ...prev, startDate: text || undefined }))}
-            />
-            <TextInput 
-              style={[styles.filterInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="End Date (YYYY-MM-DD)"
-              placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={(text) => setFilters(prev => ({ ...prev, endDate: text || undefined }))}
-            />
-            <TextInput 
-              style={[styles.filterInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Branch ID"
-              placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={(text) => setFilters(prev => ({ ...prev, branchId: text || undefined }))}
-            />
-            <TextInput 
-              style={[styles.filterInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Product ID"
-              placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={(text) => setFilters(prev => ({ ...prev, productId: text || undefined }))}
-            />
-            <TextInput 
-              style={[styles.filterInput, { borderColor: theme.colors.border, color: theme.colors.text }]}
-              placeholder="Customer ID"
-              placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={(text) => setFilters(prev => ({ ...prev, customerId: text || undefined }))}
-            />
-          </ScrollView>
-          <TouchableOpacity style={[styles.exportButton, { backgroundColor: theme.colors.text }]} onPress={handleExport}>
-            <Text style={[styles.exportButtonText, { color: theme.colors.background }]}>Export Data</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Main Content Area */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* 2. Contextual KPI Cards Bar */}
+        {reportKPIs.length > 0 && activeReportId !== 'profit_loss' && activeReportId !== 'annual_report' && (
+          <View style={styles.kpiGrid}>
+            {reportKPIs.map((kpi, idx) => {
+              const IconComp = kpi.icon;
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.kpiCard,
+                    { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+                  ]}
+                >
+                  <View style={[styles.kpiIconBox, { backgroundColor: kpi.bg }]}>
+                    <IconComp size={20} color={kpi.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>{kpi.title}</Text>
+                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpi.value}</Text>
+                    <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>{kpi.sub}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
-        <View style={styles.tableContainer}>
-          {loading ? (
-            <ActivityIndicator size="large" color={theme.colors.text} style={{ marginTop: 40 }} />
-          ) : (
-            <ScrollView horizontal style={styles.tableScroll}>
-              <View>
-                {renderTableHeader()}
-                <ScrollView>
-                  {renderTableRows()}
-                </ScrollView>
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </View>
+        {/* 3. Conditional Screen Views */}
+        {activeReportId === 'profit_loss' ? (
+          <ProfitLossView data={statementData} dateRangeLabel={dateRangeLabel} />
+        ) : activeReportId === 'annual_report' ? (
+          <AnnualReportView data={statementData} dateRangeLabel={dateRangeLabel} />
+        ) : (
+          <View style={styles.tableWrapper}>
+            <AdvancedTable
+              title={activeTabConfig.label}
+              subtitle={`${activeTabConfig.subtitle} • ${dateRangeLabel}`}
+              headerActions={headerActions}
+              columns={tableColumns}
+              data={filteredData}
+              searchPlaceholder={`Search in ${activeTabConfig.label.toLowerCase()}...`}
+              onSearch={setSearchQuery}
+              filters={dateFilters}
+              isLoading={isLoading}
+              hasCheckbox={false}
+            />
+          </View>
+        )}
+
+      </ScrollView>
+
+      {/* 4. Export & Print Dialog Modal */}
+      <ReportExportModal
+        visible={isExportModalVisible}
+        onClose={() => setIsExportModalVisible(false)}
+        reportTitle={activeTabConfig.label}
+        totalRecords={filteredData.length}
+        dateRangeLabel={dateRangeLabel}
+      />
+
     </View>
   );
 };
@@ -202,88 +764,150 @@ export const ReportsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row',
   },
-  sidebar: {
-    width: 240,
-    borderRightWidth: 1,
-    paddingVertical: 24,
-  },
-  sidebarTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    paddingHorizontal: 24,
-    marginBottom: 24,
-    letterSpacing: -0.5,
-  },
-  reportNavItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  reportNavText: {
-    fontSize: 15,
-  },
-  mainContent: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  toolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
+  topTabsBar: {
     borderBottomWidth: 1,
   },
-  filtersArea: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingRight: 16,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    width: 150,
-    fontSize: 14,
-  },
-  exportButton: {
+  topTabsContent: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 6,
+    gap: 8,
+    flexDirection: 'row',
   },
-  exportButtonText: {
-    fontSize: 14,
+  tabChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    gap: 8,
+  },
+  tabChipText: {
+    fontSize: 13,
     fontWeight: '500',
   },
-  tableContainer: {
-    flex: 1,
-    padding: 24,
+  tabChipTextActive: {
+    fontWeight: '700',
   },
-  tableScroll: {
-    flex: 1,
+  scrollContent: {
+    padding: 16,
+    gap: 16,
   },
-  tableRow: {
+  kpiGrid: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    paddingVertical: 16,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  tableHeaderRow: {
-    borderBottomWidth: 2,
+  kpiCard: {
+    flex: 1,
+    minWidth: 190,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  tableCell: {
-    width: 150,
-    paddingRight: 16,
-    fontSize: 14,
-  },
-  tableHeaderCell: {
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  emptyState: {
-    padding: 40,
+  kpiIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
   },
+  kpiLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  kpiValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  kpiSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  tableWrapper: {
+    flex: 1,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outlineActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+  },
+  outlineActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  primaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  primaryActionText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterGroupLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginRight: 4,
+    letterSpacing: 0.5,
+  },
+  filterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });
-
-

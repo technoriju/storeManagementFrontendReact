@@ -121,13 +121,25 @@ export const AppSelect = ({
   let displayValue = placeholder || 'Select...';
   let hasValue = false;
   
+  const sanitizedOptions = useMemo(() => {
+    if (!Array.isArray(options)) return [];
+    const seen = new Set<string>();
+    return options.filter((opt) => {
+      if (!opt) return false;
+      const key = String(opt.value ?? '');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [options]);
+
   if (isMulti) {
     const currentArray = Array.isArray(currentValue) ? currentValue : [];
     hasValue = currentArray.length > 0;
   } else {
     hasValue = currentValue !== undefined && currentValue !== null && currentValue !== '';
     if (hasValue) {
-      const selectedOption = options.find((o: AppSelectOption) => String(o.value) === String(currentValue));
+      const selectedOption = sanitizedOptions.find((o: AppSelectOption) => String(o.value) === String(currentValue));
       if (selectedOption) {
         displayValue = selectedOption.label;
       } else {
@@ -137,13 +149,13 @@ export const AppSelect = ({
   }
 
   const filteredOptions = useMemo(() => {
-    if (!searchable || !searchQuery) return options;
+    if (!searchable || !searchQuery) return sanitizedOptions;
     const lowerQuery = String(searchQuery).toLowerCase();
-    return options.filter(opt => {
+    return sanitizedOptions.filter(opt => {
       if (!opt) return false;
       return String(opt.label || '').toLowerCase().includes(lowerQuery);
     });
-  }, [options, searchable, searchQuery]);
+  }, [sanitizedOptions, searchable, searchQuery]);
 
   return (
     <View style={[styles.container, { marginBottom: theme.spacing.md }, containerStyle]}>
@@ -171,11 +183,11 @@ export const AppSelect = ({
               {displayValue}
             </Text>
           ) : (
-            (Array.isArray(currentValue) ? currentValue : []).map((val: any) => {
-              const opt = options.find(o => o.value === val);
+            (Array.isArray(currentValue) ? currentValue : []).map((val: any, idx: number) => {
+              const opt = sanitizedOptions.find(o => String(o.value) === String(val));
               const lbl = opt ? opt.label : String(val);
               return (
-                <View key={String(val)} style={[styles.chip, { backgroundColor: theme.colors.background || '#f9f9f9' }]}>
+                <View key={`chip-${String(val)}-${idx}`} style={[styles.chip, { backgroundColor: theme.colors.background || '#f9f9f9' }]}>
                   <Text style={[styles.chipText, { color: theme.colors.text }]}>{lbl}</Text>
                   <TouchableOpacity 
                     onPress={(e) => { e.stopPropagation(); removeMultiItem(val); }} 
@@ -242,8 +254,8 @@ export const AppSelect = ({
             ) : (
               <FlatList
                 data={filteredOptions}
-                keyExtractor={(item, index) => String(item.value) + index}
-                renderItem={({ item }) => {
+                keyExtractor={(item, index) => `select-opt-${String(item.value ?? '')}-${index}`}
+                renderItem={({ item, index }) => {
                   let isSelected = false;
                   if (isMulti) {
                     isSelected = Array.isArray(currentValue) && currentValue.some((v: any) => String(v) === String(item.value));
@@ -253,6 +265,7 @@ export const AppSelect = ({
 
                   return (
                     <TouchableOpacity 
+                      key={`select-item-${String(item.value ?? '')}-${index}`}
                       style={[
                         styles.optionItem, 
                         isSelected && !isMulti && { backgroundColor: theme.colors.background || '#f9f9f9' }
@@ -270,7 +283,7 @@ export const AppSelect = ({
                         <Check size={16} color={theme.colors.primary} />
                       )}
                     </TouchableOpacity>
-                  )
+                  );
                 }}
                 style={{ maxHeight: 250 }}
                 bounces={false}
