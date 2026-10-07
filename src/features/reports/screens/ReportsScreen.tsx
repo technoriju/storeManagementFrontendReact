@@ -410,12 +410,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Helper status badge renderer
   const renderStatusBadge = (status: string) => {
-    const s = String(status || '').toUpperCase();
+    const raw = (status && String(status).trim()) || 'Completed';
+    const s = raw.toUpperCase();
     if (s === 'PAID' || s === 'COMPLETED' || s === 'RECEIVED' || s === 'CLEAR' || s === 'IN_STOCK' || s === 'RECEIPT') {
       return (
         <View style={[styles.badge, { backgroundColor: '#ECFDF5' }]}>
           <View style={[styles.badgeDot, { backgroundColor: '#10B981' }]} />
-          <Text style={[styles.badgeText, { color: '#10B981' }]}>{status}</Text>
+          <Text style={[styles.badgeText, { color: '#10B981' }]}>{raw}</Text>
         </View>
       );
     }
@@ -423,14 +424,14 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       return (
         <View style={[styles.badge, { backgroundColor: '#FFFBEB' }]}>
           <View style={[styles.badgeDot, { backgroundColor: '#F59E0B' }]} />
-          <Text style={[styles.badgeText, { color: '#D97706' }]}>{status}</Text>
+          <Text style={[styles.badgeText, { color: '#D97706' }]}>{raw}</Text>
         </View>
       );
     }
     return (
       <View style={[styles.badge, { backgroundColor: '#FEF2F2' }]}>
         <View style={[styles.badgeDot, { backgroundColor: '#EF4444' }]} />
-        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{status}</Text>
+        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{raw}</Text>
       </View>
     );
   };
@@ -447,16 +448,19 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             title: 'Customer',
             flex: 2,
             minWidth: 180,
-            render: (val: string, item: any) => (
-              <Pressable
-                onPress={() => {
-                  if (item.customerId) setSelectedCustomerId(item.customerId);
-                  handleSelectTab('customer_wise');
-                }}
-              >
-                <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{val}</Text>
-              </Pressable>
-            ),
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.customerName && String(item.customerName).trim()) || (item.customer?.name && String(item.customer?.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (item.customerId) setSelectedCustomerId(item.customerId);
+                    handleSelectTab('customer_wise');
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{name}</Text>
+                </Pressable>
+              );
+            },
           },
           { key: 'paymentMethod', title: 'Payment Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'subtotal', title: 'Subtotal', width: 100, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -476,16 +480,19 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
             title: 'Supplier Name',
             flex: 2,
             minWidth: 190,
-            render: (val: string, item: any) => (
-              <Pressable
-                onPress={() => {
-                  if (item.supplierId) setSelectedSupplierId(item.supplierId);
-                  handleSelectTab('supplier_wise');
-                }}
-              >
-                <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{val}</Text>
-              </Pressable>
-            ),
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.supplier?.name && String(item.supplier?.name).trim()) || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+              return (
+                <Pressable
+                  onPress={() => {
+                    if (item.supplierId) setSelectedSupplierId(item.supplierId);
+                    handleSelectTab('supplier_wise');
+                  }}
+                >
+                  <Text style={{ fontWeight: '600', color: theme.colors.primary }}>{name}</Text>
+                </Pressable>
+              );
+            },
           },
           { key: 'itemsCount', title: 'Items', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 1}</Text> },
           { key: 'subtotal', title: 'Subtotal', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -500,7 +507,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'sku', title: 'SKU Code', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'name', title: 'Product Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 130,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || (item.category?.name && String(item.category?.name).trim()) || 'General';
+              return <Text style={{ color: theme.colors.textSecondary }}>{cat}</Text>;
+            },
+          },
           { key: 'stockWithUnits', title: 'Stock Available', width: 180, render: (val: string) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
           { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
           { key: 'price', title: 'Price (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toFixed(2)}</Text> },
@@ -511,9 +526,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       case 'customer_report':
         return [
           { key: 'customerCode', title: 'Customer ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'customerName', title: 'Customer Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'phone', title: 'Contact Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'totalSalesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'customerName',
+            title: 'Customer Name',
+            flex: 2,
+            minWidth: 190,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.name && String(item.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Customer');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'phone', title: 'Contact Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'N/A'}</Text> },
+          { key: 'totalSalesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
           { key: 'totalBilled', title: 'Total Billed (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'totalPaid', title: 'Total Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'outstandingBalance', title: 'Balance Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -540,9 +564,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       case 'supplier_report':
         return [
           { key: 'supplierCode', title: 'Supplier ID', width: 110, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'supplierName',
+            title: 'Supplier Name',
+            flex: 2,
+            minWidth: 200,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.name && String(item.name).trim()) || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'N/A'}</Text> },
+          { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
           { key: 'totalPurchased', title: 'Purchased (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'totalPaid', title: 'Paid (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'outstandingBalance', title: 'Payable Due (₹)', width: 130, render: (val: number) => <Text style={{ color: Number(val) > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
@@ -570,24 +603,41 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'sku', title: 'SKU', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'name', title: 'Product Name', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'unitsSold', title: 'Sold (Qty)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 120,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || (item.category?.name && String(item.category?.name).trim()) || 'General';
+              return <Text style={{ color: theme.colors.textSecondary }}>{cat}</Text>;
+            },
+          },
+          { key: 'unitsSold', title: 'Sold (Qty)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{val || 0}</Text> },
           { key: 'revenue', title: 'Revenue (₹)', width: 120, render: (val: number) => <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'cost', title: 'Cost (₹)', width: 100, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'profit', title: 'Profit (₹)', width: 110, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
-          { key: 'margin', title: 'Margin %', width: 90, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>{val}%</Text> },
-          { key: 'currentStock', title: 'In Stock', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'margin', title: 'Margin %', width: 90, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '600' }}>{val || 0}%</Text> },
+          { key: 'currentStock', title: 'In Stock', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val || 0}</Text> },
         ];
 
       case 'invoice_report':
         return [
           { key: 'invoiceNumber', title: 'Invoice No', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date & Time', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'customerName', title: 'Customer', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
+          {
+            key: 'customerName',
+            title: 'Customer',
+            flex: 2,
+            minWidth: 180,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.customerName && String(item.customerName).trim()) || (item.customer?.name && String(item.customer?.name).trim()) || (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+              return <Text style={{ fontWeight: '500', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
           { key: 'taxableAmount', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'taxAmount', title: 'GST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'grandTotal', title: 'Grand Total', width: 120, render: (val: number) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 100, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 100, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
         ];
 
@@ -596,9 +646,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
-          { key: 'partyName', title: 'Party (Customer/Supplier)', flex: 2, minWidth: 190, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'reference', title: 'Reference / UTR', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'partyName',
+            title: 'Party (Customer/Supplier)',
+            flex: 2,
+            minWidth: 190,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.partyName && String(item.partyName).trim()) || (item.customerName && String(item.customerName).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.type === 'Receipt' ? 'Customer' : 'Supplier');
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
+          { key: 'reference', title: 'Reference / UTR', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
           { key: 'inflow', title: 'Inflow (+) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>{Number(val) > 0 ? `+₹${Number(val).toLocaleString()}` : '-'}</Text> },
           { key: 'outflow', title: 'Outflow (-) (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>{Number(val) > 0 ? `-₹${Number(val).toLocaleString()}` : '-'}</Text> },
         ];
@@ -607,10 +666,18 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 150, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'vendor', title: 'Paid To', width: 160, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          {
+            key: 'category',
+            title: 'Category',
+            width: 150,
+            render: (val: any, item: any) => {
+              const cat = (val && String(val).trim()) || (item.categoryName && String(item.categoryName).trim()) || 'General Expense';
+              return <Text style={{ fontWeight: '600', color: theme.colors.text }}>{cat}</Text>;
+            },
+          },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
+          { key: 'vendor', title: 'Paid To', width: 160, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val || 'Vendor'}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#EF4444', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
         ];
 
@@ -618,10 +685,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         return [
           { key: 'voucherNo', title: 'Voucher #', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'category', title: 'Category', width: 160, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
-          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'receivedFrom', title: 'Received From', width: 170, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val}</Text> },
-          { key: 'paymentMethod', title: 'Mode', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'category', title: 'Category', width: 160, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val || 'Revenue'}</Text> },
+          { key: 'description', title: 'Description', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || '-'}</Text> },
+          { key: 'receivedFrom', title: 'Received From', width: 170, render: (val: string) => <Text style={{ color: theme.colors.text }}>{val || 'Customer'}</Text> },
+          { key: 'paymentMethod', title: 'Mode', width: 130, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'Cash'}</Text> },
           { key: 'amount', title: 'Amount (₹)', width: 120, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{Number(val || 0).toLocaleString()}</Text> },
         ];
 
@@ -630,8 +697,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           { key: 'invoiceNumber', title: 'Bill / INV #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
           { key: 'date', title: 'Date', width: 110, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'type', title: 'Type', width: 100, render: (val: string) => renderStatusBadge(val) },
-          { key: 'partyName', title: 'Party Name', flex: 2, minWidth: 180, render: (val: string) => <Text style={{ fontWeight: '500', color: theme.colors.text }}>{val}</Text> },
-          { key: 'gstin', title: 'GSTIN', width: 160, render: (val: string) => <Text style={{ color: theme.colors.textSecondary, fontFamily: 'monospace' }}>{val}</Text> },
+          {
+            key: 'partyName',
+            title: 'Party Name',
+            flex: 2,
+            minWidth: 180,
+            render: (val: string, item: any) => {
+              const name = (val && String(val).trim()) || (item.partyName && String(item.partyName).trim()) || (item.customerName && String(item.customerName).trim()) || (item.supplierName && String(item.supplierName).trim()) || (item.type === 'PURCHASE' ? 'Supplier' : 'Customer');
+              return <Text style={{ fontWeight: '500', color: theme.colors.text }}>{name}</Text>;
+            },
+          },
+          { key: 'gstin', title: 'GSTIN', width: 160, render: (val: string) => <Text style={{ color: theme.colors.textSecondary, fontFamily: 'monospace' }}>{val || 'Unregistered'}</Text> },
           { key: 'taxableValue', title: 'Taxable (₹)', width: 110, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'cgst', title: 'CGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'sgst', title: 'SGST (₹)', width: 90, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>₹{Number(val || 0).toLocaleString()}</Text> },

@@ -157,26 +157,27 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
     const q = supplierSearchQuery.toLowerCase().trim();
     return allSuppliersData.filter(
       (s: any) =>
-        s.supplierName.toLowerCase().includes(q) ||
-        s.phone.toLowerCase().includes(q) ||
+        (s.supplierName || s.name || '').toLowerCase().includes(q) ||
+        (s.phone || '').toLowerCase().includes(q) ||
         (s.supplierCode && s.supplierCode.toLowerCase().includes(q))
     );
   }, [allSuppliersData, supplierSearchQuery]);
 
   const renderStatusBadge = (status: string) => {
-    const s = String(status || '').toUpperCase();
+    const raw = (status && String(status).trim()) || 'Clear';
+    const s = raw.toUpperCase();
     if (s === 'CLEAR' || s === 'PAID' || s === 'RECEIVED') {
       return (
         <View style={[styles.badge, { backgroundColor: '#ECFDF5' }]}>
           <View style={[styles.badgeDot, { backgroundColor: '#10B981' }]} />
-          <Text style={[styles.badgeText, { color: '#10B981' }]}>{status}</Text>
+          <Text style={[styles.badgeText, { color: '#10B981' }]}>{raw}</Text>
         </View>
       );
     }
     return (
       <View style={[styles.badge, { backgroundColor: '#FEF2F2' }]}>
         <View style={[styles.badgeDot, { backgroundColor: '#EF4444' }]} />
-        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{status}</Text>
+        <Text style={[styles.badgeText, { color: '#EF4444' }]}>{raw}</Text>
       </View>
     );
   };
@@ -517,8 +518,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
         subtitle={`${dateRangeLabel} • Tap any supplier row or 'View Details' to drill down`}
         columns={[
           { key: 'supplierCode', title: 'Supplier ID', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
-          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 200, render: (val: string) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>{val}</Text> },
-          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
+          { key: 'supplierName', title: 'Supplier Name', flex: 2, minWidth: 200, render: (val: string, item: any) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>{(val && String(val).trim()) || (item.name && String(item.name).trim()) || 'Supplier'}</Text> },
+          { key: 'phone', title: 'Phone', width: 140, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val || 'N/A'}</Text> },
           { key: 'totalPurchasesCount', title: 'Orders', width: 80, render: (val: number) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'totalPurchased', title: 'Purchased (₹)', width: 130, render: (val: number) => <Text style={{ color: theme.colors.text }}>₹{Number(val || 0).toLocaleString()}</Text> },
           { key: 'totalPaid', title: 'Paid (₹)', width: 130, render: (val: number) => <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(val || 0).toLocaleString()}</Text> },

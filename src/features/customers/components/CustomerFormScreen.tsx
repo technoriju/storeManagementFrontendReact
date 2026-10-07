@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Modal } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { useCustomerStore } from '../store/customerStore';
+import { CUSTOMER_QUERY_KEY } from '../api/useCustomer';
 import { Customer } from '../../../types/models';
 import { X } from 'lucide-react-native';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -13,6 +15,7 @@ interface CustomerFormScreenProps {
 }
 
 export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customerId, onNavigate }) => {
+  const queryClient = useQueryClient();
   const { addCustomer, updateCustomer } = useCustomerStore();
   
   const [firstName, setFirstName] = useState('');
@@ -60,6 +63,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
         setPhone(customer.phone || '');
         setAddress(customer.address || '');
         setGstin(customer.gstin || '');
+        setIsActive(customer.status ? customer.status.toUpperCase() === 'ACTIVE' : true);
       }
     } catch (e) {
       console.error(e);
@@ -79,6 +83,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
 
     const fullName = lastName.trim() ? `${firstName} ${lastName}` : firstName;
     const fullAddress = [address, city, state, country, postalCode].filter(Boolean).join(', ');
+    const customerStatus = isActive ? 'ACTIVE' : 'INACTIVE';
 
     try {
       const now = new Date().toISOString();
@@ -92,7 +97,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
             phone,
             address: fullAddress,
             gstin,
-            
+            status: customerStatus,
             updatedAt: now,
             syncStatus: 'pending_update'
           };
@@ -106,9 +111,8 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
           email,
           phone,
           address: fullAddress,
-          
           gstin,
-          
+          status: customerStatus,
           createdAt: now,
           updatedAt: now,
           syncStatus: 'pending_insert'
@@ -116,6 +120,7 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
         await customerRepository.insert(newCustomer);
         addCustomer(newCustomer);
       }
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       resetForm();
       onNavigate('list');
     } catch (e) {

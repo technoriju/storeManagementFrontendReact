@@ -279,27 +279,29 @@ class StockRepository {
       console.warn('Local SQLite update error on addStock:', localErr);
     }
 
-    // 2. Sync to Backend API
-    try {
-      const apiRes = await apiClient.post(API_ENDPOINTS.INVENTORY.ADD_STOCK, {
-        productId: payload.productId,
-        quantity: qtyToAdd,
-        reason: payload.reason,
-        reference,
-        unitCost: payload.unitCost,
-        notes: payload.notes,
-        warehouseId: payload.warehouseId,
-      });
-      return apiRes.data?.data || apiRes.data;
-    } catch (apiErr) {
-      console.warn('Backend sync deferred for addStock (will sync later):', apiErr);
-      return {
-        success: true,
-        productId: String(numProductId),
-        quantityAdded: qtyToAdd,
-        offline: true,
-      };
+    // 2. Sync to Backend API (only for positive server-synced product IDs)
+    if (numProductId > 0) {
+      try {
+        const apiRes = await apiClient.post(API_ENDPOINTS.INVENTORY.ADD_STOCK, {
+          productId: numProductId,
+          quantity: qtyToAdd,
+          reason: payload.reason,
+          reference,
+          unitCost: payload.unitCost,
+          notes: payload.notes,
+          warehouseId: payload.warehouseId,
+        });
+        return apiRes.data?.data || apiRes.data;
+      } catch (apiErr) {
+        console.warn('Backend sync deferred for addStock (will sync later):', apiErr);
+      }
     }
+    return {
+      success: true,
+      productId: String(numProductId),
+      quantityAdded: qtyToAdd,
+      offline: true,
+    };
   }
 
   async adjustStock(payload: AdjustStockPayload): Promise<any> {
@@ -351,38 +353,41 @@ class StockRepository {
       console.warn('Local SQLite error on adjustStock:', localErr);
     }
 
-    // 2. Sync to Backend API
-    try {
-      const apiRes = await apiClient.post(API_ENDPOINTS.INVENTORY.ADJUST_STOCK, {
-        productId: payload.productId,
-        adjustmentType: payload.adjustmentType,
-        quantity: qty,
-        reason: payload.reason,
-        notes: payload.notes,
-        warehouseId: payload.warehouseId,
-      });
-      return apiRes.data?.data || apiRes.data;
-    } catch (apiErr) {
-      console.warn('Backend sync deferred for adjustStock:', apiErr);
-      return {
-        success: true,
-        productId: String(numProductId),
-        adjustmentType: payload.adjustmentType,
-        offline: true,
-      };
+    // 2. Sync to Backend API (only for positive server-synced product IDs)
+    if (numProductId > 0) {
+      try {
+        const apiRes = await apiClient.post(API_ENDPOINTS.INVENTORY.ADJUST_STOCK, {
+          productId: numProductId,
+          adjustmentType: payload.adjustmentType,
+          quantity: qty,
+          reason: payload.reason,
+          notes: payload.notes,
+          warehouseId: payload.warehouseId,
+        });
+        return apiRes.data?.data || apiRes.data;
+      } catch (apiErr) {
+        console.warn('Backend sync deferred for adjustStock:', apiErr);
+      }
     }
+    return {
+      success: true,
+      productId: String(numProductId),
+      adjustmentType: payload.adjustmentType,
+      offline: true,
+    };
   }
 
   async getTransactions(productId?: number | string): Promise<StockTransactionRecord[]> {
-    // 1. Try Backend API
-    try {
-      const params: any = {};
-      if (productId) params.productId = productId;
-      const res = await apiClient.get(API_ENDPOINTS.INVENTORY.TRANSACTIONS, { params });
-      const data = res.data?.data || res.data;
-      if (Array.isArray(data)) {
-        return data.map((tx: any) => ({
-          id: tx.id,
+    // 1. Try Backend API (only if no productId or positive server product ID)
+    if (!productId || Number(productId) > 0) {
+      try {
+        const params: any = {};
+        if (productId) params.productId = productId;
+        const res = await apiClient.get(API_ENDPOINTS.INVENTORY.TRANSACTIONS, { params });
+        const data = res.data?.data || res.data;
+        if (Array.isArray(data)) {
+          return data.map((tx: any) => ({
+            id: tx.id,
           productId: tx.productId,
           productName: tx.productName,
           sku: tx.sku,
@@ -396,6 +401,7 @@ class StockRepository {
         }));
       }
     } catch (_) {}
+  }
 
     // 2. Fallback to SQLite
     try {

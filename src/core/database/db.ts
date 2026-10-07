@@ -140,7 +140,9 @@ export const initializeDatabase = () => {
       'ALTER TABLE sub_units ADD COLUMN parentUnitId INTEGER',
       'ALTER TABLE sub_units ADD COLUMN status TEXT DEFAULT \'Active\'',
       'ALTER TABLE customers ADD COLUMN backendId INTEGER',
+      'ALTER TABLE customers ADD COLUMN status TEXT DEFAULT \'ACTIVE\'',
       'ALTER TABLE suppliers ADD COLUMN backendId INTEGER',
+      'ALTER TABLE suppliers ADD COLUMN status TEXT DEFAULT \'Active\'',
       'ALTER TABLE products ADD COLUMN subCategoryId INTEGER',
       'ALTER TABLE purchases ADD COLUMN reference TEXT',
       'ALTER TABLE purchases ADD COLUMN supplierName TEXT',
@@ -269,6 +271,7 @@ export const initializeDatabase = () => {
         address TEXT,
         taxId TEXT,
         outstandingBalance REAL DEFAULT 0,
+        status TEXT DEFAULT 'ACTIVE',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'

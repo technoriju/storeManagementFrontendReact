@@ -86,13 +86,20 @@ export const SupplierListScreen: React.FC<Props> = ({ onNavigate }) => {
     { 
       key: 'status', 
       title: 'Status', 
-      width: 100,
-      render: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}>
-          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'white', marginRight: 4 }} />
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: '500' }}>Active</Text>
-        </View>
-      )
+      width: 110,
+      render: (value: any, item: any) => {
+        const rawStatus = String(value || item?.status || 'Active').toUpperCase();
+        const isInactive = rawStatus === 'INACTIVE' || rawStatus === 'DISABLED';
+        const color = isInactive ? '#EF4444' : '#10B981';
+        const bg = isInactive ? '#FEF2F2' : '#ECFDF5';
+        const label = isInactive ? 'Inactive' : 'Active';
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: bg, borderColor: color, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, marginRight: 6 }} />
+            <Text style={{ color, fontSize: 12, fontWeight: '600' }}>{label}</Text>
+          </View>
+        );
+      }
     },
     { 
       key: 'syncStatus', 
