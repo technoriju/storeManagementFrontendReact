@@ -172,6 +172,9 @@ class SyncEngine {
         } else if (item.entityType === 'suppliers') {
           await supplierRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'products') {
+          await productRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
         } else if (item.entityType === 'sales') {
           await saleRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);

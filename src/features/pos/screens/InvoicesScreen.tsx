@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -119,22 +119,35 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allInvoices, searchQuery]);
 
   const handleDelete = (item: any) => {
+    const doDelete = async () => {
+      setDismissedInvoiceIds((prev) => [...prev, String(item.id)]);
+      const numericId = parseInt(String(item.id), 10);
+      if (!isNaN(numericId)) {
+        try {
+          await deleteSaleMutation.mutateAsync(numericId);
+        } catch (err: any) {
+          console.warn('Failed to delete sale from db:', err);
+          Alert.alert('Error', err?.message || 'Failed to delete sale');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete invoice ${item.invoiceNumber || item.reference || item.id}?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Invoice',
-      `Are you sure you want to delete invoice ${item.invoiceNumber}?`,
+      `Are you sure you want to delete invoice ${item.invoiceNumber || item.reference || item.id}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            setDismissedInvoiceIds((prev) => [...prev, item.id]);
-            try {
-              await deleteSaleMutation.mutateAsync(item.id);
-            } catch (err: any) {
-              console.warn('Failed to delete sale from db:', err);
-            }
-          },
+          onPress: () => { void doDelete(); },
         },
       ]
     );

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -326,26 +326,35 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allOrders, searchQuery]);
 
   const handleDelete = (item: any) => {
+    const doDelete = async () => {
+      setDismissedOrderIds((prev) => [...prev, String(item.id)]);
+      const numericId = parseInt(String(item.id), 10);
+      if (!isNaN(numericId)) {
+        try {
+          await deleteSaleMutation.mutateAsync(numericId);
+        } catch (err: any) {
+          console.warn('Failed to delete sale from db:', err);
+          Alert.alert('Error', err?.message || 'Failed to delete sale');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete order ${item.reference || item.id}?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Sale',
-      `Are you sure you want to delete order ${item.reference}?`,
+      `Are you sure you want to delete order ${item.reference || item.id}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            setDismissedOrderIds((prev) => [...prev, String(item.id)]);
-            const numericId = parseInt(item.id, 10);
-            const isDbSale = dbSales.some((s) => String(s.id) === String(item.id));
-            if (!isNaN(numericId) && (isDbSale || dbSales.length > 0)) {
-              try {
-                await deleteSaleMutation.mutateAsync(numericId);
-              } catch (err: any) {
-                console.warn('Failed to delete sale from db:', err);
-              }
-            }
-          },
+          onPress: () => { void doDelete(); },
         },
       ]
     );

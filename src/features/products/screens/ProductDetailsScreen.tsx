@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
@@ -27,6 +27,18 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
   }
 
   const handleDelete = () => {
+    const doDelete = async () => {
+      await deleteProduct(productId);
+      onNavigate('list');
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete "${product.name}"?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Product',
       `Are you sure you want to delete "${product.name}"?`,
@@ -35,10 +47,7 @@ export const ProductDetailsScreen: React.FC<Props> = ({ productId, onNavigate })
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            await deleteProduct(Number(productId));
-            onNavigate('list');
-          },
+          onPress: () => { void doDelete(); },
         },
       ]
     );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, StyleSheet, Text, Pressable, Image, Alert } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Image, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { useProductStore } from '../store/productStore';
@@ -271,6 +271,21 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const handleDeleteProduct = (item: any) => {
+    const doDelete = async () => {
+      try {
+        await deleteProduct(item.id);
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to delete product');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete "${item.name}"?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Product',
       `Are you sure you want to delete "${item.name}"?`,
@@ -279,7 +294,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         { 
           text: 'Delete', 
           style: 'destructive', 
-          onPress: () => deleteProduct(Number(item.id)) 
+          onPress: () => { void doDelete(); } 
         }
       ]
     );

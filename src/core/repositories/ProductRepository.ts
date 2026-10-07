@@ -3,10 +3,14 @@ import { Product } from '../../types/models';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { db } from '../database/db';
-import { tombstoneRepo } from '../sync/outbox';
+import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
 
 export class ProductRepository extends BaseRepository<Product> {
   protected tableName = 'products';
+
+  private requestSync(): void {
+    void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.syncNow());
+  }
 
   protected getInsertColumns(): string {
     return 'id, name, sku, barcode, hsn, gst, description, price, cost, purchasePrice, wholesalePrice, retailPrice, mrp, categoryId, subCategoryId, brandId, categoryName, brandName, unitId, subunitId, conversionRate, openingStock, stockQuantity, lowStockThreshold, createdAt, updatedAt, syncStatus';
@@ -257,15 +261,43 @@ export class ProductRepository extends BaseRepository<Product> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
+    const entity = await this.getById(id);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
+      await outboxRepo.removeForEntity(this.tableName, id);
+      if (/^\d+$/.test(String(id))) {
+        await outboxRepo.add(this.tableName, id, 'DELETE', entity || { id });
+        this.requestSync();
+      }
       try {
         await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
       } catch (e) {
         console.warn(`Failed to delete product ${id} from API:`, e);
       }
     }
+  }
+
+  async syncOutboxItem(item: OutboxItem): Promise<void> {
+    if (item.operation !== 'DELETE' && (await tombstoneRepo.isDeleted(this.tableName, item.entityId))) {
+      return;
+    }
+    if (item.operation === 'DELETE') {
+      if (!/^\d+$/.test(String(item.entityId))) return;
+      try {
+        await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(item.entityId));
+      } catch (e: any) {
+        const status = e?.response?.status ?? e?.status;
+        if (status >= 400 && status < 500) {
+          return;
+        }
+        throw e;
+      }
+      return;
+    }
+    const entity = item.payload ? (JSON.parse(item.payload) as Product) : await this.getById(item.entityId);
+    if (!entity) throw new Error(`Product ${item.entityId} not found`);
+    await this.syncWithApi(entity, item.operation === 'CREATE' ? 'insert' : 'update');
   }
 
   public async fetchFromApi(): Promise<Product[]> {
