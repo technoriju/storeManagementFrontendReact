@@ -100,6 +100,17 @@ const EditorField = ({ value, onChangeText }: { value?: string; onChangeText?: (
   </View>
 );
 
+const dedupeOptions = <T extends { label: string; value: string }>(list: T[]): T[] => {
+  const seen = new Set<string>();
+  return list.filter(item => {
+    if (!item || item.value === undefined || item.value === null) return false;
+    const str = String(item.value);
+    if (seen.has(str)) return false;
+    seen.add(str);
+    return true;
+  });
+};
+
 export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) => {
   const { products, addProduct, updateProduct, fetchProducts } = useProductStore();
 
@@ -183,7 +194,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       if (brandVal && bName) {
         setBrands(prev => {
           if (!prev.some(b => String(b.value) === String(brandVal))) {
-            return [{ label: bName, value: String(brandVal) }, ...prev];
+            return dedupeOptions([{ label: bName, value: String(brandVal) }, ...prev]);
           }
           return prev;
         });
@@ -274,22 +285,22 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
         if (isMounted) {
           if (localCats && localCats.length > 0) {
-            setCategories(localCats.filter((c: any) => c && c.name).map((c: any) => ({
+            setCategories(dedupeOptions(localCats.filter((c: any) => c && c.name).map((c: any) => ({
               label: c.name,
               value: String(c.id ?? c.backendId)
-            })));
+            }))));
           }
           if (localBrands && localBrands.length > 0) {
-            setBrands(localBrands.filter((b: any) => b && b.name).map((b: any) => ({
+            setBrands(dedupeOptions(localBrands.filter((b: any) => b && b.name).map((b: any) => ({
               label: b.name,
               value: String(b.id ?? b.backendId)
-            })));
+            }))));
           }
           if (localUnits && localUnits.length > 0) {
-            setUnits(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({
+            setUnits(dedupeOptions(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({
               label: u.name || u.shortName,
               value: String(u.id ?? u.backendId)
-            })));
+            }))));
           }
         }
       } catch (localErr) {
@@ -320,7 +331,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         if (cats.length === 0) {
           cats = [{ label: 'Electronics', value: '1' }, { label: 'Groceries', value: '2' }];
         }
-        setCategories(cats);
+        setCategories(dedupeOptions(cats));
 
         // Brands
         let brandItems = brandRes.status === 'fulfilled' ? extractList(brandRes.value.data) : [];
@@ -363,7 +374,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             const map = new Map<string, string>();
             prev.forEach(p => map.set(p.value, p.label));
             brnds.forEach(b => map.set(b.value, b.label));
-            return Array.from(map.entries()).map(([value, label]) => ({ label, value }));
+            return dedupeOptions(Array.from(map.entries()).map(([value, label]) => ({ label, value })));
           });
         }
 
@@ -381,7 +392,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         if (unts.length === 0) {
           unts = [{ label: 'Box', value: '1' }, { label: 'Dozen', value: '2' }, { label: 'Kg', value: '3' }, { label: 'Piece', value: '4' }];
         }
-        setUnits(unts);
+        setUnits(dedupeOptions(unts));
 
         // Sync API brands to local repository in background
         if (brandRes.status === 'fulfilled') {
@@ -397,13 +408,13 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               unitRepository.getAll().catch(() => []),
             ]);
             if (localCats.length > 0) {
-              setCategories(localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) })));
+              setCategories(dedupeOptions(localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }))));
             }
             if (localBrands.length > 0) {
-              setBrands(localBrands.filter((b: any) => b && b.name).map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) })));
+              setBrands(dedupeOptions(localBrands.filter((b: any) => b && b.name).map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) }))));
             }
             if (localUnits.length > 0) {
-              setUnits(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) })));
+              setUnits(dedupeOptions(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }))));
             }
           } catch (_) {}
         }
@@ -546,7 +557,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         }
       }
 
-      setSubCategories(subCategoryOptions);
+      setSubCategories(dedupeOptions(subCategoryOptions));
     };
 
     fetchSub();
@@ -595,7 +606,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         }
       }
 
-      setSubUnitsList(subOptions);
+      setSubUnitsList(dedupeOptions(subOptions));
     };
     fetchSubUnits();
   }, [selectedUnit, selectedSubUnit]);
@@ -1093,14 +1104,14 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                       <Text style={[styles.tableCell, { flex: 0.8 }]}></Text>
                     </View>
                     
-                    {subUnits.map((item) => {
+                    {subUnits.map((item, index) => {
                       const itemRate = parseFloat(item.value) > 0 ? parseFloat(item.value) : 1;
                       const itemSubPurchase = (pPriceNum / itemRate).toFixed(2);
                       const itemSubWholesale = (wPriceNum / itemRate).toFixed(2);
                       const itemSubRetail = (rPriceNum / itemRate).toFixed(2);
 
                       return (
-                        <View style={styles.tableRow} key={item.id}>
+                        <View style={styles.tableRow} key={`subunit-row-${item.id}-${index}`}>
                           <View style={[styles.tableCell, { flex: 1.8 }]}>
                             <AppSelect 
                               options={subUnitsList} 
@@ -1251,8 +1262,8 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   <Text style={[styles.tableCell, {flex: 0.8}]}></Text>
                 </View>
                 
-                {variants.map((item) => (
-                  <View style={styles.tableRow} key={item.id}>
+                {variants.map((item, index) => (
+                  <View style={styles.tableRow} key={`variant-row-${item.id}-${index}`}>
                     <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.variation} onChangeText={(val: string) => handleUpdateVariant(item.id, 'variation', val)} /></View>
                     <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.value} onChangeText={(val: string) => handleUpdateVariant(item.id, 'value', val)} /></View>
                     <View style={[styles.tableCell, {flex: 1}]}><AppInput containerStyle={{marginBottom: 0}} value={item.sku} onChangeText={(val: string) => handleUpdateVariant(item.id, 'sku', val)} /></View>
@@ -1324,7 +1335,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           visible={isCategoryModalVisible} 
           onClose={() => setCategoryModalVisible(false)} 
           onSubmit={(name) => {
-            setCategories([...categories, { label: name, value: Date.now().toString() }]);
+            setCategories(dedupeOptions([...categories, { label: name, value: Date.now().toString() }]));
             setCategoryModalVisible(false);
           }} 
         />
@@ -1359,7 +1370,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             }
 
             const val = String(brandItem.id);
-            setBrands(prev => [...prev, { label: name, value: val }]);
+            setBrands(prev => dedupeOptions([...prev, { label: name, value: val }]));
             setSelectedBrand(val);
             setBrandModalVisible(false);
           }} 

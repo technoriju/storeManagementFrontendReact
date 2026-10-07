@@ -68,10 +68,10 @@ const defaultBusinessProfile: BusinessProfile = {
   pan: 'AABCM1234F',
   state: 'West Bengal',
   stateCode: '19',
-  bankName: 'HDFC Bank',
-  accountNumber: '50200012345678',
-  ifscCode: 'HDFC0001234',
-  branch: 'Market Yard Branch',
+  bankName: 'SBI Bank',
+  accountNumber: '34184788509',
+  ifscCode: 'SBIN0008923',
+  branch: 'Thalia Branch',
   upiId: '8617633023@okbizaxis',
 };
 

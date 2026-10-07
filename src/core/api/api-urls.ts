@@ -73,4 +73,12 @@ export const API_ENDPOINTS = {
     BASE: '/payments',
     BY_ID: (id: string | number) => `/payments/${id}`,
   },
+  INVENTORY: {
+    BASE: '/inventory',
+    STOCKS: '/inventory/stocks',
+    SUMMARY: '/inventory/summary',
+    ADD_STOCK: '/inventory/add-stock',
+    ADJUST_STOCK: '/inventory/adjust-stock',
+    TRANSACTIONS: '/inventory/transactions',
+  },
 };

@@ -1,8 +1,21 @@
 import React from 'react';
 import { ReportsScreen } from './screens/ReportsScreen';
 
-export const ReportsModule = () => {
-  return <ReportsScreen />;
+interface ReportsModuleProps {
+  initialReport?: string;
+  onNavigateReport?: (reportId: string) => void;
+}
+
+export const ReportsModule: React.FC<ReportsModuleProps> = ({
+  initialReport,
+  onNavigateReport,
+}) => {
+  return (
+    <ReportsScreen
+      initialReport={initialReport}
+      onNavigateReport={onNavigateReport}
+    />
+  );
 };
 
 

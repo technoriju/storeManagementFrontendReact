@@ -55,6 +55,7 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   const formatTabTitle = (tab: string) => {
     const found = TABS.find(t => t.id === tab);
     if (found) return found.label;
+    if (tab === 'profit_loss') return 'Profit & Loss';
     return tab.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 

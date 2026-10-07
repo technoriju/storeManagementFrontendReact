@@ -131,7 +131,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
               ) : (
                 currentData.map((item, rowIndex) => (
                   <View 
-                    key={item.id || rowIndex.toString()} 
+                    key={`row-${item.id ?? ''}-${rowIndex}`} 
                     style={[
                       styles.row, 
                       { borderBottomColor: theme.colors.divider },
