@@ -76,9 +76,9 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
               {/* Row 4 */}
               <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
-                <View style={{ flex: 1 }}><AppInput label="Order Tax *" placeholder="" /></View>
-                <View style={{ flex: 1 }}><AppInput label="Discount *" placeholder="" /></View>
-                <View style={{ flex: 1 }}><AppInput label="Shipping *" placeholder="" /></View>
+                <View style={{ flex: 1 }}><AppInput label="Order Tax *" placeholder="0.00" keyboardType="decimal-pad" /></View>
+                <View style={{ flex: 1 }}><AppInput label="Discount *" placeholder="0.00" keyboardType="decimal-pad" /></View>
+                <View style={{ flex: 1 }}><AppInput label="Shipping *" placeholder="0.00" keyboardType="decimal-pad" /></View>
               </View>
 
               {/* Description */}

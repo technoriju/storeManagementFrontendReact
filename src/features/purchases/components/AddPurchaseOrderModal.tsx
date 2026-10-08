@@ -475,15 +475,25 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
               <View style={{ flex: 1, gap: 12 }}>
                 <AppInput
                   label="Discount (₹)"
+                  placeholder="0.00"
                   value={discountTotal}
-                  onChangeText={setDiscountTotal}
-                  keyboardType="numeric"
+                  onChangeText={(v: string) => {
+                    const clean = v.replace(/[^0-9.]/g, '');
+                    const parts = clean.split('.');
+                    setDiscountTotal(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                  }}
+                  keyboardType="decimal-pad"
                 />
                 <AppInput
                   label="Shipping (₹)"
+                  placeholder="0.00"
                   value={shipping}
-                  onChangeText={setShipping}
-                  keyboardType="numeric"
+                  onChangeText={(v: string) => {
+                    const clean = v.replace(/[^0-9.]/g, '');
+                    const parts = clean.split('.');
+                    setShipping(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                  }}
+                  keyboardType="decimal-pad"
                 />
                 <AppInput
                   label="Notes"

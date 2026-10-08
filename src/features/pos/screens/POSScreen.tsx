@@ -88,15 +88,18 @@ export const POSScreen = () => {
       const gTotal = getGrandTotal();
 
       const receiptItems = cart.map((item) => {
-        const rawSubtotal = item.price * item.quantity;
-        const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
+        const qty = parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1;
+        const price = Number(item.price) || 0;
+        const discount = Number(item.discount) || 0;
+        const rawSubtotal = price * qty;
+        const netSubtotal = Math.max(0, rawSubtotal - discount);
         const taxAmt = netSubtotal * ((item.gstRate || 0) / 100);
         return {
           productId: item.product.id,
           productName: item.product.name,
-          quantity: item.quantity,
-          unitPrice: item.price,
-          discount: item.discount || 0,
+          quantity: qty,
+          unitPrice: price,
+          discount: discount,
           gst: item.gstRate || 0,
           taxAmount: taxAmt,
           unitCost: item.unitCost || 0,
@@ -305,13 +308,13 @@ export const POSScreen = () => {
           ]}
           keyboardType="decimal-pad"
           selectTextOnFocus
-          value={item.quantity === 0 ? '' : String(item.quantity)}
+          value={item.quantity === 0 || item.quantity === '' ? '' : String(item.quantity)}
+          placeholder="1"
           onChangeText={(v) => {
             const clean = v.replace(/[^0-9.]/g, '');
             const parts = clean.split('.');
             const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
-            const parsed = parseFloat(sanitized);
-            updateCartItem(item.id, { quantity: isNaN(parsed) ? (sanitized === '' ? 0 : (sanitized as any)) : parsed });
+            updateCartItem(item.id, { quantity: sanitized });
           }}
           onBlur={() => {
             const parsed = parseFloat(String(item.quantity));
@@ -333,7 +336,7 @@ export const POSScreen = () => {
         </TouchableOpacity>
       </View>
       <Text style={styles.cartItemTotal}>
-        ₹{((item.price * item.quantity) - item.discount).toFixed(2)}
+        ₹{(((Number(item.price) || 0) * (parseFloat(String(item.quantity)) || 0)) - (Number(item.discount) || 0)).toFixed(2)}
       </Text>
     </View>
   );

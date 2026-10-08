@@ -46,9 +46,9 @@ interface SaleItemRow {
   productName: string;
   sku?: string;
   quantity: number | string;
-  unitPrice: number;
-  discount: number;
-  gst: number;
+  unitPrice: number | string;
+  discount: number | string;
+  gst: number | string;
   unit?: string;
   unitType?: 'base' | 'sub';
   baseUnitName?: string;
@@ -485,7 +485,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     const item = items[index];
     const nextType: 'base' | 'sub' = item.unitType === 'base' ? 'sub' : 'base';
     const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Box') : (item.subUnitName || 'Pcs');
-    const nextPrice = nextType === 'base' ? (item.basePrice || item.unitPrice) : (item.subPrice || Number((item.unitPrice / (item.conversionRate || 1)).toFixed(2)));
+    const nextPrice = nextType === 'base' ? (item.basePrice || Number(item.unitPrice)) : (item.subPrice || Number(((parseFloat(String(item.unitPrice)) || 0) / (item.conversionRate || 1)).toFixed(2)));
     const nextCost = nextType === 'base' ? (item.baseCost || 0) : (item.subCost || Number(((item.baseCost || 0) / (item.conversionRate || 1)).toFixed(4)));
 
     const updated = [...items];
@@ -516,9 +516,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     return items.map((item) => {
       const parsedQty = parseFloat(String(item.quantity));
       const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
-      const rawSubtotal = effectiveQty * item.unitPrice;
-      const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
-      const taxAmount = netSubtotal * ((item.gst || 0) / 100);
+      const unitPriceNum = parseFloat(String(item.unitPrice)) || 0;
+      const discountNum = parseFloat(String(item.discount)) || 0;
+      const gstNum = parseFloat(String(item.gst)) || 0;
+      const rawSubtotal = effectiveQty * unitPriceNum;
+      const netSubtotal = Math.max(0, rawSubtotal - discountNum);
+      const taxAmount = netSubtotal * (gstNum / 100);
       const total = netSubtotal + taxAmount;
       return {
         ...item,
@@ -534,12 +537,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     return items.reduce((sum, item) => {
       const parsedQty = parseFloat(String(item.quantity));
       const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
-      return sum + effectiveQty * item.unitPrice;
+      const unitPriceNum = parseFloat(String(item.unitPrice)) || 0;
+      return sum + effectiveQty * unitPriceNum;
     }, 0);
   }, [items]);
 
   const itemsDiscount = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.discount || 0), 0);
+    return items.reduce((sum, item) => sum + (parseFloat(String(item.discount)) || 0), 0);
   }, [items]);
 
   const itemsTax = useMemo(() => {
@@ -625,9 +629,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         productId: item.productId,
         productName: item.productName,
         quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-        unitPrice: item.unitPrice,
-        discount: item.discount,
-        gst: item.gst,
+        unitPrice: parseFloat(String(item.unitPrice)) || 0,
+        discount: parseFloat(String(item.discount)) || 0,
+        gst: parseFloat(String(item.gst)) || 0,
         taxAmount: item.taxAmount,
         unitCost: item.unitCost,
         total: item.total,
@@ -678,9 +682,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           productName: item.productName,
           sku: item.sku,
           quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          gst: item.gst,
+          unitPrice: parseFloat(String(item.unitPrice)) || 0,
+          discount: parseFloat(String(item.discount)) || 0,
+          gst: parseFloat(String(item.gst)) || 0,
           taxAmount: item.taxAmount,
           total: item.total,
           unit: item.unit,
@@ -920,9 +924,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary }}>₹</Text>
                               <TextInput
                                 style={[styles.miniAmountInput, { color: theme.colors.text }]}
-                                keyboardType="numeric"
+                                keyboardType="decimal-pad"
                                 value={previousBalanceAmount}
-                                onChangeText={setPreviousBalanceAmount}
+                                onChangeText={(v) => {
+                                  const clean = v.replace(/[^0-9.]/g, '');
+                                  const parts = clean.split('.');
+                                  setPreviousBalanceAmount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                                }}
                                 placeholder="0.00"
                               />
                             </View>
@@ -1270,10 +1278,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.unitPrice)}
+                              value={item.unitPrice === 0 || item.unitPrice === '' ? '' : String(item.unitPrice)}
+                              placeholder="0.00"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'unitPrice', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'unitPrice', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.unitPrice));
+                                handleUpdateItem(index, 'unitPrice', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1291,10 +1307,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.discount)}
+                              value={item.discount === 0 || item.discount === '' ? '' : String(item.discount)}
+                              placeholder="0.00"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'discount', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'discount', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.discount));
+                                handleUpdateItem(index, 'discount', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1312,10 +1336,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.gst)}
+                              value={item.gst === 0 || item.gst === '' ? '' : String(item.gst)}
+                              placeholder="0"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'gst', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'gst', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.gst));
+                                handleUpdateItem(index, 'gst', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1356,7 +1388,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderTax}
-                    onChangeText={setOrderTax}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setOrderTax(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1365,7 +1401,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderDiscount}
-                    onChangeText={setOrderDiscount}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setOrderDiscount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1374,7 +1414,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={shipping}
-                    onChangeText={setShipping}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setShipping(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1405,7 +1449,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                       placeholder="0.00"
                       keyboardType="decimal-pad"
                       value={amountReceived}
-                      onChangeText={setAmountReceived}
+                      onChangeText={(v: string) => {
+                        const clean = v.replace(/[^0-9.]/g, '');
+                        const parts = clean.split('.');
+                        setAmountReceived(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                      }}
                     />
                   </View>
                 )}
