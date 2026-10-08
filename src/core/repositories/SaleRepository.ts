@@ -349,6 +349,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
 
@@ -757,7 +759,7 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       // If status is Completed, deduct from product stock (in base unit)
       if (sale.status === 'Completed') {
-        const deductedBaseQty = unitType === 'sub' ? item.quantity / conversionRate : item.quantity;
+        const deductedBaseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
@@ -845,7 +847,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         const conversionRate =
           oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
         const unitType = oldItem.unitType || 'sub';
-        const baseQty = unitType === 'sub' ? Number(oldItem.quantity) / conversionRate : Number(oldItem.quantity);
+        const baseQty = unitType === 'base' ? Number(oldItem.quantity) * conversionRate : Number(oldItem.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ?`,
@@ -866,7 +868,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         const conversionRate =
           newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
         const unitType = newItem.unitType || 'sub';
-        const baseQty = unitType === 'sub' ? Number(newItem.quantity) / conversionRate : Number(newItem.quantity);
+        const baseQty = unitType === 'base' ? Number(newItem.quantity) * conversionRate : Number(newItem.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ?`,
@@ -962,6 +964,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
       await apiClient.put(API_ENDPOINTS.SALES.BY_ID(targetServerId), apiPayload);
@@ -1159,7 +1163,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         if (!item.productId) continue;
         const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
         const unitType = item.unitType || 'base';
-        const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+        const baseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
