@@ -135,7 +135,7 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
                                   { color: typeMeta.isPositive ? '#10B981' : '#EF4444' }
                                 ]}
                               >
-                                {typeMeta.isPositive ? `+${item.quantity}` : `-${item.quantity}`}
+                                {`${typeMeta.isPositive ? '+' : '-'}${Math.abs(Number(item.quantity || 0))}`}
                               </Text>
                             </View>
                             {item.newStock > 0 && (

@@ -23,6 +23,7 @@ import {
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { AddSalesModal } from '../components/AddSalesModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
+import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -39,6 +40,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [dismissedInvoiceIds, setDismissedInvoiceIds] = useState<any[]>([]);
   const [shareData, setShareData] = useState<any | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -119,38 +123,27 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allInvoices, searchQuery]);
 
   const handleDelete = (item: any) => {
-    const doDelete = async () => {
-      setDismissedInvoiceIds((prev) => [...prev, String(item.id)]);
-      const numericId = parseInt(String(item.id), 10);
-      if (!isNaN(numericId)) {
-        try {
-          await deleteSaleMutation.mutateAsync(numericId);
-        } catch (err: any) {
-          console.warn('Failed to delete sale from db:', err);
-          Alert.alert('Error', err?.message || 'Failed to delete sale');
-        }
-      }
-    };
+    setDeleteError(null);
+    setDeleteTarget(item);
+  };
 
-    if (Platform.OS === 'web') {
-      if ((globalThis as any).confirm(`Are you sure you want to delete invoice ${item.invoiceNumber || item.reference || item.id}?`)) {
-        void doDelete();
-      }
-      return;
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const numericId = parseInt(String(deleteTarget.id), 10);
+      const targetId = !isNaN(numericId) ? numericId : deleteTarget.id;
+      await deleteSaleMutation.mutateAsync(targetId);
+      setDismissedInvoiceIds((prev) => [...prev, String(deleteTarget.id)]);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err: any) {
+      console.error('Failed to delete sale bill:', err);
+      setDeleteError(err?.message || 'Server failed to delete invoice');
+    } finally {
+      setIsDeleting(false);
     }
-
-    Alert.alert(
-      'Delete Invoice',
-      `Are you sure you want to delete invoice ${item.invoiceNumber || item.reference || item.id}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => { void doDelete(); },
-        },
-      ]
-    );
   };
 
   const loadInvoiceItems = async (invoice: any) => {
@@ -601,6 +594,44 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           setShowAddModal(false);
           setEditSaleId(null);
           refetch();
+        }}
+      />
+
+      <SweetConfirmModal
+        visible={!!deleteTarget}
+        type={deleteError ? 'error' : 'danger'}
+        title="Delete Sales Invoice"
+        subtitle="Are you sure you want to permanently delete this sales invoice? The deletion will sync immediately with the server."
+        entityName={
+          deleteTarget
+            ? `${deleteTarget.invoiceNumber || deleteTarget.reference || deleteTarget.id} • ${deleteTarget.customerName || 'Customer'} (₹${Number(deleteTarget.total || 0).toFixed(2)})`
+            : undefined
+        }
+        sideEffects={[
+          {
+            icon: 'stock',
+            title: 'Inventory Stock Restoration',
+            description: 'Quantities sold in this invoice will be added back into warehouse stock.',
+          },
+          {
+            icon: 'wallet',
+            title: 'Customer Ledger Balance Adjustment',
+            description: 'Any unpaid due recorded on this invoice will be deducted from customer account.',
+          },
+          {
+            icon: 'server',
+            title: 'Permanent Server Deletion',
+            description: 'Invoice and associated payment transactions will be removed on the server.',
+          },
+        ]}
+        confirmText="Yes, Delete Bill"
+        cancelText="Cancel"
+        isConfirming={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
         }}
       />
     </View>

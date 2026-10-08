@@ -102,7 +102,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
       const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
 
-      const unitType: 'base' | 'sub' = preferredUnitType || (hasSubUnit ? 'sub' : 'base');
+      const unitType: 'base' | 'sub' = preferredUnitType || 'base';
       const baseUnitName = product.baseUnitName || product.unit || 'Box';
       const subUnitName = product.subUnitName || 'Pcs';
       const selectedUnit = unit || (unitType === 'sub' ? subUnitName : baseUnitName);

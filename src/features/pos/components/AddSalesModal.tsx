@@ -189,9 +189,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     quantity: Number(item.quantity || 1),
                     unitPrice: Number(item.unitPrice || 0),
                     discount: Number(item.discount || 0),
-                    gst: Number(item.gst || 0),
-                    unit: item.unit || (item.unitType === 'base' ? 'Box' : 'Pcs'),
-                    unitType: (item.unitType as any) || 'sub',
+                    gst: Number(item.gst || item.taxRate || item.tax || 0),
+                    unit: item.unit || (item.unitType === 'sub' ? (item.subUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
+                    unitType: item.unitType ? (item.unitType as any) : 'base',
                     baseUnitName: item.baseUnitName || 'Box',
                     subUnitName: item.subUnitName || 'Pcs',
                     conversionRate: cRate,
@@ -442,16 +442,15 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       const baseUnitName = baseUnit?.name || baseUnit?.shortName || 'Box';
       const subUnitName = subUnit?.name || 'Pcs';
 
-      // Default for sales: sell pcs-wise if sub-unit exists
-      const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
-      const initialType: 'base' | 'sub' = hasSubUnit ? 'sub' : 'base';
-      const initialUnit = initialType === 'sub' ? subUnitName : baseUnitName;
+      // Default for sales: base unit unless explicitly chosen
+      const initialType: 'base' | 'sub' = 'base';
+      const initialUnit = baseUnitName;
 
       const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
       const subCost = cRate > 0 ? Number((baseCost / cRate).toFixed(4)) : baseCost;
 
-      const initialPrice = initialType === 'sub' ? subPrice : basePrice;
-      const initialCost = initialType === 'sub' ? subCost : baseCost;
+      const initialPrice = basePrice;
+      const initialCost = baseCost;
 
       setItems((prev) => [
         ...prev,

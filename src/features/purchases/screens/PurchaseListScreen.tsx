@@ -8,6 +8,7 @@ import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { ImportPurchaseModal } from '../components/ImportPurchaseModal';
 import { usePurchases, useDeletePurchase } from '../api/usePurchases';
+import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -32,6 +33,9 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const [editPurchaseId, setEditPurchaseId] = useState<number | string | null>(null);
   const [dismissedPurchaseIds, setDismissedPurchaseIds] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const { data: dbPurchases = [], isLoading, refetch } = usePurchases();
   const deletePurchaseMutation = useDeletePurchase();
@@ -102,38 +106,27 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   };
 
   const handleDelete = (item: any) => {
-    const doDelete = async () => {
-      setDismissedPurchaseIds((prev) => [...prev, String(item.id)]);
-      const numericId = parseInt(String(item.id), 10);
-      if (!isNaN(numericId)) {
-        try {
-          await deletePurchaseMutation.mutateAsync(numericId);
-        } catch (err: any) {
-          console.warn('Failed to delete purchase from db:', err);
-          Alert.alert('Error', err?.message || 'Failed to delete purchase');
-        }
-      }
-    };
+    setDeleteError(null);
+    setDeleteTarget(item);
+  };
 
-    if (Platform.OS === 'web') {
-      if ((globalThis as any).confirm(`Are you sure you want to delete purchase ${item.reference || item.id}?`)) {
-        void doDelete();
-      }
-      return;
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const numericId = parseInt(String(deleteTarget.id), 10);
+      const targetId = !isNaN(numericId) ? numericId : deleteTarget.id;
+      await deletePurchaseMutation.mutateAsync(targetId);
+      setDismissedPurchaseIds((prev) => [...prev, String(deleteTarget.id)]);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err: any) {
+      console.error('Failed to delete purchase:', err);
+      setDeleteError(err?.message || 'Server failed to delete purchase');
+    } finally {
+      setIsDeleting(false);
     }
-
-    Alert.alert(
-      'Delete Purchase',
-      `Are you sure you want to delete purchase ${item.reference || item.id}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => { void doDelete(); },
-        },
-      ]
-    );
   };
 
   const columns = [
@@ -285,6 +278,44 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         }}
       />
       <ImportPurchaseModal visible={showImportModal} onClose={() => setShowImportModal(false)} />
+
+      <SweetConfirmModal
+        visible={!!deleteTarget}
+        type={deleteError ? 'error' : 'danger'}
+        title="Delete Purchase Bill"
+        subtitle="Are you sure you want to permanently delete this purchase record? The deletion will sync immediately with the server."
+        entityName={
+          deleteTarget
+            ? `${deleteTarget.reference || deleteTarget.invoiceNumber || deleteTarget.id} • ${deleteTarget.supplierName || 'Supplier'} (₹${Number(deleteTarget.total || 0).toFixed(2)})`
+            : undefined
+        }
+        sideEffects={[
+          {
+            icon: 'stock',
+            title: 'Warehouse Inventory Deduction',
+            description: 'Quantities received from this purchase will be subtracted from warehouse stock.',
+          },
+          {
+            icon: 'wallet',
+            title: 'Supplier Account Adjustment',
+            description: 'Any payable due owed to this supplier on this bill will be reversed.',
+          },
+          {
+            icon: 'server',
+            title: 'Permanent Server Deletion',
+            description: 'This purchase and associated transaction records will be permanently deleted from the server.',
+          },
+        ]}
+        confirmText="Yes, Delete Purchase"
+        cancelText="Cancel"
+        isConfirming={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        }}
+      />
     </View>
   );
 };
