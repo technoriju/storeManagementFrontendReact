@@ -27,29 +27,6 @@ export class ReportsService {
     return condition;
   }
 
-  private static filterFallbackList(items: any[], filters: ReportFilters, dateField = 'date'): any[] {
-    let list = [...items];
-    if (filters.startDate) {
-      list = list.filter((item) => {
-        const d = String(item[dateField] || '').split(' ')[0];
-        return !d || d >= filters.startDate!;
-      });
-    }
-    if (filters.endDate) {
-      const endOnly = filters.endDate!.split('T')[0];
-      list = list.filter((item) => {
-        const d = String(item[dateField] || '').split(' ')[0];
-        return !d || d <= endOnly;
-      });
-    }
-    if (filters.search && filters.search.trim()) {
-      const q = filters.search.toLowerCase().trim();
-      list = list.filter((item) =>
-        Object.values(item).some((val) => String(val).toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }
 
   static unpackApiArray(res: any): any[] {
     if (!res) return [];
@@ -61,6 +38,24 @@ export class ReportsService {
     if (Array.isArray(body?.data?.items)) return body.data.items;
     if (Array.isArray(body?.rows)) return body.rows;
     if (Array.isArray(body?.data?.rows)) return body.data.rows;
+    return [];
+  }
+
+  static extractDbRows(res: any): any[] {
+    if (!res) return [];
+    if (Array.isArray(res)) return res;
+    if (res.rows) {
+      if (Array.isArray(res.rows)) return res.rows;
+      if (Array.isArray(res.rows._array)) return res.rows._array;
+      if (typeof res.rows.length === 'number') {
+        const arr = [];
+        for (let i = 0; i < res.rows.length; i++) {
+          arr.push(typeof res.rows.item === 'function' ? res.rows.item(i) : res.rows[i]);
+        }
+        return arr;
+      }
+    }
+    if (Array.isArray(res._array)) return res._array;
     return [];
   }
 
@@ -131,23 +126,10 @@ export class ReportsService {
       query += ' ORDER BY s.id DESC';
 
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    // Rich fallback data
-    const fallback = [
-      { id: 1, invoiceNumber: 'INV-2026-008', date: '2026-10-07', customerName: 'Sharma General Store', paymentMethod: 'UPI', subtotal: 12500, tax: 1500, discount: 200, total: 13800, paid: 13800, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      { id: 2, invoiceNumber: 'INV-2026-007', date: '2026-10-07', customerName: 'Apex Retailers', paymentMethod: 'Cash', subtotal: 8400, tax: 1008, discount: 0, total: 9408, paid: 5000, due: 4408, paymentStatus: 'Partial', status: 'Completed' },
-      { id: 3, invoiceNumber: 'INV-2026-006', date: '2026-10-06', customerName: 'Mehta Traders', paymentMethod: 'Bank Transfer', subtotal: 24000, tax: 2880, discount: 500, total: 26380, paid: 26380, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      { id: 4, invoiceNumber: 'INV-2026-005', date: '2026-10-06', customerName: 'Walk-in Customer', paymentMethod: 'Cash', subtotal: 1200, tax: 144, discount: 50, total: 1294, paid: 1294, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      { id: 5, invoiceNumber: 'INV-2026-004', date: '2026-10-05', customerName: 'Patel Supermarket', paymentMethod: 'UPI', subtotal: 31500, tax: 3780, discount: 1000, total: 34280, paid: 0, due: 34280, paymentStatus: 'Unpaid', status: 'Pending' },
-      { id: 6, invoiceNumber: 'INV-2026-003', date: '2026-10-04', customerName: 'Rajesh Enterprises', paymentMethod: 'Card', subtotal: 16800, tax: 2016, discount: 300, total: 18516, paid: 18516, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      { id: 7, invoiceNumber: 'INV-2026-002', date: '2026-10-03', customerName: 'Golden Bakeries', paymentMethod: 'UPI', subtotal: 9200, tax: 1104, discount: 200, total: 10104, paid: 5000, due: 5104, paymentStatus: 'Partial', status: 'Completed' },
-      { id: 8, invoiceNumber: 'INV-2026-001', date: '2026-10-01', customerName: 'Krishna Provision Store', paymentMethod: 'Cash', subtotal: 22000, tax: 2640, discount: 400, total: 24240, paid: 24240, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-    ];
-    return this.filterFallbackList(fallback, filters);
+    return [];
   }
 
   // 2. Purchase Report
@@ -216,20 +198,10 @@ export class ReportsService {
       query += ' ORDER BY p.id DESC';
 
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    const fallback = [
-      { id: 1, invoiceNumber: 'PO-2026-081', date: '2026-10-06', supplierName: 'Hindustan Unilever Ltd', itemsCount: 14, subtotal: 42000, tax: 5040, total: 47040, paid: 47040, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      { id: 2, invoiceNumber: 'PO-2026-080', date: '2026-10-05', supplierName: 'ITC Distribution Hub', itemsCount: 8, subtotal: 28500, tax: 3420, total: 31920, paid: 20000, due: 11920, status: 'Received', paymentStatus: 'Partial' },
-      { id: 3, invoiceNumber: 'PO-2026-079', date: '2026-10-04', supplierName: 'Nestle Wholesale Corp', itemsCount: 12, subtotal: 35000, tax: 4200, total: 39200, paid: 0, due: 39200, status: 'Pending', paymentStatus: 'Unpaid' },
-      { id: 4, invoiceNumber: 'PO-2026-078', date: '2026-10-03', supplierName: 'Parle Agro Distributors', itemsCount: 6, subtotal: 16400, tax: 1968, total: 18368, paid: 18368, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      { id: 5, invoiceNumber: 'PO-2026-077', date: '2026-10-01', supplierName: 'Tata Consumer Supplies', itemsCount: 18, subtotal: 54000, tax: 6480, total: 60480, paid: 60480, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      { id: 6, invoiceNumber: 'PO-2026-076', date: '2026-09-28', supplierName: 'Amul Dairy Co-op', itemsCount: 10, subtotal: 22000, tax: 2640, total: 24640, paid: 24640, due: 0, status: 'Received', paymentStatus: 'Paid' },
-    ];
-    return this.filterFallbackList(fallback, filters);
+    return [];
   }
 
   // 3. Inventory Report
@@ -302,21 +274,10 @@ export class ReportsService {
       query += ' ORDER BY p.name ASC';
 
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, sku: 'SKU-AMUL-500', name: 'Amul Butter 500g', category: 'Dairy', stockQuantity: 65, stockWithUnits: '65 Box (650 Pcs)', cost: 240, price: 275, stockValuation: 15600, status: 'IN_STOCK' },
-      { id: 2, sku: 'SKU-ATTA-10KG', name: 'Aashirvaad Shudh Atta 10kg', category: 'Staples', stockQuantity: 42, stockWithUnits: '42 Bags (420 Kg)', cost: 410, price: 460, stockValuation: 17220, status: 'IN_STOCK' },
-      { id: 3, sku: 'SKU-SALT-1KG', name: 'Tata Salt Vacuum Evaporated 1kg', category: 'Staples', stockQuantity: 120, stockWithUnits: '120 Pkts (120 Kg)', cost: 22, price: 28, stockValuation: 2640, status: 'IN_STOCK' },
-      { id: 4, sku: 'SKU-OIL-1L', name: 'Fortune Sunlite Refined Oil 1L', category: 'Edible Oils', stockQuantity: 4, stockWithUnits: '4 Ctn (48 Pouch)', cost: 135, price: 155, stockValuation: 540, status: 'LOW_STOCK' },
-      { id: 5, sku: 'SKU-MAGGI-70G', name: 'Maggi 2-Minute Masala Noodles', category: 'Instant Food', stockQuantity: 0, stockWithUnits: '0 Box (0 Pcs)', cost: 12, price: 14, stockValuation: 0, status: 'OUT_OF_STOCK' },
-      { id: 6, sku: 'SKU-TEA-500G', name: 'Red Label Tea 500g', category: 'Beverages', stockQuantity: 28, stockWithUnits: '28 Box (112 Pcs)', cost: 285, price: 330, stockValuation: 7980, status: 'IN_STOCK' },
-      { id: 7, sku: 'SKU-SURF-1KG', name: 'Surf Excel Easy Wash Detergent 1kg', category: 'Household', stockQuantity: 3, stockWithUnits: '3 Ctn (36 Pkt)', cost: 145, price: 170, stockValuation: 435, status: 'LOW_STOCK' },
-      { id: 8, sku: 'SKU-DOVE-100G', name: 'Dove Cream Beauty Bar 100g', category: 'Personal Care', stockQuantity: 55, stockWithUnits: '55 Box (220 Pcs)', cost: 58, price: 72, stockValuation: 3190, status: 'IN_STOCK' },
-    ];
+    return [];
   }
 
   // 4. Customer Report
@@ -390,33 +351,10 @@ export class ReportsService {
         ORDER BY outstandingBalance DESC, totalBilled DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    const fallback = [
-      { id: 1, customerCode: 'CU-101', customerName: 'Sharma General Store', phone: '+91 98765 43210', totalSalesCount: 18, totalBilled: 142000, totalPaid: 142000, outstandingBalance: 0, status: 'Clear' },
-      { id: 2, customerCode: 'CU-102', customerName: 'Patel Supermarket', phone: '+91 98111 22334', totalSalesCount: 12, totalBilled: 98500, totalPaid: 64220, outstandingBalance: 34280, status: 'Overdue' },
-      { id: 3, customerCode: 'CU-103', customerName: 'Apex Retailers', phone: '+91 99222 33445', totalSalesCount: 8, totalBilled: 46200, totalPaid: 41792, outstandingBalance: 4408, status: 'Overdue' },
-      { id: 4, customerCode: 'CU-104', customerName: 'Golden Bakeries', phone: '+91 97333 44556', totalSalesCount: 15, totalBilled: 88400, totalPaid: 83296, outstandingBalance: 5104, status: 'Overdue' },
-      { id: 5, customerCode: 'CU-105', customerName: 'Mehta Traders', phone: '+91 96444 55667', totalSalesCount: 22, totalBilled: 176000, totalPaid: 176000, outstandingBalance: 0, status: 'Clear' },
-      { id: 6, customerCode: 'CU-106', customerName: 'Krishna Provision Store', phone: '+91 95555 66778', totalSalesCount: 10, totalBilled: 74200, totalPaid: 74200, outstandingBalance: 0, status: 'Clear' },
-      { id: 7, customerCode: 'CU-107', customerName: 'Rajesh Enterprises', phone: '+91 94666 77889', totalSalesCount: 6, totalBilled: 38400, totalPaid: 38400, outstandingBalance: 0, status: 'Clear' },
-    ];
-    let filtered = [...fallback];
-    if (filters.customerId) {
-      filtered = filtered.filter((c) => String(c.id) === String(filters.customerId));
-    }
-    if (filters.search && filters.search.trim()) {
-      const q = filters.search.toLowerCase().trim();
-      filtered = filtered.filter((c) =>
-        c.customerName.toLowerCase().includes(q) ||
-        c.customerCode.toLowerCase().includes(q) ||
-        c.phone.toLowerCase().includes(q)
-      );
-    }
-    return filtered;
+    return [];
   }
 
   static async getCustomerOutstandingReport(filters: ReportFilters = {}): Promise<any[]> {
@@ -494,32 +432,10 @@ export class ReportsService {
         ORDER BY outstandingBalance DESC, totalPurchased DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    const fallback = [
-      { id: 1, supplierCode: 'SU-201', supplierName: 'Nestle Wholesale Corp', phone: '+91 11 2345 6789', totalPurchasesCount: 6, totalPurchased: 185000, totalPaid: 145800, outstandingBalance: 39200, status: 'Pending' },
-      { id: 2, supplierCode: 'SU-202', supplierName: 'ITC Distribution Hub', phone: '+91 33 2288 1122', totalPurchasesCount: 8, totalPurchased: 148000, totalPaid: 136080, outstandingBalance: 11920, status: 'Pending' },
-      { id: 3, supplierCode: 'SU-203', supplierName: 'Hindustan Unilever Ltd', phone: '+91 22 3980 2000', totalPurchasesCount: 14, totalPurchased: 312000, totalPaid: 312000, outstandingBalance: 0, status: 'Clear' },
-      { id: 4, supplierCode: 'SU-204', supplierName: 'Tata Consumer Supplies', phone: '+91 22 6665 8282', totalPurchasesCount: 9, totalPurchased: 215000, totalPaid: 215000, outstandingBalance: 0, status: 'Clear' },
-      { id: 5, supplierCode: 'SU-205', supplierName: 'Amul Dairy Co-op', phone: '+91 26 9225 8506', totalPurchasesCount: 16, totalPurchased: 198000, totalPaid: 198000, outstandingBalance: 0, status: 'Clear' },
-      { id: 6, supplierCode: 'SU-206', supplierName: 'Parle Agro Distributors', phone: '+91 22 6691 6911', totalPurchasesCount: 5, totalPurchased: 84000, totalPaid: 84000, outstandingBalance: 0, status: 'Clear' },
-    ];
-    let filtered = [...fallback];
-    if (filters.supplierId) {
-      filtered = filtered.filter((s) => String(s.id) === String(filters.supplierId));
-    }
-    if (filters.search && filters.search.trim()) {
-      const q = filters.search.toLowerCase().trim();
-      filtered = filtered.filter((s) =>
-        s.supplierName.toLowerCase().includes(q) ||
-        s.supplierCode.toLowerCase().includes(q) ||
-        s.phone.toLowerCase().includes(q)
-      );
-    }
-    return filtered;
+    return [];
   }
 
   static async getSupplierOutstandingReport(filters: ReportFilters = {}): Promise<any[]> {
@@ -581,20 +497,10 @@ export class ReportsService {
         ORDER BY revenue DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, sku: 'SKU-AMUL-500', name: 'Amul Butter 500g', category: 'Dairy', unitsSold: 240, revenue: 66000, cost: 57600, profit: 8400, margin: 12.7, currentStock: 65 },
-      { id: 2, sku: 'SKU-ATTA-10KG', name: 'Aashirvaad Shudh Atta 10kg', category: 'Staples', unitsSold: 110, revenue: 50600, cost: 45100, profit: 5500, margin: 10.9, currentStock: 42 },
-      { id: 3, sku: 'SKU-TEA-500G', name: 'Red Label Tea 500g', category: 'Beverages', unitsSold: 85, revenue: 28050, cost: 24225, profit: 3825, margin: 13.6, currentStock: 28 },
-      { id: 4, sku: 'SKU-OIL-1L', name: 'Fortune Sunlite Refined Oil 1L', category: 'Edible Oils', unitsSold: 150, revenue: 23250, cost: 20250, profit: 3000, margin: 12.9, currentStock: 4 },
-      { id: 5, sku: 'SKU-DOVE-100G', name: 'Dove Cream Beauty Bar 100g', category: 'Personal Care', unitsSold: 280, revenue: 20160, cost: 16240, profit: 3920, margin: 19.4, currentStock: 55 },
-      { id: 6, sku: 'SKU-SURF-1KG', name: 'Surf Excel Easy Wash Detergent 1kg', category: 'Household', unitsSold: 92, revenue: 15640, cost: 13340, profit: 2300, margin: 14.7, currentStock: 3 },
-      { id: 7, sku: 'SKU-SALT-1KG', name: 'Tata Salt Vacuum Evaporated 1kg', category: 'Staples', unitsSold: 320, revenue: 8960, cost: 7040, profit: 1920, margin: 21.4, currentStock: 120 },
-    ];
+    return [];
   }
 
   // 7. Invoice Report
@@ -647,20 +553,10 @@ export class ReportsService {
         ORDER BY s.id DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, invoiceNumber: 'INV-2026-008', date: '2026-10-07 11:20', customerName: 'Sharma General Store', taxableAmount: 12500, taxAmount: 1500, grandTotal: 13800, paymentMethod: 'UPI', paymentStatus: 'Paid' },
-      { id: 2, invoiceNumber: 'INV-2026-007', date: '2026-10-07 10:45', customerName: 'Apex Retailers', taxableAmount: 8400, taxAmount: 1008, grandTotal: 9408, paymentMethod: 'Cash', paymentStatus: 'Partial' },
-      { id: 3, invoiceNumber: 'INV-2026-006', date: '2026-10-06 17:15', customerName: 'Mehta Traders', taxableAmount: 24000, taxAmount: 2880, grandTotal: 26380, paymentMethod: 'Bank Transfer', paymentStatus: 'Paid' },
-      { id: 4, invoiceNumber: 'INV-2026-005', date: '2026-10-06 14:02', customerName: 'Patel Supermarket', taxableAmount: 31500, taxAmount: 3780, grandTotal: 34280, paymentMethod: 'Credit', paymentStatus: 'Unpaid' },
-      { id: 5, invoiceNumber: 'INV-2026-004', date: '2026-10-05 18:30', customerName: 'Walk-in Customer', taxableAmount: 1200, taxAmount: 144, grandTotal: 1294, paymentMethod: 'Cash', paymentStatus: 'Paid' },
-      { id: 6, invoiceNumber: 'INV-2026-003', date: '2026-10-04 12:10', customerName: 'Rajesh Enterprises', taxableAmount: 16800, taxAmount: 2016, grandTotal: 18516, paymentMethod: 'Card', paymentStatus: 'Paid' },
-      { id: 7, invoiceNumber: 'INV-2026-002', date: '2026-10-03 16:40', customerName: 'Golden Bakeries', taxableAmount: 9200, taxAmount: 1104, grandTotal: 10104, paymentMethod: 'UPI', paymentStatus: 'Partial' },
-    ];
+    return [];
   }
 
   // 8. Payment Report
@@ -718,21 +614,10 @@ export class ReportsService {
         ORDER BY p.id DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, voucherNo: 'PAY-508', date: '2026-10-07', type: 'Receipt', partyName: 'Sharma General Store', paymentMethod: 'UPI', reference: 'UPI/628491823', amount: 13800, inflow: 13800, outflow: 0 },
-      { id: 2, voucherNo: 'PAY-507', date: '2026-10-06', type: 'Payment', partyName: 'Hindustan Unilever Ltd', paymentMethod: 'Bank Transfer', reference: 'NEFT/HDFC/9921', amount: 47040, inflow: 0, outflow: 47040 },
-      { id: 3, voucherNo: 'PAY-506', date: '2026-10-06', type: 'Receipt', partyName: 'Mehta Traders', paymentMethod: 'Bank Transfer', reference: 'IMPS/881293', amount: 26380, inflow: 26380, outflow: 0 },
-      { id: 4, voucherNo: 'PAY-505', date: '2026-10-05', type: 'Payment', partyName: 'ITC Distribution Hub', paymentMethod: 'Cheque', reference: 'CHQ-440192', amount: 20000, inflow: 0, outflow: 20000 },
-      { id: 5, voucherNo: 'PAY-504', date: '2026-10-05', type: 'Receipt', partyName: 'Apex Retailers', paymentMethod: 'Cash', reference: 'CASH-REC', amount: 5000, inflow: 5000, outflow: 0 },
-      { id: 6, voucherNo: 'PAY-503', date: '2026-10-04', type: 'Receipt', partyName: 'Golden Bakeries', paymentMethod: 'UPI', reference: 'UPI/9912001', amount: 5000, inflow: 5000, outflow: 0 },
-      { id: 7, voucherNo: 'PAY-502', date: '2026-10-03', type: 'Receipt', partyName: 'Rajesh Enterprises', paymentMethod: 'Card', reference: 'POS/TXN/331', amount: 18516, inflow: 18516, outflow: 0 },
-      { id: 8, voucherNo: 'PAY-501', date: '2026-10-01', type: 'Payment', partyName: 'Tata Consumer Supplies', paymentMethod: 'Bank Transfer', reference: 'RTGS/ICICI/11', amount: 60480, inflow: 0, outflow: 60480 },
-    ];
+    return [];
   }
 
   // 9. Expense Report
@@ -772,19 +657,10 @@ export class ReportsService {
         ORDER BY date DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, voucherNo: 'EXP-306', date: '2026-10-05', category: 'Rent', description: 'Store Commercial Rent Oct 2026', vendor: 'City Commercial Space', paymentMethod: 'Bank Transfer', amount: 25000 },
-      { id: 2, voucherNo: 'EXP-305', date: '2026-10-04', category: 'Electricity & Utilities', description: 'Monthly Electricity Bill', vendor: 'State Electricity Board', paymentMethod: 'UPI', amount: 4850 },
-      { id: 3, voucherNo: 'EXP-304', date: '2026-10-03', category: 'Staff Salaries', description: 'Sales Staff Advance & Incentives', vendor: 'Staff Payroll', paymentMethod: 'Bank Transfer', amount: 18000 },
-      { id: 4, voucherNo: 'EXP-303', date: '2026-10-02', category: 'Logistics & Freight', description: 'Tempo Freight for Goods Delivery', vendor: 'Speedy Logistics', paymentMethod: 'Cash', amount: 2200 },
-      { id: 5, voucherNo: 'EXP-302', date: '2026-09-29', category: 'Packaging Materials', description: 'Boxes, Tapes & Carry Bags', vendor: 'Sunrise Packaging', paymentMethod: 'UPI', amount: 3100 },
-      { id: 6, voucherNo: 'EXP-301', date: '2026-09-25', category: 'Internet & POS Phone', description: 'High-speed Fiber & Landline', vendor: 'Telecom Provider', paymentMethod: 'Card', amount: 1299 },
-    ];
+    return [];
   }
 
   static async getExpensesReport(filters: ReportFilters = {}): Promise<any[]> {
@@ -793,14 +669,7 @@ export class ReportsService {
 
   // 10. Income Report
   static async getIncomeReport(filters: ReportFilters = {}): Promise<any[]> {
-    return [
-      { id: 1, voucherNo: 'INC-406', date: '2026-10-06', category: 'Sales Operating Inflow', description: 'Net Daily Store Sales Settlement', receivedFrom: 'Daily Counter Collection', paymentMethod: 'Mixed (Cash/UPI)', amount: 28400 },
-      { id: 2, voucherNo: 'INC-405', date: '2026-10-04', category: 'Wholesale Delivery Fee', description: 'Handling and logistics delivery fee', receivedFrom: 'Patel Supermarket', paymentMethod: 'UPI', amount: 1500 },
-      { id: 3, voucherNo: 'INC-404', date: '2026-10-02', category: 'Scrap & Packaging Sale', description: 'Disposal of empty cardboard boxes & drums', receivedFrom: 'Local Recycler', paymentMethod: 'Cash', amount: 1850 },
-      { id: 4, voucherNo: 'INC-403', date: '2026-09-30', category: 'Bank Interest', description: 'Quarterly Savings & Flexi Interest', receivedFrom: 'State Bank of India', paymentMethod: 'Auto Credit', amount: 2450 },
-      { id: 5, voucherNo: 'INC-402', date: '2026-09-28', category: 'Supplier Display Incentive', description: 'Branding placement fee inside store', receivedFrom: 'Nestle Wholesale Corp', paymentMethod: 'Bank Transfer', amount: 5000 },
-      { id: 6, voucherNo: 'INC-401', date: '2026-09-20', category: 'Sales Operating Inflow', description: 'Bulk Catering Order Dispatch', receivedFrom: 'Golden Bakeries', paymentMethod: 'Bank Transfer', amount: 45000 },
-    ];
+    return [];
   }
 
   // 11. Tax (GST) Report
@@ -880,19 +749,10 @@ export class ReportsService {
         ORDER BY date DESC
       `;
       const res = await db.execute(query);
-      if (res.rows && res.rows.length > 0) {
-        return res.rows;
-      }
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, invoiceNumber: 'INV-2026-008', date: '2026-10-07', partyName: 'Sharma General Store', gstin: '27AAGCS1234F1ZX', type: 'SALE', taxableValue: 12500, cgst: 750, sgst: 750, igst: 0, totalGst: 1500 },
-      { id: 2, invoiceNumber: 'PO-2026-081', date: '2026-10-06', partyName: 'Hindustan Unilever Ltd', gstin: '27AAACH1111Q1ZZ', type: 'PURCHASE', taxableValue: 42000, cgst: 2520, sgst: 2520, igst: 0, totalGst: 5040 },
-      { id: 3, invoiceNumber: 'INV-2026-006', date: '2026-10-06', partyName: 'Mehta Traders', gstin: '27AABCM5555M1Z9', type: 'SALE', taxableValue: 24000, cgst: 1440, sgst: 1440, igst: 0, totalGst: 2880 },
-      { id: 4, invoiceNumber: 'PO-2026-080', date: '2026-10-05', partyName: 'ITC Distribution Hub', gstin: '19AAACI2222N1Z4', type: 'PURCHASE', taxableValue: 28500, cgst: 0, sgst: 0, igst: 3420, totalGst: 3420 },
-      { id: 5, invoiceNumber: 'INV-2026-004', date: '2026-10-05', partyName: 'Walk-in Customer', gstin: 'Unregistered', type: 'SALE', taxableValue: 1200, cgst: 72, sgst: 72, igst: 0, totalGst: 144 },
-      { id: 6, invoiceNumber: 'PO-2026-079', date: '2026-10-04', partyName: 'Nestle Wholesale Corp', gstin: '07AAACN3333P1Z5', type: 'PURCHASE', taxableValue: 35000, cgst: 0, sgst: 0, igst: 4200, totalGst: 4200 },
-    ];
+    return [];
   }
 
   static async getGSTReport(filters: ReportFilters = {}): Promise<any[]> {
@@ -995,41 +855,19 @@ export class ReportsService {
       }
     } catch {}
 
-    // Rich fallback
-    const grossSales = 485000;
-    const totalDiscount = 12500;
-    const netSales = 472500;
-    const cogs = 345000;
-    const grossProfit = 127500;
-    const grossMarginPercent = 27.0;
-    const totalExpenses = 54449;
-    const netProfit = 73051;
-    const netMarginPercent = 15.5;
-
     return {
       summary: {
-        grossSales,
-        totalDiscount,
-        netSales,
-        cogs,
-        grossProfit,
-        grossMarginPercent,
-        totalExpenses,
-        netProfit,
-        netMarginPercent,
+        grossSales: 0,
+        totalDiscount: 0,
+        netSales: 0,
+        cogs: 0,
+        grossProfit: 0,
+        grossMarginPercent: 0,
+        totalExpenses: 0,
+        netProfit: 0,
+        netMarginPercent: 0,
       },
-      items: [
-        { category: 'Operating Revenue', metric: 'Gross Sales Revenue', amount: grossSales, type: 'credit', notes: 'All customer sales orders' },
-        { category: 'Operating Revenue', metric: 'Sales Discounts Given', amount: totalDiscount, type: 'debit', notes: 'Promotional & bill discounts' },
-        { category: 'Operating Revenue', metric: 'NET SALES REVENUE', amount: netSales, type: 'subtotal', notes: 'Revenue after deductions' },
-        { category: 'Cost of Sales', metric: 'Cost of Goods Sold (COGS)', amount: cogs, type: 'debit', notes: 'Wholesale unit purchase costs' },
-        { category: 'Profitability', metric: 'GROSS OPERATING PROFIT', amount: grossProfit, type: 'highlight', notes: `Gross Margin: ${grossMarginPercent}%` },
-        { category: 'Operating Expenses', metric: 'Commercial Store Rent', amount: 25000, type: 'debit', notes: 'Fixed monthly facility cost' },
-        { category: 'Operating Expenses', metric: 'Staff Wages & Compensation', amount: 18000, type: 'debit', notes: 'Sales executive salaries' },
-        { category: 'Operating Expenses', metric: 'Electricity & Utilities', amount: 4850, type: 'debit', notes: 'Power & water utility bills' },
-        { category: 'Operating Expenses', metric: 'Logistics, Packing & Misc', amount: 6599, type: 'debit', notes: 'Transport & supply packaging' },
-        { category: 'Profitability', metric: 'NET OPERATING PROFIT', amount: netProfit, type: 'highlight', notes: `Net Margin: ${netMarginPercent}%` },
-      ]
+      items: []
     };
   }
 
@@ -1043,39 +881,17 @@ export class ReportsService {
       }
     } catch {}
 
-    const months = [
-      { month: 'Apr 2026', sales: 410000, purchases: 310000, expenses: 48000, grossProfit: 100000, netProfit: 52000, margin: 12.7, orders: 340 },
-      { month: 'May 2026', sales: 435000, purchases: 325000, expenses: 50000, grossProfit: 110000, netProfit: 60000, margin: 13.8, orders: 365 },
-      { month: 'Jun 2026', sales: 460000, purchases: 340000, expenses: 51200, grossProfit: 120000, netProfit: 68800, margin: 15.0, orders: 390 },
-      { month: 'Jul 2026', sales: 475000, purchases: 350000, expenses: 52000, grossProfit: 125000, netProfit: 73000, margin: 15.4, orders: 412 },
-      { month: 'Aug 2026', sales: 510000, purchases: 380000, expenses: 53500, grossProfit: 130000, netProfit: 76500, margin: 15.0, orders: 445 },
-      { month: 'Sep 2026', sales: 540000, purchases: 395000, expenses: 54000, grossProfit: 145000, netProfit: 91000, margin: 16.9, orders: 480 },
-      { month: 'Oct 2026', sales: 485000, purchases: 360000, expenses: 54449, grossProfit: 125000, netProfit: 70551, margin: 14.5, orders: 420 },
-      { month: 'Nov 2025', sales: 490000, purchases: 370000, expenses: 51000, grossProfit: 120000, netProfit: 69000, margin: 14.1, orders: 415 },
-      { month: 'Dec 2025', sales: 580000, purchases: 430000, expenses: 56000, grossProfit: 150000, netProfit: 94000, margin: 16.2, orders: 510 },
-      { month: 'Jan 2026', sales: 460000, purchases: 345000, expenses: 50000, grossProfit: 115000, netProfit: 65000, margin: 14.1, orders: 380 },
-      { month: 'Feb 2026', sales: 470000, purchases: 350000, expenses: 49000, grossProfit: 120000, netProfit: 71000, margin: 15.1, orders: 395 },
-      { month: 'Mar 2026', sales: 520000, purchases: 385000, expenses: 52500, grossProfit: 135000, netProfit: 82500, margin: 15.9, orders: 450 },
-    ];
-
-    const totalTurnover = months.reduce((sum, m) => sum + m.sales, 0);
-    const totalPurchases = months.reduce((sum, m) => sum + m.purchases, 0);
-    const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0);
-    const totalNetProfit = months.reduce((sum, m) => sum + m.netProfit, 0);
-    const totalOrders = months.reduce((sum, m) => sum + m.orders, 0);
-    const avgNetMargin = Number(((totalNetProfit / totalTurnover) * 100).toFixed(1));
-
     return {
       summary: {
-        totalTurnover,
-        totalPurchases,
-        totalExpenses,
-        totalNetProfit,
-        totalOrders,
-        avgNetMargin,
-        growthRate: 18.4,
+        totalTurnover: 0,
+        totalPurchases: 0,
+        totalExpenses: 0,
+        totalNetProfit: 0,
+        totalOrders: 0,
+        avgNetMargin: 0,
+        growthRate: 0,
       },
-      months,
+      months: [],
     };
   }
 
@@ -1125,18 +941,10 @@ export class ReportsService {
         WHERE syncStatus != 'deleted'
         ORDER BY name ASC
       `);
-      if (res.rows && res.rows.length > 0) return res.rows;
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, customerCode: 'CU-101', name: 'Sharma General Store', phone: '+91 98765 43210', gstin: '27AAGCS1234F1ZX', outstandingBalance: 0 },
-      { id: 2, customerCode: 'CU-102', name: 'Patel Supermarket', phone: '+91 98111 22334', gstin: '27BAPCS9988G1Z1', outstandingBalance: 34280 },
-      { id: 3, customerCode: 'CU-103', name: 'Apex Retailers', phone: '+91 99222 33445', gstin: '27AAPCR4433H1Z2', outstandingBalance: 4408 },
-      { id: 4, customerCode: 'CU-104', name: 'Golden Bakeries', phone: '+91 97333 44556', gstin: '27AABCG5511J1Z3', outstandingBalance: 5104 },
-      { id: 5, customerCode: 'CU-105', name: 'Mehta Traders', phone: '+91 96444 55667', gstin: '27AABCM5555M1Z9', outstandingBalance: 0 },
-      { id: 6, customerCode: 'CU-106', name: 'Krishna Provision Store', phone: '+91 95555 66778', gstin: '27AAACK7722K1Z8', outstandingBalance: 0 },
-      { id: 7, customerCode: 'CU-107', name: 'Rajesh Enterprises', phone: '+91 94666 77889', gstin: '27AAPER8811L1Z0', outstandingBalance: 0 },
-    ];
+    return [];
   }
 
   // Supplier List for Dropdown Picker
@@ -1172,17 +980,10 @@ export class ReportsService {
         WHERE syncStatus != 'deleted'
         ORDER BY name ASC
       `);
-      if (res.rows && res.rows.length > 0) return res.rows;
+      return this.extractDbRows(res);
     } catch {}
 
-    return [
-      { id: 1, supplierCode: 'SU-201', name: 'Nestle Wholesale Corp', phone: '+91 11 2345 6789', contactName: 'Ramesh Sharma', outstandingBalance: 39200 },
-      { id: 2, supplierCode: 'SU-202', name: 'ITC Distribution Hub', phone: '+91 33 2288 1122', contactName: 'Sunil Verma', outstandingBalance: 11920 },
-      { id: 3, supplierCode: 'SU-203', name: 'Hindustan Unilever Ltd', phone: '+91 22 3980 2000', contactName: 'Anil Kapoor', outstandingBalance: 0 },
-      { id: 4, supplierCode: 'SU-204', name: 'Tata Consumer Supplies', phone: '+91 22 6665 8282', contactName: 'Pooja Hegde', outstandingBalance: 0 },
-      { id: 5, supplierCode: 'SU-205', name: 'Amul Dairy Co-op', phone: '+91 26 9225 8506', contactName: 'Dr. Kurien Office', outstandingBalance: 0 },
-      { id: 6, supplierCode: 'SU-206', name: 'Parle Agro Distributors', phone: '+91 22 6691 6911', contactName: 'Kunal Shah', outstandingBalance: 0 },
-    ];
+    return [];
   }
 
   // Detailed Customer-Wise Statement (Sales & Payments)
@@ -1264,7 +1065,8 @@ export class ReportsService {
         SELECT id, name, phone, email, address, taxId as gstin, COALESCE(outstandingBalance, 0) as outstandingBalance
         FROM customers WHERE id = '${custIdStr}' OR backendId = '${custIdStr}'
       `);
-      const customer = custRes.rows?.[0] || null;
+      const custRows = this.extractDbRows(custRes);
+      const customer = custRows[0] || null;
 
       let salesDateCondition = 's.status != "cancelled"';
       let payDateCondition = '1=1';
@@ -1310,9 +1112,10 @@ export class ReportsService {
         ORDER BY p.id DESC
       `);
 
-      if (customer && salesRes.rows && salesRes.rows.length > 0) {
-        const sales = salesRes.rows || [];
-        const payments = payRes.rows || [];
+      const sales = this.extractDbRows(salesRes);
+      const payments = this.extractDbRows(payRes);
+
+      if (customer) {
         const totalBilled = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
         const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
         const totalDue = Math.max(0, totalBilled - totalPaid);
@@ -1335,69 +1138,16 @@ export class ReportsService {
       }
     } catch {}
 
-    const allCustomers = await this.getAllCustomersList();
-    const customer = allCustomers.find((c) => String(c.id) === custIdStr) || allCustomers[0];
-
-    const mockSalesByCustomer: Record<string, any[]> = {
-      '1': [
-        { id: 101, invoiceNumber: 'INV-2026-008', date: '2026-10-07', subtotal: 12500, tax: 1500, discount: 200, total: 13800, paid: 13800, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-        { id: 102, invoiceNumber: 'INV-2026-015', date: '2026-09-28', subtotal: 45000, tax: 5400, discount: 1000, total: 49400, paid: 49400, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-        { id: 103, invoiceNumber: 'INV-2026-022', date: '2026-09-15', subtotal: 72000, tax: 8640, discount: 1840, total: 78800, paid: 78800, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      ],
-      '2': [
-        { id: 104, invoiceNumber: 'INV-2026-004', date: '2026-10-05', subtotal: 31500, tax: 3780, discount: 1000, total: 34280, paid: 0, due: 34280, paymentStatus: 'Unpaid', status: 'Pending' },
-        { id: 105, invoiceNumber: 'INV-2026-018', date: '2026-09-22', subtotal: 58000, tax: 6960, discount: 740, total: 64220, paid: 64220, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      ],
-      '3': [
-        { id: 106, invoiceNumber: 'INV-2026-007', date: '2026-10-07', subtotal: 8400, tax: 1008, discount: 0, total: 9408, paid: 5000, due: 4408, paymentStatus: 'Partial', status: 'Completed' },
-        { id: 107, invoiceNumber: 'INV-2026-025', date: '2026-09-18', subtotal: 33000, tax: 3960, discount: 170, total: 36790, paid: 36790, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      ],
-      '4': [
-        { id: 108, invoiceNumber: 'INV-2026-002', date: '2026-10-03', subtotal: 9200, tax: 1104, discount: 200, total: 10104, paid: 5000, due: 5104, paymentStatus: 'Partial', status: 'Completed' },
-        { id: 109, invoiceNumber: 'INV-2026-031', date: '2026-09-10', subtotal: 71000, tax: 8520, discount: 1224, total: 78296, paid: 78296, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-      ],
-    };
-
-    const mockPaymentsByCustomer: Record<string, any[]> = {
-      '1': [
-        { id: 501, voucherNo: 'PAY-508', date: '2026-10-07', amount: 13800, paymentMethod: 'UPI', reference: 'UPI/628491823', type: 'receive' },
-        { id: 502, voucherNo: 'PAY-489', date: '2026-09-28', amount: 49400, paymentMethod: 'Bank Transfer', reference: 'NEFT/554199', type: 'receive' },
-      ],
-      '2': [
-        { id: 503, voucherNo: 'PAY-477', date: '2026-09-22', amount: 64220, paymentMethod: 'Cheque', reference: 'CHQ-882103', type: 'receive' },
-      ],
-      '3': [
-        { id: 504, voucherNo: 'PAY-504', date: '2026-10-07', amount: 5000, paymentMethod: 'Cash', reference: 'CASH-REC', type: 'receive' },
-      ],
-      '4': [
-        { id: 505, voucherNo: 'PAY-503', date: '2026-10-03', amount: 5000, paymentMethod: 'UPI', reference: 'UPI/9912001', type: 'receive' },
-      ],
-    };
-
-    let sales = mockSalesByCustomer[String(customer.id)] || [
-      { id: 991, invoiceNumber: 'INV-2026-041', date: '2026-10-02', subtotal: 18000, tax: 2160, discount: 160, total: 20000, paid: 20000, due: 0, paymentStatus: 'Paid', status: 'Completed' },
-    ];
-    let payments = mockPaymentsByCustomer[String(customer.id)] || [
-      { id: 992, voucherNo: 'PAY-601', date: '2026-10-02', amount: 20000, paymentMethod: 'Cash', reference: 'REC-01', type: 'receive' },
-    ];
-
-    sales = this.filterFallbackList(sales, filters);
-    payments = this.filterFallbackList(payments, filters);
-
-    const totalBilled = sales.reduce((sum, s) => sum + Number(s.total || 0), 0);
-    const totalPaid = sales.reduce((sum, s) => sum + Number(s.paid || 0), 0);
-    const totalDue = Math.max(0, totalBilled - totalPaid);
-
     return {
-      customer,
-      sales,
-      payments,
+      customer: null,
+      sales: [],
+      payments: [],
       summary: {
-        totalOrders: sales.length,
-        totalBilled,
-        totalPaid,
-        totalDue,
-        outstandingBalance: customer.outstandingBalance || totalDue,
+        totalOrders: 0,
+        totalBilled: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        outstandingBalance: 0,
       },
     };
   }
@@ -1481,7 +1231,8 @@ export class ReportsService {
         SELECT id, name, phone, email, address, contactName, COALESCE(outstandingBalance, 0) as outstandingBalance
         FROM suppliers WHERE id = '${suppIdStr}' OR backendId = '${suppIdStr}'
       `);
-      const supplier = suppRes.rows?.[0] || null;
+      const suppRows = this.extractDbRows(suppRes);
+      const supplier = suppRows[0] || null;
 
       let purDateCondition = 'p.status != "cancelled"';
       let payDateCondition = '1=1';
@@ -1527,9 +1278,10 @@ export class ReportsService {
         ORDER BY p.id DESC
       `);
 
-      if (supplier && purRes.rows && purRes.rows.length > 0) {
-        const purchases = purRes.rows || [];
-        const payments = payRes.rows || [];
+      const purchases = this.extractDbRows(purRes);
+      const payments = this.extractDbRows(payRes);
+
+      if (supplier) {
         const totalPurchased = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
         const totalPaid = purchases.reduce((sum: number, p: any) => sum + Number(p.paid || 0), 0);
         const totalDue = Math.max(0, totalPurchased - totalPaid);
@@ -1552,60 +1304,16 @@ export class ReportsService {
       }
     } catch {}
 
-    const allSuppliers = await this.getAllSuppliersList();
-    const supplier = allSuppliers.find((s) => String(s.id) === suppIdStr) || allSuppliers[0];
-
-    const mockPurchasesBySupplier: Record<string, any[]> = {
-      '1': [
-        { id: 201, invoiceNumber: 'PO-2026-079', date: '2026-10-04', itemsCount: 12, subtotal: 35000, tax: 4200, total: 39200, paid: 0, due: 39200, status: 'Pending', paymentStatus: 'Unpaid' },
-        { id: 202, invoiceNumber: 'PO-2026-065', date: '2026-09-19', itemsCount: 22, subtotal: 130000, tax: 15600, total: 145800, paid: 145800, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      ],
-      '2': [
-        { id: 203, invoiceNumber: 'PO-2026-080', date: '2026-10-05', itemsCount: 8, subtotal: 28500, tax: 3420, total: 31920, paid: 20000, due: 11920, status: 'Received', paymentStatus: 'Partial' },
-        { id: 204, invoiceNumber: 'PO-2026-068', date: '2026-09-24', itemsCount: 16, subtotal: 104000, tax: 12080, total: 116080, paid: 116080, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      ],
-      '3': [
-        { id: 205, invoiceNumber: 'PO-2026-081', date: '2026-10-06', itemsCount: 14, subtotal: 42000, tax: 5040, total: 47040, paid: 47040, due: 0, status: 'Received', paymentStatus: 'Paid' },
-        { id: 206, invoiceNumber: 'PO-2026-072', date: '2026-09-27', itemsCount: 24, subtotal: 236000, tax: 28960, total: 264960, paid: 264960, due: 0, status: 'Received', paymentStatus: 'Paid' },
-      ],
-    };
-
-    const mockPaymentsBySupplier: Record<string, any[]> = {
-      '1': [
-        { id: 601, voucherNo: 'PAY-460', date: '2026-09-19', amount: 145800, paymentMethod: 'Bank Transfer', reference: 'NEFT/NESTLE/11', type: 'pay' },
-      ],
-      '2': [
-        { id: 602, voucherNo: 'PAY-505', date: '2026-10-05', amount: 20000, paymentMethod: 'Cheque', reference: 'CHQ-440192', type: 'pay' },
-      ],
-      '3': [
-        { id: 603, voucherNo: 'PAY-507', date: '2026-10-06', amount: 47040, paymentMethod: 'Bank Transfer', reference: 'NEFT/HDFC/9921', type: 'pay' },
-      ],
-    };
-
-    let purchases = mockPurchasesBySupplier[String(supplier.id)] || [
-      { id: 210, invoiceNumber: 'PO-2026-085', date: '2026-10-01', itemsCount: 10, subtotal: 30000, tax: 3600, total: 33600, paid: 33600, due: 0, status: 'Received', paymentStatus: 'Paid' },
-    ];
-    let payments = mockPaymentsBySupplier[String(supplier.id)] || [
-      { id: 610, voucherNo: 'PAY-501', date: '2026-10-01', amount: 33600, paymentMethod: 'Bank Transfer', reference: 'RTGS/001', type: 'pay' },
-    ];
-
-    purchases = this.filterFallbackList(purchases, filters);
-    payments = this.filterFallbackList(payments, filters);
-
-    const totalPurchased = purchases.reduce((sum, p) => sum + Number(p.total || 0), 0);
-    const totalPaid = purchases.reduce((sum, p) => sum + Number(p.paid || 0), 0);
-    const totalDue = Math.max(0, totalPurchased - totalPaid);
-
     return {
-      supplier,
-      purchases,
-      payments,
+      supplier: null,
+      purchases: [],
+      payments: [],
       summary: {
-        totalOrders: purchases.length,
-        totalPurchased,
-        totalPaid,
-        totalDue,
-        outstandingBalance: supplier.outstandingBalance || totalDue,
+        totalOrders: 0,
+        totalPurchased: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        outstandingBalance: 0,
       },
     };
   }
