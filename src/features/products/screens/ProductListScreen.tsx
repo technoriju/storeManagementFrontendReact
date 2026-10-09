@@ -40,7 +40,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+  }, []);
 
   useEffect(() => {
     if (lastSyncedAt) {

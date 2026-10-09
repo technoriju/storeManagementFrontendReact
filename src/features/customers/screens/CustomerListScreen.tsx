@@ -101,6 +101,20 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     },
     { 
+      key: 'outstandingBalance', 
+      title: 'Due Balance', 
+      width: 130,
+      render: (value: any, item: any) => {
+        const bal = Number(value !== undefined && value !== null ? value : item?.outstandingBalance || 0);
+        const color = bal > 0 ? '#EF4444' : bal < 0 ? '#10B981' : theme.colors.textSecondary;
+        return (
+          <Text style={{ color, fontWeight: '700' }}>
+            ₹{bal.toFixed(2)}
+          </Text>
+        );
+      }
+    },
+    { 
       key: 'status', 
       title: 'Status', 
       width: 110,

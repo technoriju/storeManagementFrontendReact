@@ -18,6 +18,9 @@ import { db } from '../../../core/database/db';
 import { PaymentMethod, PaymentType, Payment, Customer, Supplier } from '../../../types/models';
 import { useCustomerStore } from '../store/customerStore';
 import { useSupplierStore } from '../../suppliers/store/supplierStore';
+import { useQueryClient } from '@tanstack/react-query';
+import { CUSTOMER_QUERY_KEY } from '../api/useCustomer';
+import { SUPPLIER_QUERY_KEY } from '../../suppliers/api/useSupplier';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppSelect, AppSelectOption } from '../../../shared/components/forms/AppSelect';
@@ -52,6 +55,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   const { isMobile } = useResponsive();
   const { updateCustomer } = useCustomerStore();
   const { updateSupplier } = useSupplierStore();
+  const queryClient = useQueryClient();
 
   const [activeEntityType, setActiveEntityType] = useState<'customer' | 'supplier'>(initialEntityType);
   const [activePaymentType, setActivePaymentType] = useState<PaymentType>(
@@ -264,6 +268,9 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           }
         }
       }
+
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
 
       if (onSuccess) {
         onSuccess();
