@@ -110,8 +110,8 @@ const AuthenticatedApp = () => {
     if (activeTab === 'customers' || activeTab === 'customer_payment' || activeTab === 'customer_payments') {
       return <CustomersModule initialScreen={activeTab} />;
     }
-    if (activeTab === 'suppliers') {
-      return <SuppliersModule />;
+    if (activeTab === 'suppliers' || activeTab === 'supplier_payment' || activeTab === 'supplier_payments') {
+      return <SuppliersModule initialScreen={activeTab} />;
     }
     if (
       activeTab === 'settings' ||

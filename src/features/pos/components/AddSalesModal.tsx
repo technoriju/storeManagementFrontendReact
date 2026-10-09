@@ -372,10 +372,16 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   }, [customers, customerId, localAddedCustomers]);
 
   const customerOptions = useMemo(() => {
-    return allCustomers.map((c) => ({
-      label: c.name,
-      value: String(c.id),
-    }));
+    return allCustomers.map((c) => {
+      const bal = Number(c.outstandingBalance || 0);
+      let balText = '';
+      if (bal > 0) balText = ` (Due: ₹${bal.toFixed(2)})`;
+      else if (bal < 0) balText = ` (Advance: ₹${Math.abs(bal).toFixed(2)})`;
+      return {
+        label: `${c.name}${balText}`,
+        value: String(c.id),
+      };
+    });
   }, [allCustomers]);
 
   const supplierOptions = useMemo(() => {
@@ -424,10 +430,25 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           setPreviousBalanceAmount(String(res.advance));
           setShowPreviousBalance(true);
         } else {
-          setCustomerRawBalance(0);
-          setBalanceType('due');
-          setPreviousBalanceAmount('0');
-          setShowPreviousBalance(false);
+          // Check if customer has outstandingBalance from customer record
+          const cBal = Number(selectedCustomer?.outstandingBalance || 0);
+          if (cBal > 0) {
+            setCustomerRawBalance(cBal);
+            setBalanceType('due');
+            setPreviousBalanceAmount(String(cBal));
+            setShowPreviousBalance(true);
+          } else if (cBal < 0) {
+            const adv = Math.abs(cBal);
+            setCustomerRawBalance(-adv);
+            setBalanceType('advance');
+            setPreviousBalanceAmount(String(adv));
+            setShowPreviousBalance(true);
+          } else {
+            setCustomerRawBalance(0);
+            setBalanceType('due');
+            setPreviousBalanceAmount('0');
+            setShowPreviousBalance(false);
+          }
         }
       })
       .catch((err) => {
@@ -656,6 +677,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       const parsedBalanceAmt = Math.abs(parseFloat(previousBalanceAmount) || 0);
       const prevDueVal = showPreviousBalance && balanceType === 'due' ? parsedBalanceAmt : 0;
       const advPaymentVal = showPreviousBalance && balanceType === 'advance' ? parsedBalanceAmt : 0;
+      const adjustedAdvance = Math.min(advPaymentVal, grandTotal);
+      const netPayable = Math.max(0, grandTotal - adjustedAdvance);
 
       let finalPaid = grandTotal;
       let finalDue = 0;
@@ -665,18 +688,21 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         finalPaid = grandTotal;
         finalDue = 0;
       } else if (paymentStatus === 'Unpaid') {
-        finalPaid = 0;
-        finalDue = grandTotal;
+        finalPaid = adjustedAdvance;
+        finalDue = netPayable;
+        effectivePaymentStatus = adjustedAdvance >= grandTotal ? 'Paid' : (adjustedAdvance > 0 ? 'Partial' : 'Unpaid');
       } else if (paymentStatus === 'Partial') {
         const parsed = parseFloat(amountReceived);
-        finalPaid = !isNaN(parsed) && parsed > 0 ? Math.min(grandTotal, parsed) : 0;
+        const cashPaid = !isNaN(parsed) && parsed > 0 ? parsed : 0;
+        finalPaid = Math.min(grandTotal, adjustedAdvance + cashPaid);
         finalDue = Math.max(0, grandTotal - finalPaid);
         if (finalPaid >= grandTotal) effectivePaymentStatus = 'Paid';
-        else if (finalPaid === 0) effectivePaymentStatus = 'Unpaid';
+        else if (finalPaid > 0) effectivePaymentStatus = 'Partial';
+        else effectivePaymentStatus = 'Unpaid';
       } else {
-        finalPaid = status === 'Completed' ? grandTotal : 0;
-        finalDue = status === 'Completed' ? 0 : grandTotal;
-        effectivePaymentStatus = status === 'Completed' ? 'Paid' : 'Unpaid';
+        finalPaid = status === 'Completed' ? grandTotal : adjustedAdvance;
+        finalDue = status === 'Completed' ? 0 : netPayable;
+        effectivePaymentStatus = status === 'Completed' ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
       }
 
       let effectiveCustomerId = Number(customerId);
@@ -1661,6 +1687,36 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                       +₹{shippingNum.toFixed(2)}
                     </Text>
                   </View>
+                  {showPreviousBalance && (
+                    <View style={styles.summaryLine}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                        {balanceType === 'due' ? 'Previous Due' : 'Advance Credit Adjusted'}
+                      </Text>
+                      <Text
+                        style={{
+                          color: balanceType === 'due' ? '#DC2626' : '#16A34A',
+                          fontWeight: '600',
+                          fontSize: 13,
+                        }}
+                      >
+                        {balanceType === 'due' ? '+' : '-'}₹{(
+                          balanceType === 'due'
+                            ? (parseFloat(previousBalanceAmount) || 0)
+                            : Math.min((parseFloat(previousBalanceAmount) || 0), grandTotal)
+                        ).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  {showPreviousBalance && balanceType === 'advance' && (parseFloat(previousBalanceAmount) || 0) > grandTotal && (
+                    <View style={styles.summaryLine}>
+                      <Text style={{ color: '#2563EB', fontSize: 13, fontWeight: '600' }}>
+                        Remaining Advance
+                      </Text>
+                      <Text style={{ color: '#2563EB', fontWeight: '700', fontSize: 13 }}>
+                        ₹{((parseFloat(previousBalanceAmount) || 0) - grandTotal).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
                   <View
                     style={[
                       styles.summaryLine,
@@ -1673,10 +1729,20 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     ]}
                   >
                     <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 15 }}>
-                      Grand Total
+                      {showPreviousBalance
+                        ? balanceType === 'due'
+                          ? 'Net Total Payable (with Due)'
+                          : 'Net Payable (after Advance)'
+                        : 'Grand Total'}
                     </Text>
                     <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 17 }}>
-                      ₹{grandTotal.toFixed(2)}
+                      ₹{(
+                        showPreviousBalance
+                          ? balanceType === 'due'
+                            ? grandTotal + (parseFloat(previousBalanceAmount) || 0)
+                            : Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0))
+                          : grandTotal
+                      ).toFixed(2)}
                     </Text>
                   </View>
                 </View>

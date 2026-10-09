@@ -918,15 +918,20 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
-    // If sale has due, update customer's outstanding balance
+    // If sale has due or advance was applied, update customer's outstanding balance
+    const advUsed = sale.showPreviousBalance && Number(sale.advancePayment || 0) > 0
+      ? Math.min(Number(sale.advancePayment), Number(sale.total || 0))
+      : 0;
+
     if (sale.customerId && Number(sale.customerId) > 0) {
       try {
         const cId = Number(sale.customerId);
         const saleDue = Number(sale.due || 0);
-        if (saleDue > 0) {
+        const balanceDelta = saleDue + advUsed;
+        if (balanceDelta !== 0) {
           await db.execute(
             `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
-            [saleDue, now, cId]
+            [balanceDelta, now, cId]
           );
         }
       } catch (custErr) {
@@ -934,8 +939,9 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
-    // If sale has paid amount, record in payments table
-    if (sale.paid && Number(sale.paid) > 0) {
+    // Only record payment for fresh cash paid (excluding applied advance credit)
+    const freshCashPaid = Math.max(0, Number(sale.paid || 0) - advUsed);
+    if (freshCashPaid > 0) {
       try {
         const invNum = sale.invoiceNumber || sale.reference;
         const existingRes = await db.execute(
@@ -949,7 +955,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         if (existingRows.length > 0) {
           await db.execute(
             `UPDATE payments SET amount = ?, customerId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
-            [Number(sale.paid), sale.customerId ? Number(sale.customerId) : null, now, existingRows[0].id]
+            [freshCashPaid, sale.customerId ? Number(sale.customerId) : null, now, existingRows[0].id]
           );
         } else {
           const paymentId = Date.now() + Math.floor(Math.random() * 10000);
@@ -959,7 +965,7 @@ export class SaleRepository extends BaseRepository<Sale> {
             [
               paymentId,
               null,
-              Number(sale.paid),
+              freshCashPaid,
               'cash',
               'receive',
               invNum,

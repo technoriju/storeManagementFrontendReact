@@ -598,15 +598,20 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // If purchase has due, update supplier's outstanding balance
+    // If purchase has due or advance was applied, update supplier's outstanding balance
+    const advUsed = purchase.showPreviousBalance && Number(purchase.advancePayment || 0) > 0
+      ? Math.min(Number(purchase.advancePayment), Number(purchase.total || 0))
+      : 0;
+
     if (purchase.supplierId && Number(purchase.supplierId) > 0) {
       try {
         const sId = Number(purchase.supplierId);
         const purDue = Number(purchase.due || 0);
-        if (purDue > 0) {
+        const balanceDelta = purDue + advUsed;
+        if (balanceDelta !== 0) {
           await db.execute(
             `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
-            [purDue, now, sId]
+            [balanceDelta, now, sId]
           );
         }
       } catch (suppErr) {
@@ -614,8 +619,9 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // If purchase has paid amount, record in payments table (type = 'pay')
-    if (purchase.paid && Number(purchase.paid) > 0) {
+    // If purchase has fresh cash paid, record in payments table (type = 'pay')
+    const freshCashPaid = Math.max(0, Number(purchase.paid || 0) - advUsed);
+    if (freshCashPaid > 0) {
       try {
         const invNum = purchase.invoiceNumber || purchase.reference;
         const existingRes = await db.execute(
@@ -629,7 +635,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         if (existingRows.length > 0) {
           await db.execute(
             `UPDATE payments SET amount = ?, supplierId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
-            [Number(purchase.paid), purchase.supplierId ? Number(purchase.supplierId) : null, now, existingRows[0].id]
+            [freshCashPaid, purchase.supplierId ? Number(purchase.supplierId) : null, now, existingRows[0].id]
           );
         } else {
           const paymentId = Date.now() + Math.floor(Math.random() * 10000);
@@ -639,7 +645,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
             [
               paymentId,
               null,
-              Number(purchase.paid),
+              freshCashPaid,
               'cash',
               'pay',
               invNum,
