@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -75,6 +75,21 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allOrders, searchQuery]);
 
   const handleDelete = (item: any) => {
+    const doDelete = async () => {
+      try {
+        await deletePOMutation.mutateAsync(item.id);
+      } catch (err: any) {
+        Alert.alert('Error', err?.message || 'Failed to delete');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm(`Are you sure you want to delete purchase order ${item.orderNumber}?`)) {
+        void doDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Purchase Order',
       `Are you sure you want to delete purchase order ${item.orderNumber}?`,
@@ -83,13 +98,7 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePOMutation.mutateAsync(item.id);
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete');
-            }
-          },
+          onPress: () => { void doDelete(); },
         },
       ]
     );

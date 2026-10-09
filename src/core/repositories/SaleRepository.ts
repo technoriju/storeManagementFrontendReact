@@ -85,9 +85,15 @@ export class SaleRepository extends BaseRepository<Sale> {
   public async getItemsForSale(saleId: number): Promise<SaleItem[]> {
     try {
       const res = await db.execute(
-        `SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+        `SELECT si.*, 
+                p.name as fallbackProductName, 
+                p.sku as productSku,
+                COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
          FROM sale_items si
-         LEFT JOIN products p ON si.productId = p.id
+         LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
+         LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+         LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
          WHERE si.saleId = ?
          ORDER BY si.id ASC`,
         [saleId]
@@ -116,6 +122,9 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         const pId = Number(row.productId);
         const existingIdx = items.findIndex((it) => it.productId === pId);
+        const brand = (row.brandName || row.fallbackBrandName || '').trim() || undefined;
+        const subUnit = (row.subUnitName || row.fallbackSubUnitName || '').trim() || undefined;
+
         const newItem: SaleItem = {
           id: Number(row.id),
           saleId: Number(row.saleId || saleId),
@@ -130,6 +139,10 @@ export class SaleRepository extends BaseRepository<Sale> {
           unit: row.unit ? String(row.unit) : undefined,
           unitType: row.unitType || 'sub',
           conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
+          brand: brand && brand !== 'N/A' ? brand : undefined,
+          brandName: brand && brand !== 'N/A' ? brand : undefined,
+          subUnit: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+          subUnitName: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
           total: Number(row.total || 0),
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -221,9 +234,15 @@ export class SaleRepository extends BaseRepository<Sale> {
       // Batch load items for all sales
       try {
         const itemsRes = await db.execute(`
-          SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+          SELECT si.*, 
+                 p.name as fallbackProductName, 
+                 p.sku as productSku,
+                 COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                 COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
           FROM sale_items si
-          LEFT JOIN products p ON si.productId = p.id
+          LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
+          LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+          LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
           ORDER BY si.id ASC
         `);
         let itemRows: any[] = [];
@@ -251,6 +270,9 @@ export class SaleRepository extends BaseRepository<Sale> {
           if (qty <= 0) continue;
 
           const existingIdx = itemsBySaleId[sId].findIndex((it) => it.productId === pId);
+          const brand = (r.brandName || r.fallbackBrandName || '').trim() || undefined;
+          const subUnit = (r.subUnitName || r.fallbackSubUnitName || '').trim() || undefined;
+
           const newItem: SaleItem = {
             id: Number(r.id),
             saleId: sId,
@@ -265,6 +287,10 @@ export class SaleRepository extends BaseRepository<Sale> {
             unit: r.unit ? String(r.unit) : undefined,
             unitType: r.unitType || 'sub',
             conversionRate: r.conversionRate ? Number(r.conversionRate) : 1,
+            brand: brand && brand !== 'N/A' ? brand : undefined,
+            brandName: brand && brand !== 'N/A' ? brand : undefined,
+            subUnit: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+            subUnitName: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
             total: Number(r.total || 0),
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
@@ -349,14 +375,23 @@ export class SaleRepository extends BaseRepository<Sale> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
 
-      const response = await apiClient.post(API_ENDPOINTS.SALES.BASE, apiPayload);
-      if (response.status >= 200 && response.status < 300) {
+      let response: any;
+      if (operation === 'update') {
+        const targetServerId = entity.invoiceNumber || entity.reference || entity.id;
+        response = await apiClient.put(API_ENDPOINTS.SALES.BY_ID(targetServerId), apiPayload);
+      } else {
+        response = await apiClient.post(API_ENDPOINTS.SALES.BASE, apiPayload);
+      }
+
+      if (response && response.status >= 200 && response.status < 300) {
         const body = response?.data?.data || response?.data || {};
         const returnedId = Number(body.id || body._id);
-        if (returnedId && returnedId !== entity.id) {
+        if (returnedId && returnedId !== entity.id && Number(entity.id) > 1000000000000) {
           await db.execute(`UPDATE sales SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
           await db.execute(`UPDATE sale_items SET saleId = ?, syncStatus = 'synced' WHERE saleId = ?`, [returnedId, entity.id]);
           await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
@@ -398,7 +433,11 @@ export class SaleRepository extends BaseRepository<Sale> {
     const items = payloadData?.items || (await this.getItemsForSale(sale.id));
     sale.items = items;
 
-    await this.syncWithApi(sale, 'insert');
+    if (item.operation === 'UPDATE') {
+      await this.syncWithApi(sale, 'update');
+    } else {
+      await this.syncWithApi(sale, 'insert');
+    }
   }
 
   private extractList(data: any): any[] {
@@ -494,6 +533,32 @@ export class SaleRepository extends BaseRepository<Sale> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
+        const existingItem = existingSale?.items?.find(
+          (x) => x.productId === Number(it.productId) || (x.id && it.id && Number(x.id) === Number(it.id))
+        );
+
+        const rawBrand =
+          it.brandName ||
+          (typeof it.brand === 'string' ? it.brand : it.brand?.name) ||
+          it.product?.brandName ||
+          (typeof it.product?.brand === 'string' ? it.product?.brand : it.product?.brand?.name) ||
+          existingItem?.brandName ||
+          existingItem?.brand;
+        const brand = rawBrand && String(rawBrand).trim() !== 'N/A' ? String(rawBrand).trim() : undefined;
+
+        const rawSubUnit =
+          it.subUnitName ||
+          (typeof it.subUnit === 'string' ? it.subUnit : it.subUnit?.name) ||
+          it.sub_unit ||
+          it.product?.subUnitName ||
+          (typeof it.product?.subUnit === 'string' ? it.product?.subUnit : it.product?.subUnit?.name) ||
+          it.product?.subunit?.name ||
+          it.productUnit?.name ||
+          it.productUnit?.unit?.name ||
+          existingItem?.subUnitName ||
+          existingItem?.subUnit;
+        const subUnit = rawSubUnit && String(rawSubUnit).trim() !== 'N/A' ? String(rawSubUnit).trim() : undefined;
+
         items.push({
           id: itemId,
           saleId,
@@ -508,6 +573,10 @@ export class SaleRepository extends BaseRepository<Sale> {
           unit: it.unit ? String(it.unit) : undefined,
           unitType,
           conversionRate,
+          brand,
+          brandName: brand,
+          subUnit,
+          subUnitName: subUnit,
           total: itemTotal,
           createdAt: it.createdAt ? String(it.createdAt) : sale.createdAt,
           updatedAt: it.updatedAt ? String(it.updatedAt) : sale.updatedAt,
@@ -579,8 +648,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           for (const it of items) {
             await db.execute(
               `INSERT INTO sale_items (
-                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 it.id,
                 it.saleId,
@@ -595,6 +664,8 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.unit || null,
                 it.unitType || 'sub',
                 it.conversionRate || 1,
+                it.brandName || it.brand || null,
+                it.subUnitName || it.subUnit || null,
                 it.total,
                 it.createdAt,
                 it.updatedAt,
@@ -650,8 +721,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           for (const it of items) {
             await db.execute(
               `INSERT INTO sale_items (
-                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 it.id,
                 it.saleId,
@@ -666,6 +737,8 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.unit || null,
                 it.unitType || 'sub',
                 it.conversionRate || 1,
+                it.brandName || it.brand || null,
+                it.subUnitName || it.subUnit || null,
                 it.total,
                 it.createdAt,
                 it.updatedAt,
@@ -674,7 +747,8 @@ export class SaleRepository extends BaseRepository<Sale> {
             );
           }
         }
-        return { ...sale, items };
+        const fullItems = await this.getItemsForSale(sale.id);
+        return { ...sale, items: fullItems.length > 0 ? fullItems : items };
       }
 
       return await this.getById(id);
@@ -713,6 +787,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         ...item,
         id: itemId,
         saleId,
+        brand: item.brand || item.brandName || undefined,
+        brandName: item.brandName || item.brand || undefined,
+        subUnit: item.subUnit || item.subUnitName || undefined,
+        subUnitName: item.subUnitName || item.subUnit || undefined,
         createdAt: now,
         updatedAt: now,
         syncStatus: 'pending_insert',
@@ -721,8 +799,8 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       await db.execute(
         `INSERT INTO sale_items (
-          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           itemId,
           saleId,
@@ -737,6 +815,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           item.unit || null,
           unitType,
           conversionRate,
+          item.brandName || item.brand || null,
+          item.subUnitName || item.subUnit || null,
           item.total,
           now,
           now,
@@ -746,7 +826,7 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       // If status is Completed, deduct from product stock (in base unit)
       if (sale.status === 'Completed') {
-        const deductedBaseQty = unitType === 'sub' ? item.quantity / conversionRate : item.quantity;
+        const deductedBaseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
@@ -810,21 +890,35 @@ export class SaleRepository extends BaseRepository<Sale> {
     newItems: Array<Omit<SaleItem, 'id' | 'saleId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>
   ): Promise<Sale> {
     const now = new Date().toISOString();
-    const existingSale = await this.getById(saleId);
-    const oldItems = await this.getItemsForSale(saleId);
+    const existingSale =
+      (await this.getById(saleId)) ||
+      (await this.getAll()).find(
+        (s) =>
+          s.id === saleId ||
+          String(s.id) === String(saleId) ||
+          (saleData.invoiceNumber && s.invoiceNumber === saleData.invoiceNumber)
+      );
+
+    let oldItems = await this.getItemsForSale(saleId);
+    if ((!oldItems || oldItems.length === 0) && existingSale?.items && existingSale.items.length > 0) {
+      oldItems = existingSale.items;
+    }
 
     // 1. Stock Adjustment:
-    // Reverse old items stock:
-    if (existingSale && (existingSale.status === 'Completed' || (existingSale.status as any) === 'COMPLETED')) {
+    // Step A: Reverse old items stock (add back what previous sale deducted)
+    const oldStatus = String(existingSale?.status || '').toUpperCase();
+    const isOldCompleted = !existingSale || oldStatus === 'COMPLETED' || oldStatus === 'RECEIVED';
+    if (isOldCompleted && oldItems && oldItems.length > 0) {
       for (const oldItem of oldItems) {
         if (!oldItem.productId) continue;
-        const conversionRate = oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
+        const conversionRate =
+          oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
         const unitType = oldItem.unitType || 'sub';
-        const baseQty = unitType === 'sub' ? Number(oldItem.quantity) / conversionRate : Number(oldItem.quantity);
+        const baseQty = unitType === 'base' ? Number(oldItem.quantity) * conversionRate : Number(oldItem.quantity);
         try {
           await db.execute(
-            `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
-            [baseQty, oldItem.productId]
+            `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ?`,
+            [baseQty, now, oldItem.productId]
           );
         } catch (e) {
           console.warn('Stock reverse err:', e);
@@ -832,18 +926,20 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
-    // Deduct new items stock:
-    const newStatus = saleData.status || existingSale?.status || 'Completed';
-    if (newStatus === 'Completed' || (newStatus as any) === 'COMPLETED') {
+    // Step B: Deduct new items stock (deduct what is now sold)
+    const newStatus = String(saleData.status || existingSale?.status || 'Completed').toUpperCase();
+    const isNewCompleted = newStatus === 'COMPLETED' || newStatus === 'RECEIVED';
+    if (isNewCompleted && newItems && newItems.length > 0) {
       for (const newItem of newItems) {
         if (!newItem.productId) continue;
-        const conversionRate = newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
+        const conversionRate =
+          newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
         const unitType = newItem.unitType || 'sub';
-        const baseQty = unitType === 'sub' ? Number(newItem.quantity) / conversionRate : Number(newItem.quantity);
+        const baseQty = unitType === 'base' ? Number(newItem.quantity) * conversionRate : Number(newItem.quantity);
         try {
           await db.execute(
-            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
-            [baseQty, newItem.productId]
+            `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ?`,
+            [baseQty, now, newItem.productId]
           );
         } catch (e) {
           console.warn('Stock deduct err:', e);
@@ -888,6 +984,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         ...item,
         id: itemId,
         saleId,
+        brand: item.brand || item.brandName || undefined,
+        brandName: item.brandName || item.brand || undefined,
+        subUnit: item.subUnit || item.subUnitName || undefined,
+        subUnitName: item.subUnitName || item.subUnit || undefined,
         createdAt: now,
         updatedAt: now,
         syncStatus: 'pending_insert',
@@ -896,8 +996,8 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       await db.execute(
         `INSERT INTO sale_items (
-          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           itemId,
           saleId,
@@ -912,6 +1012,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           item.unit || null,
           unitType,
           conversionRate,
+          item.brandName || item.brand || null,
+          item.subUnitName || item.subUnit || null,
           item.total,
           now,
           now,
@@ -925,18 +1027,21 @@ export class SaleRepository extends BaseRepository<Sale> {
     this.requestSync();
 
     try {
+      const targetServerId = updatedSale.invoiceNumber || updatedSale.reference || saleId;
       const apiPayload = {
         ...updatedSale,
-        items: fullItems.map(it => ({
+        items: fullItems.map((it) => ({
           productId: String(it.productId),
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
-      await apiClient.put(API_ENDPOINTS.SALES.BY_ID(saleId), apiPayload);
+      await apiClient.put(API_ENDPOINTS.SALES.BY_ID(targetServerId), apiPayload);
     } catch (e) {
       console.warn('Direct API sale update error (will sync via outbox):', e);
     }
@@ -979,84 +1084,103 @@ export class SaleRepository extends BaseRepository<Sale> {
   }> {
     try {
       const cIdNum = Number(customerId);
-      const cIdStr = String(customerId || '').trim();
       const cName = customerName ? customerName.trim() : '';
 
-      // 1. Fetch customer opening/ledger balance from customers table
-      let custBal = 0;
-      try {
-        const custRes = await db.execute(
-          'SELECT outstandingBalance FROM customers WHERE id = ? OR (name IS NOT NULL AND LOWER(name) = LOWER(?)) LIMIT 1',
-          [!isNaN(cIdNum) ? cIdNum : 0, cName || '']
-        );
-        const cRows = this.extractRows(custRes);
-        if (cRows.length > 0 && cRows[0]) {
-          custBal = Number(cRows[0].outstandingBalance || 0);
-        }
-      } catch (err) {
-        console.warn('Failed to query customer balance:', err);
+      // Skip unassigned or generic walk-in customers
+      const isWalkIn = !cName || cName.toLowerCase() === 'walk-in customer' || cName.toLowerCase() === 'walk-in';
+      if ((isNaN(cIdNum) || cIdNum <= 0) && isWalkIn) {
+        return { outstandingBalance: 0, salesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
+      }
+      if (isWalkIn) {
+        return { outstandingBalance: 0, salesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
       }
 
-      // 2. Query ALL previous invoices for this customer from local sales table
+      let custBal = 0;
+
+      // 1. Try fetching latest balance from backend if customer has a valid server ID
+      if (!isNaN(cIdNum) && cIdNum > 0) {
+        try {
+          const apiRes = await apiClient.get(API_ENDPOINTS.CUSTOMERS.BY_ID(cIdNum));
+          const apiCust = apiRes?.data?.data || apiRes?.data;
+          if (apiCust && apiCust.outstandingBalance !== undefined) {
+            custBal = Number(apiCust.outstandingBalance || 0);
+            try {
+              await db.execute('UPDATE customers SET outstandingBalance = ? WHERE id = ?', [custBal, cIdNum]);
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+
+      // 2. Fetch customer opening/ledger balance from local customers table if not obtained from API
+      if (custBal === 0) {
+        try {
+          const whereParts: string[] = [];
+          const whereArgs: any[] = [];
+          if (!isNaN(cIdNum) && cIdNum > 0) {
+            whereParts.push('id = ?');
+            whereArgs.push(cIdNum);
+          }
+          if (cName) {
+            whereParts.push('(name IS NOT NULL AND LOWER(name) = LOWER(?))');
+            whereArgs.push(cName);
+          }
+          if (whereParts.length > 0) {
+            const custRes = await db.execute(
+              `SELECT outstandingBalance FROM customers WHERE ${whereParts.join(' OR ')} LIMIT 1`,
+              whereArgs
+            );
+            const cRows = this.extractRows(custRes);
+            if (cRows.length > 0 && cRows[0]) {
+              custBal = Number(cRows[0].outstandingBalance || 0);
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to query customer balance:', err);
+        }
+      }
+
+      // 3. Query previous invoices for THIS specific customer from local sales table
       let sDue = 0;
       let unpaidCount = 0;
       try {
-        const salesRes = await db.execute(
-          `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
-           FROM sales 
-           WHERE (
-             customerId = ? 
-             OR customerId = ? 
-             OR (customerName IS NOT NULL AND customerName != '' AND LOWER(customerName) = LOWER(?))
-           )
-           AND (status IS NULL OR LOWER(status) != 'cancelled')`,
-          [!isNaN(cIdNum) ? cIdNum : 0, cIdStr, cName]
-        );
-        const sRows = this.extractRows(salesRes);
-        for (const row of sRows) {
-          if (!row) continue;
-          const total = Number(row.total || 0);
-          const paid = Number(row.paid || 0);
-          let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
+        const whereSaleParts: string[] = [];
+        const saleArgs: any[] = [];
+        if (!isNaN(cIdNum) && cIdNum > 0) {
+          whereSaleParts.push('customerId = ?');
+          saleArgs.push(cIdNum);
+        }
+        if (cName) {
+          whereSaleParts.push('(customerName IS NOT NULL AND customerName != \'\' AND LOWER(customerName) = LOWER(?))');
+          saleArgs.push(cName);
+        }
 
-          // If due is <= 0 but total > paid and paymentStatus is not 'Paid', compute real due
-          if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
-            due = total - paid;
-          }
+        if (whereSaleParts.length > 0) {
+          const salesRes = await db.execute(
+            `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
+             FROM sales 
+             WHERE (${whereSaleParts.join(' OR ')})
+             AND (status IS NULL OR LOWER(status) != 'cancelled')`,
+            saleArgs
+          );
+          const sRows = this.extractRows(salesRes);
+          for (const row of sRows) {
+            if (!row) continue;
+            const total = Number(row.total || 0);
+            const paid = Number(row.paid || 0);
+            let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
 
-          if (due > 0) {
-            sDue += due;
-            unpaidCount++;
+            if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
+              due = total - paid;
+            }
+
+            if (due > 0) {
+              sDue += due;
+              unpaidCount++;
+            }
           }
         }
       } catch (err) {
         console.warn('Failed to query sales for customer balance:', err);
-      }
-
-      // 3. Fallback: if direct SQL returned 0, check all loaded sales via getAll()
-      if (sDue === 0) {
-        try {
-          const allSales = await this.getAll();
-          for (const s of allSales) {
-            if (!s) continue;
-            const matchesId = !isNaN(cIdNum) && cIdNum > 0 && Number(s.customerId) === cIdNum;
-            const matchesName = Boolean(
-              cName && s.customerName && s.customerName.trim().toLowerCase() === cName.toLowerCase()
-            );
-            if (matchesId || matchesName) {
-              const total = Number(s.total || 0);
-              const paid = Number(s.paid || 0);
-              let due = Number(s.due || 0);
-              if (due <= 0 && total > paid && String(s.paymentStatus || '').toLowerCase() !== 'paid') {
-                due = total - paid;
-              }
-              if (due > 0) {
-                sDue += due;
-                unpaidCount++;
-              }
-            }
-          }
-        } catch (_) {}
       }
 
       // 4. Compute effective total due and advance
@@ -1087,20 +1211,61 @@ export class SaleRepository extends BaseRepository<Sale> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
-    const sale = await this.getById(id);
+    const sale = await this.getById(id) || (await this.getAll()).find(s => s.id === id || String(s.id) === String(id));
     const items = await this.getItemsForSale(id);
+
+    // If sync enabled, delete from server FIRST to ensure sync with server
+    if (shouldSync) {
+      const serverTargetId = sale?.invoiceNumber || sale?.reference || id;
+      try {
+        await apiClient.delete(API_ENDPOINTS.SALES.BY_ID(serverTargetId));
+      } catch (apiErr: any) {
+        // If 404, record already deleted on server, proceed with local cleanup
+        const status = apiErr?.response?.status;
+        if (status !== 404) {
+          const errMsg = apiErr?.response?.data?.message || apiErr?.message || 'Server failed to delete sale bill';
+          console.error(`Failed to delete sale ${id} from server:`, errMsg);
+          throw new Error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+        }
+      }
+    }
 
     // Adjust stock: restore deducted items back to stock
     if (sale && (sale.status === 'Completed' || (sale.status as any) === 'COMPLETED')) {
       for (const item of items) {
         if (!item.productId) continue;
         const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
-        const unitType = item.unitType || 'sub';
-        const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+        const unitType = item.unitType || 'base';
+        const baseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
             [baseQty, item.productId]
+          );
+
+          // Record reversing transaction in stock_transactions
+          const prodRes = await db.execute('SELECT stockQuantity, name, sku FROM products WHERE id = ?', [item.productId]);
+          const pRows = this.extractRows(prodRes);
+          const currStock = pRows.length > 0 ? Number(pRows[0].stockQuantity || 0) : 0;
+          await db.execute(
+            `INSERT INTO stock_transactions (
+              productId, productName, sku, type, quantity, previousStock, newStock, reason, reference, notes, createdAt, updatedAt, syncStatus
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              item.productId,
+              item.productName || pRows[0]?.name || null,
+              pRows[0]?.sku || null,
+              'SALE_CANCELLED',
+              baseQty,
+              currStock - baseQty,
+              currStock,
+              'Sale Bill Deletion',
+              sale.invoiceNumber || String(id),
+              'Restored stock on sale deletion',
+              new Date().toISOString(),
+              new Date().toISOString(),
+              'synced'
+            ]
           );
         } catch (stockErr) {
           console.warn(`Failed to restore stock for product ${item.productId}:`, stockErr);
@@ -1125,13 +1290,6 @@ export class SaleRepository extends BaseRepository<Sale> {
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);
-      if (/^\d+$/.test(String(id))) {
-        await outboxRepo.add(this.tableName, id, 'DELETE', { id });
-        this.requestSync();
-      }
-      try {
-        await apiClient.delete(API_ENDPOINTS.SALES.BY_ID(id));
-      } catch (_) {}
     }
   }
 }

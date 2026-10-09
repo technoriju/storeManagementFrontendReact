@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -25,6 +25,8 @@ import {
 } from 'lucide-react-native';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
+import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
+import { enrichSaleItemsWithProductMeta } from '../utils/enrichSaleItems';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -138,6 +140,9 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [shareOrderData, setShareOrderData] = useState<any | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -189,7 +194,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     }
 
-    return Array.from(itemsMap.values());
+    const filtered = Array.from(itemsMap.values());
+    return await enrichSaleItemsWithProductMeta(filtered);
   };
 
   const handleOpenPrintPreview = async (order: any) => {
@@ -201,13 +207,22 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
           sku: i.sku,
+          brand: i.brand || i.brandName || i.product?.brandName,
+          brandName: i.brandName || i.brand || i.product?.brandName,
+          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
+          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
+          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : undefined),
+          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
+          unitType: i.unitType,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
           gst: Number(i.gst) || 0,
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
-          unit: i.unit || 'Pcs',
+          unit: i.unit || i.product?.unitName || i.product?.baseUnitName || 'Pcs',
+          product: i.product,
+          productUnit: i.productUnit,
           hsn: i.hsn || '',
         }))
       : [
@@ -326,29 +341,27 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allOrders, searchQuery]);
 
   const handleDelete = (item: any) => {
-    Alert.alert(
-      'Delete Sale',
-      `Are you sure you want to delete order ${item.reference}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDismissedOrderIds((prev) => [...prev, String(item.id)]);
-            const numericId = parseInt(item.id, 10);
-            const isDbSale = dbSales.some((s) => String(s.id) === String(item.id));
-            if (!isNaN(numericId) && (isDbSale || dbSales.length > 0)) {
-              try {
-                await deleteSaleMutation.mutateAsync(numericId);
-              } catch (err: any) {
-                console.warn('Failed to delete sale from db:', err);
-              }
-            }
-          },
-        },
-      ]
-    );
+    setDeleteError(null);
+    setDeleteTarget(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const numericId = parseInt(String(deleteTarget.id), 10);
+      const targetId = !isNaN(numericId) ? numericId : deleteTarget.id;
+      await deleteSaleMutation.mutateAsync(targetId);
+      setDismissedOrderIds((prev) => [...prev, String(deleteTarget.id)]);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err: any) {
+      console.error('Failed to delete sale order:', err);
+      setDeleteError(err?.message || 'Server failed to delete sale order');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -612,6 +625,44 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           setShowAddModal(false);
           setEditSaleId(null);
           refetch();
+        }}
+      />
+
+      <SweetConfirmModal
+        visible={!!deleteTarget}
+        type={deleteError ? 'error' : 'danger'}
+        title="Delete Sale Order"
+        subtitle="Are you sure you want to permanently delete this sale order? The deletion will sync immediately with the server."
+        entityName={
+          deleteTarget
+            ? `${deleteTarget.reference || deleteTarget.invoiceNumber || deleteTarget.id} • ${deleteTarget.customerName || 'Customer'} (₹${Number(deleteTarget.total || 0).toFixed(2)})`
+            : undefined
+        }
+        sideEffects={[
+          {
+            icon: 'stock',
+            title: 'Inventory Stock Restoration',
+            description: 'Quantities sold in this order will be credited back into product stock.',
+          },
+          {
+            icon: 'wallet',
+            title: 'Customer Ledger Balance Adjustment',
+            description: 'Any unpaid due recorded on this order will be reversed from the customer account.',
+          },
+          {
+            icon: 'server',
+            title: 'Permanent Server Deletion',
+            description: 'Order and associated payment transactions will be permanently deleted from the server.',
+          },
+        ]}
+        confirmText="Yes, Delete Order"
+        cancelText="Cancel"
+        isConfirming={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
         }}
       />
     </View>

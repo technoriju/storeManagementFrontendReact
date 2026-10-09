@@ -191,13 +191,30 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
 
-      const response = await apiClient.post(API_ENDPOINTS.PURCHASES.BASE, apiPayload);
-      if (response.status >= 200 && response.status < 300) {
-        await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
-        await db.execute(`UPDATE purchase_items SET syncStatus = 'synced' WHERE purchaseId = ?`, [entity.id]);
+      let response: any;
+      if (operation === 'update') {
+        const targetServerId = entity.invoiceNumber || entity.reference || entity.id;
+        response = await apiClient.put(API_ENDPOINTS.PURCHASES.BY_ID(targetServerId), apiPayload);
+      } else {
+        response = await apiClient.post(API_ENDPOINTS.PURCHASES.BASE, apiPayload);
+      }
+
+      if (response && response.status >= 200 && response.status < 300) {
+        const body = response?.data?.data || response?.data || {};
+        const returnedId = Number(body.id || body._id);
+        if (returnedId && returnedId !== entity.id && Number(entity.id) > 1000000000000) {
+          await db.execute(`UPDATE purchases SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
+          await db.execute(`UPDATE purchase_items SET purchaseId = ?, syncStatus = 'synced' WHERE purchaseId = ?`, [returnedId, entity.id]);
+          await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
+        } else {
+          await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
+          await db.execute(`UPDATE purchase_items SET syncStatus = 'synced' WHERE purchaseId = ?`, [entity.id]);
+        }
       }
     } catch (error) {
       console.error(`Failed to sync purchase ${entity.id} with API:`, error);
@@ -232,7 +249,11 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     const items = payloadData?.items || (await this.getItemsForPurchase(purchase.id));
     purchase.items = items;
 
-    await this.syncWithApi(purchase, 'insert');
+    if (item.operation === 'UPDATE') {
+      await this.syncWithApi(purchase, 'update');
+    } else {
+      await this.syncWithApi(purchase, 'insert');
+    }
   }
 
   private extractList(data: any): any[] {
@@ -536,7 +557,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
       // If status is Received, add to product stock (in base unit)
       if (purchase.status === 'Received') {
-        const addedBaseQty = unitType === 'sub' ? item.quantity / conversionRate : item.quantity;
+        const addedBaseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
             `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
@@ -600,21 +621,35 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     newItems: Array<Omit<PurchaseItem, 'id' | 'purchaseId' | 'createdAt' | 'updatedAt' | 'syncStatus'>>
   ): Promise<Purchase> {
     const now = new Date().toISOString();
-    const existingPurchase = await this.getById(purchaseId);
-    const oldItems = await this.getItemsForPurchase(purchaseId);
+    const existingPurchase =
+      (await this.getById(purchaseId)) ||
+      (await this.getAll()).find(
+        (p) =>
+          p.id === purchaseId ||
+          String(p.id) === String(purchaseId) ||
+          (purchaseData.invoiceNumber && p.invoiceNumber === purchaseData.invoiceNumber)
+      );
+
+    let oldItems = await this.getItemsForPurchase(purchaseId);
+    if ((!oldItems || oldItems.length === 0) && existingPurchase?.items && existingPurchase.items.length > 0) {
+      oldItems = existingPurchase.items;
+    }
 
     // 1. Stock Adjustment:
-    // Reverse old items stock (subtract what was added):
-    if (existingPurchase && (existingPurchase.status === 'Received' || (existingPurchase.status as any) === 'COMPLETED')) {
+    // Step A: Reverse old items stock (subtract what previous purchase added)
+    const oldStatus = String(existingPurchase?.status || '').toUpperCase();
+    const isOldReceived = !existingPurchase || oldStatus === 'RECEIVED' || oldStatus === 'COMPLETED';
+    if (isOldReceived && oldItems && oldItems.length > 0) {
       for (const oldItem of oldItems) {
         if (!oldItem.productId) continue;
-        const conversionRate = oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
+        const conversionRate =
+          oldItem.conversionRate && Number(oldItem.conversionRate) > 0 ? Number(oldItem.conversionRate) : 1;
         const unitType = oldItem.unitType || 'base';
-        const baseQty = unitType === 'sub' ? Number(oldItem.quantity) / conversionRate : Number(oldItem.quantity);
+        const baseQty = unitType === 'base' ? Number(oldItem.quantity) * conversionRate : Number(oldItem.quantity);
         try {
           await db.execute(
-            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
-            [baseQty, oldItem.productId]
+            `UPDATE products SET stockQuantity = stockQuantity - ?, updatedAt = ? WHERE id = ?`,
+            [baseQty, now, oldItem.productId]
           );
         } catch (e) {
           console.warn('Stock reverse err:', e);
@@ -622,18 +657,20 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // Add new items stock:
-    const newStatus = purchaseData.status || existingPurchase?.status || 'Received';
-    if (newStatus === 'Received' || (newStatus as any) === 'COMPLETED') {
+    // Step B: Add new items stock (add what is now purchased)
+    const newStatus = String(purchaseData.status || existingPurchase?.status || 'Received').toUpperCase();
+    const isNewReceived = newStatus === 'RECEIVED' || newStatus === 'COMPLETED';
+    if (isNewReceived && newItems && newItems.length > 0) {
       for (const newItem of newItems) {
         if (!newItem.productId) continue;
-        const conversionRate = newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
+        const conversionRate =
+          newItem.conversionRate && Number(newItem.conversionRate) > 0 ? Number(newItem.conversionRate) : 1;
         const unitType = newItem.unitType || 'base';
-        const baseQty = unitType === 'sub' ? Number(newItem.quantity) / conversionRate : Number(newItem.quantity);
+        const baseQty = unitType === 'base' ? Number(newItem.quantity) * conversionRate : Number(newItem.quantity);
         try {
           await db.execute(
-            `UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?`,
-            [baseQty, newItem.productId]
+            `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ?`,
+            [baseQty, now, newItem.productId]
           );
         } catch (e) {
           console.warn('Stock add err:', e);
@@ -715,18 +752,21 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     this.requestSync();
 
     try {
+      const targetServerId = updatedPurchase.invoiceNumber || updatedPurchase.reference || purchaseId;
       const apiPayload = {
         ...updatedPurchase,
-        items: fullItems.map(it => ({
+        items: fullItems.map((it) => ({
           productId: String(it.productId),
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unitType: it.unitType,
+          conversionRate: Number(it.conversionRate || 1),
         })),
       };
-      await apiClient.put(API_ENDPOINTS.PURCHASES.BY_ID(purchaseId), apiPayload);
+      await apiClient.put(API_ENDPOINTS.PURCHASES.BY_ID(targetServerId), apiPayload);
     } catch (e) {
       console.warn('Direct API purchase update error (will sync via outbox):', e);
     }
@@ -735,8 +775,24 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
-    const purchase = await this.getById(id);
+    const purchase = await this.getById(id) || (await this.getAll()).find(p => p.id === id || String(p.id) === String(id));
     const items = await this.getItemsForPurchase(id);
+
+    // If sync enabled, delete from server FIRST to ensure sync with server
+    if (shouldSync) {
+      const serverTargetId = purchase?.invoiceNumber || id;
+      try {
+        await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(serverTargetId));
+      } catch (apiErr: any) {
+        // If 404, record already deleted on server, proceed with local cleanup
+        const status = apiErr?.response?.status;
+        if (status !== 404) {
+          const errMsg = apiErr?.response?.data?.message || apiErr?.message || 'Server failed to delete purchase bill';
+          console.error(`Failed to delete purchase ${id} from server:`, errMsg);
+          throw new Error(Array.isArray(errMsg) ? errMsg.join(', ') : errMsg);
+        }
+      }
+    }
 
     // Adjust stock: reverse added stock for received purchase
     if (purchase && (purchase.status === 'Received' || (purchase.status as any) === 'COMPLETED')) {
@@ -744,11 +800,36 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         if (!item.productId) continue;
         const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
         const unitType = item.unitType || 'base';
-        const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+        const baseQty = unitType === 'base' ? Number(item.quantity) * conversionRate : Number(item.quantity);
         try {
           await db.execute(
-            `UPDATE products SET stockQuantity = stockQuantity - ? WHERE id = ?`,
+            `UPDATE products SET stockQuantity = MAX(0, stockQuantity - ?) WHERE id = ?`,
             [baseQty, item.productId]
+          );
+
+          // Record reversing transaction in stock_transactions
+          const prodRes = await db.execute('SELECT stockQuantity, name, sku FROM products WHERE id = ?', [item.productId]);
+          const pRows = this.extractRows(prodRes);
+          const currStock = pRows.length > 0 ? Number(pRows[0].stockQuantity || 0) : 0;
+          await db.execute(
+            `INSERT INTO stock_transactions (
+              productId, productName, sku, type, quantity, previousStock, newStock, reason, reference, notes, createdAt, updatedAt, syncStatus
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              item.productId,
+              item.productName || pRows[0]?.name || null,
+              pRows[0]?.sku || null,
+              'PURCHASE_CANCELLED',
+              -baseQty,
+              currStock + baseQty,
+              currStock,
+              'Purchase Bill Deletion',
+              purchase.invoiceNumber || String(id),
+              'Deducted stock on purchase deletion',
+              new Date().toISOString(),
+              new Date().toISOString(),
+              'synced'
+            ]
           );
         } catch (stockErr) {
           console.warn(`Failed to deduct stock for product ${item.productId}:`, stockErr);
@@ -773,14 +854,30 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);
-      if (/^\d+$/.test(String(id))) {
-        await outboxRepo.add(this.tableName, id, 'DELETE', { id });
-        this.requestSync();
-      }
-      try {
-        await apiClient.delete(API_ENDPOINTS.PURCHASES.BY_ID(id));
-      } catch (_) {}
     }
+  }
+
+  private extractRows(results: any): any[] {
+    let rawRows: any[] = [];
+    if (!results) return rawRows;
+    if (Array.isArray(results)) return results;
+    if (results.rows && Array.isArray(results.rows)) {
+      rawRows = results.rows;
+    } else if (results.rows && typeof results.rows === 'object') {
+      if ('_array' in results.rows && Array.isArray((results.rows as any)._array)) {
+        rawRows = (results.rows as any)._array;
+      } else if ('item' in results.rows && typeof (results.rows as any).length === 'number') {
+        const len = (results.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((results.rows as any).item(i));
+        }
+      } else {
+        try {
+          rawRows = Array.from(results.rows as any);
+        } catch (e) {}
+      }
+    }
+    return rawRows;
   }
 }
 

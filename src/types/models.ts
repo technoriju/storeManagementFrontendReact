@@ -181,6 +181,10 @@ export interface SaleItem {
   unit?: string;
   unitType?: string;
   conversionRate?: number;
+  brand?: string;
+  brandName?: string;
+  subUnit?: string;
+  subUnitName?: string;
   total: number;
   createdAt?: string;
   updatedAt?: string;

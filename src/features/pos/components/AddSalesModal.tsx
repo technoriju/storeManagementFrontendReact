@@ -46,13 +46,16 @@ interface SaleItemRow {
   productName: string;
   sku?: string;
   quantity: number | string;
-  unitPrice: number;
-  discount: number;
-  gst: number;
+  unitPrice: number | string;
+  discount: number | string;
+  gst: number | string;
   unit?: string;
   unitType?: 'base' | 'sub';
   baseUnitName?: string;
   subUnitName?: string;
+  subUnit?: string;
+  brand?: string;
+  brandName?: string;
   conversionRate?: number;
   basePrice?: number;
   subPrice?: number;
@@ -181,19 +184,25 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   const wholesaleP = prod ? getProductPriceByType(prod, 'wholesale') : Number(item.unitPrice || 0);
                   const retailP = prod ? getProductPriceByType(prod, 'retail') : Number(item.unitPrice || 0);
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
+                  const brandRaw = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+                  const brandName = brandRaw && brandRaw !== 'N/A' ? brandRaw : undefined;
+                  const resolvedSubUnitName = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
 
                   return {
                     productId: Number(item.productId),
                     productName: item.productName || prod?.name || `Product #${item.productId}`,
                     sku: item.sku || prod?.sku,
+                    brand: brandName,
+                    brandName: brandName,
+                    subUnit: resolvedSubUnitName,
+                    subUnitName: resolvedSubUnitName || 'Pcs',
                     quantity: Number(item.quantity || 1),
                     unitPrice: Number(item.unitPrice || 0),
                     discount: Number(item.discount || 0),
-                    gst: Number(item.gst || 0),
-                    unit: item.unit || (item.unitType === 'base' ? 'Box' : 'Pcs'),
-                    unitType: (item.unitType as any) || 'sub',
+                    gst: Number(item.gst || item.taxRate || item.tax || 0),
+                    unit: item.unit || (item.unitType === 'sub' ? (resolvedSubUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
+                    unitType: item.unitType ? (item.unitType as any) : 'base',
                     baseUnitName: item.baseUnitName || 'Box',
-                    subUnitName: item.subUnitName || 'Pcs',
                     conversionRate: cRate,
                     basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
                     subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
@@ -437,21 +446,26 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
 
       const baseUnit = unitList.find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId));
-      const subUnit = subUnitList.find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId));
+      const subUnit = subUnitList.find((s: any) => 
+        (product.subUnitId && (String(s.id) === String(product.subUnitId) || String(s.backendId) === String(product.subUnitId))) ||
+        (product.subunitId && (String(s.id) === String(product.subunitId) || String(s.backendId) === String(product.subunitId)))
+      );
 
-      const baseUnitName = baseUnit?.name || baseUnit?.shortName || 'Box';
-      const subUnitName = subUnit?.name || 'Pcs';
+      const baseUnitName = baseUnit?.name || baseUnit?.shortName || (product as any).baseUnitName || 'Box';
+      const resolvedSubUnitName = subUnit?.name || (product as any).subUnitName || product.subUnit?.name || undefined;
+      const subUnitName = resolvedSubUnitName || 'Pcs';
 
-      // Default for sales: sell pcs-wise if sub-unit exists
-      const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
-      const initialType: 'base' | 'sub' = hasSubUnit ? 'sub' : 'base';
-      const initialUnit = initialType === 'sub' ? subUnitName : baseUnitName;
+      // Default for sales: base unit unless explicitly chosen
+      const initialType: 'base' | 'sub' = 'base';
+      const initialUnit = baseUnitName;
 
       const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
       const subCost = cRate > 0 ? Number((baseCost / cRate).toFixed(4)) : baseCost;
 
-      const initialPrice = initialType === 'sub' ? subPrice : basePrice;
-      const initialCost = initialType === 'sub' ? subCost : baseCost;
+      const initialPrice = basePrice;
+      const initialCost = baseCost;
+      const brandRaw = getBrandName(product);
+      const brandName = brandRaw && brandRaw !== 'N/A' ? brandRaw : undefined;
 
       setItems((prev) => [
         ...prev,
@@ -459,6 +473,10 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           productId: product.id,
           productName: product.name,
           sku: product.sku,
+          brand: brandName,
+          brandName: brandName,
+          subUnit: resolvedSubUnitName,
+          subUnitName: resolvedSubUnitName || 'Pcs',
           quantity: 1,
           unitPrice: initialPrice,
           basePrice,
@@ -471,7 +489,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           unit: initialUnit,
           unitType: initialType,
           baseUnitName,
-          subUnitName,
           conversionRate: cRate,
           wholesalePrice: wholesaleP,
           retailPrice: retailP,
@@ -486,7 +503,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     const item = items[index];
     const nextType: 'base' | 'sub' = item.unitType === 'base' ? 'sub' : 'base';
     const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Box') : (item.subUnitName || 'Pcs');
-    const nextPrice = nextType === 'base' ? (item.basePrice || item.unitPrice) : (item.subPrice || Number((item.unitPrice / (item.conversionRate || 1)).toFixed(2)));
+    const nextPrice = nextType === 'base' ? (item.basePrice || Number(item.unitPrice)) : (item.subPrice || Number(((parseFloat(String(item.unitPrice)) || 0) / (item.conversionRate || 1)).toFixed(2)));
     const nextCost = nextType === 'base' ? (item.baseCost || 0) : (item.subCost || Number(((item.baseCost || 0) / (item.conversionRate || 1)).toFixed(4)));
 
     const updated = [...items];
@@ -517,9 +534,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     return items.map((item) => {
       const parsedQty = parseFloat(String(item.quantity));
       const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
-      const rawSubtotal = effectiveQty * item.unitPrice;
-      const netSubtotal = Math.max(0, rawSubtotal - (item.discount || 0));
-      const taxAmount = netSubtotal * ((item.gst || 0) / 100);
+      const unitPriceNum = parseFloat(String(item.unitPrice)) || 0;
+      const discountNum = parseFloat(String(item.discount)) || 0;
+      const gstNum = parseFloat(String(item.gst)) || 0;
+      const rawSubtotal = effectiveQty * unitPriceNum;
+      const netSubtotal = Math.max(0, rawSubtotal - discountNum);
+      const taxAmount = netSubtotal * (gstNum / 100);
       const total = netSubtotal + taxAmount;
       return {
         ...item,
@@ -535,12 +555,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     return items.reduce((sum, item) => {
       const parsedQty = parseFloat(String(item.quantity));
       const effectiveQty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 0;
-      return sum + effectiveQty * item.unitPrice;
+      const unitPriceNum = parseFloat(String(item.unitPrice)) || 0;
+      return sum + effectiveQty * unitPriceNum;
     }, 0);
   }, [items]);
 
   const itemsDiscount = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.discount || 0), 0);
+    return items.reduce((sum, item) => sum + (parseFloat(String(item.discount)) || 0), 0);
   }, [items]);
 
   const itemsTax = useMemo(() => {
@@ -622,20 +643,31 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
       };
 
-      const itemsPayload = calculatedItems.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-        unitPrice: item.unitPrice,
-        discount: item.discount,
-        gst: item.gst,
-        taxAmount: item.taxAmount,
-        unitCost: item.unitCost,
-        total: item.total,
-        unit: item.unit,
-        unitType: item.unitType,
-        conversionRate: item.conversionRate,
-      }));
+      const itemsPayload = calculatedItems.map((item) => {
+        const prod = products.find((p) => p.id === Number(item.productId));
+        const brand = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+        const validBrand = brand && brand !== 'N/A' ? brand : undefined;
+        const validSubUnit = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+
+        return {
+          productId: item.productId,
+          productName: item.productName,
+          brand: validBrand,
+          brandName: validBrand,
+          subUnit: validSubUnit,
+          subUnitName: validSubUnit,
+          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+          unitPrice: parseFloat(String(item.unitPrice)) || 0,
+          discount: parseFloat(String(item.discount)) || 0,
+          gst: parseFloat(String(item.gst)) || 0,
+          taxAmount: item.taxAmount,
+          unitCost: item.unitCost,
+          total: item.total,
+          unit: item.unit,
+          unitType: item.unitType,
+          conversionRate: item.conversionRate,
+        };
+      });
 
       if (editSaleId) {
         await updateSaleMutation.mutateAsync({
@@ -674,18 +706,32 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         advancePayment: advPaymentVal,
         showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
         notes: notes ? `${notes} [${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]` : `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
-        items: calculatedItems.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          sku: item.sku,
-          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
-          gst: item.gst,
-          taxAmount: item.taxAmount,
-          total: item.total,
-          unit: item.unit,
-        })),
+        items: calculatedItems.map((item) => {
+          const prod = products.find((p) => p.id === Number(item.productId));
+          const brand = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+          const validBrand = brand && brand !== 'N/A' ? brand : undefined;
+          const validSubUnit = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+
+          return {
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            brand: validBrand,
+            brandName: validBrand,
+            subUnit: validSubUnit,
+            subUnitName: validSubUnit,
+            unitType: item.unitType,
+            baseUnitName: item.baseUnitName,
+            conversionRate: item.conversionRate,
+            quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+            unitPrice: parseFloat(String(item.unitPrice)) || 0,
+            discount: parseFloat(String(item.discount)) || 0,
+            gst: parseFloat(String(item.gst)) || 0,
+            taxAmount: item.taxAmount,
+            total: item.total,
+            unit: item.unit,
+          };
+        }),
       };
 
       // Reset & Close
@@ -921,9 +967,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary }}>₹</Text>
                               <TextInput
                                 style={[styles.miniAmountInput, { color: theme.colors.text }]}
-                                keyboardType="numeric"
+                                keyboardType="decimal-pad"
                                 value={previousBalanceAmount}
-                                onChangeText={setPreviousBalanceAmount}
+                                onChangeText={(v) => {
+                                  const clean = v.replace(/[^0-9.]/g, '');
+                                  const parts = clean.split('.');
+                                  setPreviousBalanceAmount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                                }}
                                 placeholder="0.00"
                               />
                             </View>
@@ -1271,10 +1321,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.unitPrice)}
+                              value={item.unitPrice === 0 || item.unitPrice === '' ? '' : String(item.unitPrice)}
+                              placeholder="0.00"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'unitPrice', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'unitPrice', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.unitPrice));
+                                handleUpdateItem(index, 'unitPrice', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1292,10 +1350,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.discount)}
+                              value={item.discount === 0 || item.discount === '' ? '' : String(item.discount)}
+                              placeholder="0.00"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'discount', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'discount', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.discount));
+                                handleUpdateItem(index, 'discount', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1313,10 +1379,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               ]}
                               keyboardType="decimal-pad"
                               selectTextOnFocus
-                              value={String(item.gst)}
+                              value={item.gst === 0 || item.gst === '' ? '' : String(item.gst)}
+                              placeholder="0"
+                              placeholderTextColor={theme.colors.textSecondary}
                               onChangeText={(v) => {
-                                const val = Math.max(0, parseFloat(v) || 0);
-                                handleUpdateItem(index, 'gst', val);
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateItem(index, 'gst', sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(item.gst));
+                                handleUpdateItem(index, 'gst', isNaN(parsed) ? 0 : parsed);
                               }}
                             />
                           </View>
@@ -1357,7 +1431,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderTax}
-                    onChangeText={setOrderTax}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setOrderTax(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1366,7 +1444,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={orderDiscount}
-                    onChangeText={setOrderDiscount}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setOrderDiscount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1375,7 +1457,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     placeholder="0.00"
                     keyboardType="decimal-pad"
                     value={shipping}
-                    onChangeText={setShipping}
+                    onChangeText={(v: string) => {
+                      const clean = v.replace(/[^0-9.]/g, '');
+                      const parts = clean.split('.');
+                      setShipping(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                    }}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
@@ -1406,7 +1492,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                       placeholder="0.00"
                       keyboardType="decimal-pad"
                       value={amountReceived}
-                      onChangeText={setAmountReceived}
+                      onChangeText={(v: string) => {
+                        const clean = v.replace(/[^0-9.]/g, '');
+                        const parts = clean.split('.');
+                        setAmountReceived(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                      }}
                     />
                   </View>
                 )}

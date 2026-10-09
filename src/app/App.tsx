@@ -24,6 +24,7 @@ import { SettingsModule } from '../features/settings/SettingsModule';
 import { DashboardModule } from '../features/dashboard/DashboardModule';
 import { ReportsModule } from '../features/reports/ReportsModule';
 import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
+import { LocalDbManager } from '../features/settings/screens/LocalDbManager';
 import { initializeDatabase } from '../core/database/db';
 
 const AuthenticatedApp = () => {
@@ -124,6 +125,9 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'sync_queue') {
       return <SyncSettingsScreen />;
+    }
+    if (activeTab === 'view_local_db' || activeTab === 'delete_local_db') {
+      return <LocalDbManager action={activeTab} />;
     }
     
     return (

@@ -388,20 +388,20 @@ class StockRepository {
         if (Array.isArray(data)) {
           return data.map((tx: any) => ({
             id: tx.id,
-          productId: tx.productId,
-          productName: tx.productName,
-          sku: tx.sku,
-          type: tx.transactionType,
-          quantity: Number(tx.unitQuantity || tx.baseQuantity || 0),
-          previousStock: 0,
-          newStock: 0,
-          reason: tx.referenceId,
-          reference: tx.referenceId,
-          createdAt: tx.createdAt,
-        }));
-      }
-    } catch (_) {}
-  }
+            productId: tx.productId,
+            productName: tx.productName,
+            sku: tx.sku,
+            type: tx.transactionType,
+            quantity: Math.abs(Number(tx.unitQuantity || tx.baseQuantity || 0)),
+            previousStock: 0,
+            newStock: 0,
+            reason: tx.referenceId,
+            reference: tx.referenceId,
+            createdAt: tx.createdAt,
+          }));
+        }
+      } catch (_) {}
+    }
 
     // 2. Fallback to SQLite
     try {
@@ -421,9 +421,9 @@ class StockRepository {
         productName: r.productName,
         sku: r.sku,
         type: r.type,
-        quantity: Number(r.quantity),
-        previousStock: Number(r.previousStock),
-        newStock: Number(r.newStock),
+        quantity: Math.abs(Number(r.quantity || 0)),
+        previousStock: Number(r.previousStock || 0),
+        newStock: Number(r.newStock || 0),
         reason: r.reason,
         reference: r.reference,
         notes: r.notes,

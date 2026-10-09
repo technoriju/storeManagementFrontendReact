@@ -61,9 +61,16 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
     ? sale.items.map((it: any, idx: number) => ({
         productName: it.productName || `Item #${idx + 1}`,
         sku: it.sku,
+        brand: it.brand || it.brandName || it.product?.brandName,
+        brandName: it.brandName || it.brand || it.product?.brandName,
+        subUnit: it.subUnit || it.subUnitName || it.product?.subUnitName,
+        subUnitName: it.subUnitName || it.subUnit || it.product?.subUnitName,
+        conversionRate: it.conversionRate !== undefined ? Number(it.conversionRate) : (it.product?.conversionRate ? Number(it.product.conversionRate) : undefined),
+        baseUnitName: it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || it.unit,
+        unitType: it.unitType,
         quantity: Number(it.quantity) || 1,
         unitPrice: Number(it.unitPrice || it.price || 0),
-        unit: it.unit || 'Pcs',
+        unit: it.unit || it.product?.unitName || it.product?.baseUnitName || 'Pcs',
         discount: Number(it.discount || 0),
         gst: Number(it.gst || 0),
         taxAmount: Number(it.taxAmount || 0),
@@ -526,23 +533,33 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
                 <View style={styles.dashedDivider} />
 
                 {/* Items Rows */}
-                {receiptData.items.map((item, idx) => (
-                  <View key={idx} style={styles.tableItemRow}>
-                    <View style={{ flex: 2 }}>
-                      <Text style={styles.itemName}>{item.productName}</Text>
-                      {!!item.sku && <Text style={styles.itemSub}>SKU: {item.sku}</Text>}
+                {receiptData.items.map((item, idx) => {
+                  const brand = (item.brand || item.brandName || '').trim();
+                  const subUnit = (item.subUnit || item.subUnitName || '').trim();
+                  const meta = [
+                    brand && brand !== 'N/A' ? `Brand: ${brand}` : null,
+                    subUnit && subUnit !== 'N/A' ? `Sub Unit: ${subUnit}` : null,
+                  ].filter(Boolean).join(' | ');
+
+                  return (
+                    <View key={idx} style={styles.tableItemRow}>
+                      <View style={{ flex: 2 }}>
+                        <Text style={styles.itemName}>{item.productName}</Text>
+                        {meta ? <Text style={[styles.itemSub, { color: '#64748B' }]}>{meta}</Text> : null}
+                        {!!item.sku && <Text style={styles.itemSub}>SKU: {item.sku}</Text>}
+                      </View>
+                      <Text style={[styles.itemQty, { flex: 0.8, textAlign: 'center' }]}>
+                        {item.quantity} {item.unit || 'Pcs'}
+                      </Text>
+                      <Text style={[styles.itemPrice, { flex: 1, textAlign: 'right' }]}>
+                        ₹{item.unitPrice.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.itemTotal, { flex: 1.1, textAlign: 'right' }]}>
+                        ₹{item.total.toFixed(2)}
+                      </Text>
                     </View>
-                    <Text style={[styles.itemQty, { flex: 0.8, textAlign: 'center' }]}>
-                      {item.quantity} {item.unit || 'Pcs'}
-                    </Text>
-                    <Text style={[styles.itemPrice, { flex: 1, textAlign: 'right' }]}>
-                      ₹{item.unitPrice.toFixed(2)}
-                    </Text>
-                    <Text style={[styles.itemTotal, { flex: 1.1, textAlign: 'right' }]}>
-                      ₹{item.total.toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
+                  );
+                })}
 
                 <View style={styles.dashedDivider} />
 

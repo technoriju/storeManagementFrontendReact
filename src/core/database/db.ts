@@ -211,6 +211,8 @@ export const initializeDatabase = () => {
       'ALTER TABLE sales ADD COLUMN previousDue REAL DEFAULT 0',
       'ALTER TABLE sales ADD COLUMN advancePayment REAL DEFAULT 0',
       'ALTER TABLE sales ADD COLUMN showPreviousBalance INTEGER DEFAULT 0',
+      'ALTER TABLE sale_items ADD COLUMN brandName TEXT',
+      'ALTER TABLE sale_items ADD COLUMN subUnitName TEXT',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -360,6 +362,8 @@ export const initializeDatabase = () => {
         unit TEXT,
         unitType TEXT DEFAULT 'sub',
         conversionRate REAL DEFAULT 1,
+        brandName TEXT,
+        subUnitName TEXT,
         total REAL NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,

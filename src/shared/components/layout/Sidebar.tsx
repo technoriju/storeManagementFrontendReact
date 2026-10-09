@@ -158,6 +158,8 @@ const menuSections: MenuSection[] = [
       { id: 'roles_permissions', label: 'Roles & Permissions', icon: 'key' },
       { id: 'sync_queue', label: 'Sync Queue', icon: 'refresh-cw' },
       { id: 'delete_account_request', label: 'Delete Account Request', icon: 'trash-2' },
+      { id: 'view_local_db', label: 'View Local DB', icon: 'list' },
+      { id: 'delete_local_db', label: 'Delete Local DB', icon: 'trash-2' },
     ]
   },
   {

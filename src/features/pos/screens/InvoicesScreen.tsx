@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -23,6 +23,8 @@ import {
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { AddSalesModal } from '../components/AddSalesModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
+import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
+import { enrichSaleItemsWithProductMeta } from '../utils/enrichSaleItems';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -39,6 +41,9 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [dismissedInvoiceIds, setDismissedInvoiceIds] = useState<any[]>([]);
   const [shareData, setShareData] = useState<any | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
@@ -119,25 +124,27 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   }, [allInvoices, searchQuery]);
 
   const handleDelete = (item: any) => {
-    Alert.alert(
-      'Delete Invoice',
-      `Are you sure you want to delete invoice ${item.invoiceNumber}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDismissedInvoiceIds((prev) => [...prev, item.id]);
-            try {
-              await deleteSaleMutation.mutateAsync(item.id);
-            } catch (err: any) {
-              console.warn('Failed to delete sale from db:', err);
-            }
-          },
-        },
-      ]
-    );
+    setDeleteError(null);
+    setDeleteTarget(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const numericId = parseInt(String(deleteTarget.id), 10);
+      const targetId = !isNaN(numericId) ? numericId : deleteTarget.id;
+      await deleteSaleMutation.mutateAsync(targetId);
+      setDismissedInvoiceIds((prev) => [...prev, String(deleteTarget.id)]);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err: any) {
+      console.error('Failed to delete sale bill:', err);
+      setDeleteError(err?.message || 'Server failed to delete invoice');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const loadInvoiceItems = async (invoice: any) => {
@@ -182,7 +189,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     }
 
-    return Array.from(itemsMap.values());
+    const filtered = Array.from(itemsMap.values());
+    return await enrichSaleItemsWithProductMeta(filtered);
   };
 
   const handleOpenPrintPreview = async (invoice: any) => {
@@ -194,13 +202,23 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
           sku: i.sku,
+          brand: i.brand || i.brandName || i.product?.brandName,
+          brandName: i.brandName || i.brand || i.product?.brandName,
+          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
+          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
           gst: Number(i.gst) || 0,
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
-          unit: i.unit || 'Pcs',
+          unit: i.unit || i.unitName || i.product?.unitName || i.product?.baseUnitName || 'Pcs',
+          unitName: i.unitName || i.unit || i.product?.unitName || i.product?.baseUnitName,
+          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
+          unitType: i.unitType,
+          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : (i.productUnit?.conversionFactor ? Number(i.productUnit.conversionFactor) : undefined)),
+          product: i.product,
+          productUnit: i.productUnit,
           hsn: i.hsn || '',
         }))
       : [
@@ -436,15 +454,25 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                 {viewInvoice.items && viewInvoice.items.length > 0 && (
                   <View style={{ marginTop: 12 }}>
                     <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 8 }}>Items Purchased:</Text>
-                    {viewInvoice.items.map((i: any, idx: number) => (
-                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
-                        <View style={{ flex: 2 }}>
-                          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{i.productName || `Product #${i.productId}`}</Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                    {viewInvoice.items.map((i: any, idx: number) => {
+                      const brand = (i.brand || i.brandName || '').trim();
+                      const subUnit = (i.subUnit || i.subUnitName || '').trim();
+                      const meta = [
+                        brand && brand !== 'N/A' ? `Brand: ${brand}` : null,
+                        subUnit && subUnit !== 'N/A' ? `Sub Unit: ${subUnit}` : null,
+                      ].filter(Boolean).join(' | ');
+
+                      return (
+                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                          <View style={{ flex: 2 }}>
+                            <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{i.productName || `Product #${i.productId}`}</Text>
+                            {meta ? <Text style={{ color: '#64748B', fontSize: 10, marginTop: 1 }}>{meta}</Text> : null}
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity} {i.unit || ''} @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                          </View>
+                          <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(i.total).toFixed(2)}</Text>
                         </View>
-                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(i.total).toFixed(2)}</Text>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
 
@@ -588,6 +616,44 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           setShowAddModal(false);
           setEditSaleId(null);
           refetch();
+        }}
+      />
+
+      <SweetConfirmModal
+        visible={!!deleteTarget}
+        type={deleteError ? 'error' : 'danger'}
+        title="Delete Sales Invoice"
+        subtitle="Are you sure you want to permanently delete this sales invoice? The deletion will sync immediately with the server."
+        entityName={
+          deleteTarget
+            ? `${deleteTarget.invoiceNumber || deleteTarget.reference || deleteTarget.id} • ${deleteTarget.customerName || 'Customer'} (₹${Number(deleteTarget.total || 0).toFixed(2)})`
+            : undefined
+        }
+        sideEffects={[
+          {
+            icon: 'stock',
+            title: 'Inventory Stock Restoration',
+            description: 'Quantities sold in this invoice will be added back into warehouse stock.',
+          },
+          {
+            icon: 'wallet',
+            title: 'Customer Ledger Balance Adjustment',
+            description: 'Any unpaid due recorded on this invoice will be deducted from customer account.',
+          },
+          {
+            icon: 'server',
+            title: 'Permanent Server Deletion',
+            description: 'Invoice and associated payment transactions will be removed on the server.',
+          },
+        ]}
+        confirmText="Yes, Delete Bill"
+        cancelText="Cancel"
+        isConfirming={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError(null);
         }}
       />
     </View>

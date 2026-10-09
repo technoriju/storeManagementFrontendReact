@@ -410,7 +410,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Helper status badge renderer
   const renderStatusBadge = (status: string) => {
-    const raw = (status && String(status).trim()) || 'Completed';
+    const raw = status ? String(status).trim() : '';
+    if (!raw || raw === '-') {
+      return (
+        <View style={[styles.badge, { backgroundColor: '#F1F5F9' }]}>
+          <View style={[styles.badgeDot, { backgroundColor: '#94A3B8' }]} />
+          <Text style={[styles.badgeText, { color: '#64748B' }]}>-</Text>
+        </View>
+      );
+    }
     const s = raw.toUpperCase();
     if (s === 'PAID' || s === 'COMPLETED' || s === 'RECEIVED' || s === 'CLEAR' || s === 'IN_STOCK' || s === 'RECEIPT') {
       return (

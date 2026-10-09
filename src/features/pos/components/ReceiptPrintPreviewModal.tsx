@@ -78,13 +78,90 @@ export interface ReceiptItem {
   productName: string;
   sku?: string;
   hsn?: string;
+  brand?: string;
+  brandName?: string;
+  unit?: string;
+  unitType?: string;
+  subUnit?: string;
+  subUnitName?: string;
+  baseUnitName?: string;
+  conversionRate?: number;
   quantity: number;
   unitPrice: number;
-  unit?: string;
   discount?: number;
   gst?: number;
   taxAmount?: number;
   total: number;
+}
+
+export function getItemBrand(item: ReceiptItem): string | undefined {
+  const raw =
+    item.brand ||
+    item.brandName ||
+    (item as any).product?.brandName ||
+    (typeof (item as any).product?.brand === 'string' ? (item as any).product?.brand : (item as any).product?.brand?.name) ||
+    '';
+  const b = String(raw).trim();
+  return b && b.toLowerCase() !== 'n/a' && b !== '-' ? b : undefined;
+}
+
+export function getItemSubUnit(item: ReceiptItem): string | undefined {
+  const raw =
+    item.subUnit ||
+    item.subUnitName ||
+    (item as any).sub_unit ||
+    (item as any).product?.subUnitName ||
+    (typeof (item as any).product?.subUnit === 'string' ? (item as any).product?.subUnit : (item as any).product?.subUnit?.name) ||
+    (item as any).product?.subunit?.name ||
+    (item as any).productUnit?.name ||
+    '';
+  const s = String(raw).trim();
+  return s && s.toLowerCase() !== 'n/a' && s !== '-' ? s : undefined;
+}
+
+export function getItemConversionRate(item: ReceiptItem): number | undefined {
+  const raw =
+    item.conversionRate ||
+    (item as any).conversion_rate ||
+    (item as any).product?.conversionRate ||
+    (item as any).product?.conversion_rate ||
+    (item as any).productUnit?.conversionFactor ||
+    (item as any).conversionFactor ||
+    (item as any).product?.subUnit?.multiplier;
+  const n = Number(raw);
+  return !isNaN(n) && n > 1 ? n : undefined;
+}
+
+export function getItemBaseUnit(item: ReceiptItem): string {
+  const raw =
+    item.baseUnitName ||
+    (item as any).product?.baseUnitName ||
+    (item as any).product?.baseUnit?.name ||
+    (item as any).product?.unitName ||
+    item.unit ||
+    'Unit';
+  return String(raw).trim() || 'Unit';
+}
+
+export function formatItemMeta(item: ReceiptItem): string {
+  const brand = getItemBrand(item);
+  const subUnit = getItemSubUnit(item);
+  const conversionRate = getItemConversionRate(item);
+  const baseUnit = getItemBaseUnit(item);
+  const parts: string[] = [];
+  if (brand) {
+    parts.push(`Brand: ${brand}`);
+  }
+  if (subUnit) {
+    const convInfo =
+      conversionRate && Number(conversionRate) > 1
+        ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+        : '';
+    parts.push(`Sub Unit: ${subUnit}${convInfo}`);
+  } else if (conversionRate && Number(conversionRate) > 1) {
+    parts.push(`Conversion: 1 ${baseUnit} = ${conversionRate}`);
+  }
+  return parts.join(' | ');
 }
 
 export interface ReceiptPrintData {
@@ -364,19 +441,39 @@ export function generateReceiptHtml({
       </tr>
     </thead>
     <tbody>
-      ${items.map(item => `
+      ${items.map(item => {
+        const brand = getItemBrand(item);
+        const subUnit = getItemSubUnit(item);
+        const conversionRate = getItemConversionRate(item);
+        const baseUnit = getItemBaseUnit(item);
+        const metaParts: string[] = [];
+        if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
+        if (subUnit) {
+          const convInfo =
+            conversionRate && Number(conversionRate) > 1
+              ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+              : '';
+          metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
+        } else if (conversionRate && Number(conversionRate) > 1) {
+          metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
+        }
+        const metaLine = metaParts.length > 0 ? `<div style="font-size: 10px; color: #475569; margin: 1px 0 2px 0;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
+        return `
         <tr>
           <td colspan="4" style="padding-top: 3px;">
             <div class="item-name">${item.productName || 'Product'} ${item.hsn ? `(HSN: ${item.hsn})` : ''}</div>
+            ${metaLine}
             <div class="meta-row item-sub">
               <span>${item.discount ? `Disc: -₹${Number(item.discount).toFixed(2)}` : ''} ${showTaxBreakdown && item.gst ? `GST ${item.gst}%` : ''}</span>
-              <span style="width: 15%; text-align: center;">${item.quantity}</span>
+              <span style="width: 15%; text-align: center;">${item.quantity}${item.unit ? ` ${item.unit}` : ''}</span>
               <span style="width: 15%; text-align: right;">${Number(item.unitPrice).toFixed(2)}</span>
               <span style="width: 20%; text-align: right; font-weight: bold;">₹${Number(item.total).toFixed(2)}</span>
             </div>
           </td>
         </tr>
-      `).join('')}
+        `;
+      }).join('')}
     </tbody>
   </table>
 
@@ -639,12 +736,35 @@ export function generateReceiptHtml({
         const rawAmt = Number(item.unitPrice || 0) * itemQty;
         const discAmt = Number(item.discount || 0);
         const taxableAmt = Math.max(0, rawAmt - discAmt);
+        const brand = getItemBrand(item);
+        const subUnit = getItemSubUnit(item);
+        const conversionRate = getItemConversionRate(item);
+        const baseUnit = getItemBaseUnit(item);
+        const metaParts: string[] = [];
+        if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
+        if (subUnit) {
+          const convInfo =
+            conversionRate && Number(conversionRate) > 1
+              ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+              : '';
+          metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
+        } else if (conversionRate && Number(conversionRate) > 1) {
+          metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
+        }
+        const metaLine = metaParts.length > 0 ? `<div style="font-size: 8px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
         return `
           <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
             <td style="text-align: center;">${idx + 1}</td>
-            <td style="font-weight: 600;">${item.productName || 'Item'}</td>
+            <td style="font-weight: 600;">
+              <div>${item.productName || 'Item'}</div>
+              ${metaLine}
+            </td>
             ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
-            <td style="text-align: center;">${item.quantity} ${item.unit || ''}</td>
+            <td style="text-align: center;">
+              ${item.quantity} ${item.unit || ''}
+              ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
+            </td>
             <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
             <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
             ${showTaxBreakdown ? `
@@ -965,13 +1085,36 @@ export function generateReceiptHtml({
         const rawAmt = Number(item.unitPrice || 0) * itemQty;
         const discAmt = Number(item.discount || 0);
         const taxableAmt = Math.max(0, rawAmt - discAmt);
+        const brand = getItemBrand(item);
+        const subUnit = getItemSubUnit(item);
+        const conversionRate = getItemConversionRate(item);
+        const baseUnit = getItemBaseUnit(item);
+        const metaParts: string[] = [];
+        if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
+        if (subUnit) {
+          const convInfo =
+            conversionRate && Number(conversionRate) > 1
+              ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+              : '';
+          metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
+        } else if (conversionRate && Number(conversionRate) > 1) {
+          metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
+        }
+        const metaLine = metaParts.length > 0 ? `<div style="font-size: 8.5px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
         return `
           <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
             <td style="text-align: center;">${idx + 1}</td>
-            <td style="font-weight: 600;">${item.productName || 'Item'}</td>
+            <td style="font-weight: 600;">
+              <div>${item.productName || 'Item'}</div>
+              ${metaLine}
+            </td>
             ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
             <td style="text-align: center;">${item.quantity}</td>
-            <td style="text-align: center;">${item.unit || 'Pcs'}</td>
+            <td style="text-align: center;">
+              ${item.unit || 'Pcs'}
+              ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
+            </td>
             <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
             <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
             ${showTaxBreakdown ? `
@@ -1547,29 +1690,37 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     <View style={styles.thermalDottedLine} />
 
                     {/* Items List */}
-                    {items.map((item, idx) => (
-                      <View key={idx} style={styles.thermalItemBlock}>
-                        <Text style={styles.thermalItemName}>
-                          {item.productName || `Product #${item.productId || idx + 1}`}
-                          {item.hsn ? ` (HSN: ${item.hsn})` : ''}
-                        </Text>
-                        <View style={styles.thermalItemDetailRow}>
-                          <Text style={[styles.thermalMono, { flex: 2, color: '#475569' }]}>
-                            {item.discount ? `Disc: -₹${Number(item.discount).toFixed(2)}` : ''}
-                            {showTaxBreakdown && item.gst ? ` GST ${item.gst}%` : ''}
+                    {items.map((item, idx) => {
+                      const metaText = formatItemMeta(item);
+                      return (
+                        <View key={idx} style={styles.thermalItemBlock}>
+                          <Text style={styles.thermalItemName}>
+                            {item.productName || `Product #${item.productId || idx + 1}`}
+                            {item.hsn ? ` (HSN: ${item.hsn})` : ''}
                           </Text>
-                          <Text style={[styles.thermalMono, { width: 36, textAlign: 'center' }]}>
-                            {item.quantity}
-                          </Text>
-                          <Text style={[styles.thermalMono, { width: 55, textAlign: 'right' }]}>
-                            {Number(item.unitPrice).toFixed(2)}
-                          </Text>
-                          <Text style={[styles.thermalMonoBold, { width: 65, textAlign: 'right' }]}>
-                            {Number(item.total).toFixed(2)}
-                          </Text>
+                          {metaText ? (
+                            <Text style={{ fontSize: 10, color: '#475569', marginTop: 1, marginBottom: 2 }}>
+                              {metaText}
+                            </Text>
+                          ) : null}
+                          <View style={styles.thermalItemDetailRow}>
+                            <Text style={[styles.thermalMono, { flex: 2, color: '#475569' }]}>
+                              {item.discount ? `Disc: -₹${Number(item.discount).toFixed(2)}` : ''}
+                              {showTaxBreakdown && item.gst ? ` GST ${item.gst}%` : ''}
+                            </Text>
+                            <Text style={[styles.thermalMono, { width: 36, textAlign: 'center' }]}>
+                              {item.quantity}{item.unit ? ` ${item.unit}` : ''}
+                            </Text>
+                            <Text style={[styles.thermalMono, { width: 55, textAlign: 'right' }]}>
+                              {Number(item.unitPrice).toFixed(2)}
+                            </Text>
+                            <Text style={[styles.thermalMonoBold, { width: 65, textAlign: 'right' }]}>
+                              {Number(item.total).toFixed(2)}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    ))}
+                      );
+                    })}
 
                     <View style={styles.thermalDashedLine} />
 
@@ -1849,9 +2000,19 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                             style={[styles.lsTableRow, idx % 2 === 1 && styles.lsTableRowAlt]}
                           >
                             <Text style={[styles.lsTd, { width: 30 }]}>{idx + 1}</Text>
-                            <Text style={[styles.lsTdBold, { flex: 3 }]}>
-                              {item.productName || `Item #${idx + 1}`}
-                            </Text>
+                            <View style={{ flex: 3 }}>
+                              <Text style={styles.lsTdBold}>
+                                {item.productName || `Item #${idx + 1}`}
+                              </Text>
+                              {(() => {
+                                const metaText = formatItemMeta(item);
+                                return metaText ? (
+                                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 2 }}>
+                                    {metaText}
+                                  </Text>
+                                ) : null;
+                              })()}
+                            </View>
                             {isWholesale && (
                               <Text style={[styles.lsTd, { width: 60 }]}>{item.hsn || '9983'}</Text>
                             )}
@@ -1860,6 +2021,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                             </Text>
                             <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
                               {item.unit || 'Pcs'}
+                              {(() => {
+                                const sub = getItemSubUnit(item);
+                                return sub && sub !== item.unit ? `\n(Sub: ${sub})` : '';
+                              })()}
                             </Text>
                             <Text style={[styles.lsTd, { width: 65, textAlign: 'right' }]}>
                               {Number(item.unitPrice).toFixed(2)}

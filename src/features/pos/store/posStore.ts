@@ -6,7 +6,7 @@ import { PriceType, getProductPriceByType } from '../utils/priceUtils';
 export interface CartItem {
   id: number; // unique id for the cart item
   product: Product;
-  quantity: number;
+  quantity: number | string;
   unit: string; // The unit used for this sale
   unitType?: 'base' | 'sub';
   baseUnitName?: string;
@@ -102,7 +102,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
       const hasSubUnit = !!(product.subUnitId || product.subunitId || cRate > 1);
 
-      const unitType: 'base' | 'sub' = preferredUnitType || (hasSubUnit ? 'sub' : 'base');
+      const unitType: 'base' | 'sub' = preferredUnitType || 'base';
       const baseUnitName = product.baseUnitName || product.unit || 'Box';
       const subUnitName = product.subUnitName || 'Pcs';
       const selectedUnit = unit || (unitType === 'sub' ? subUnitName : baseUnitName);
@@ -120,7 +120,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
       if (existingItemIndex >= 0) {
         const newCart = [...state.cart];
-        newCart[existingItemIndex].quantity = Number((newCart[existingItemIndex].quantity + quantity).toFixed(4));
+        const existingQty = parseFloat(String(newCart[existingItemIndex].quantity)) || 0;
+        newCart[existingItemIndex].quantity = Number((existingQty + quantity).toFixed(4));
         return { cart: newCart };
       }
 
@@ -230,19 +231,20 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   getSubtotal: () => {
     const { cart } = get();
-    return cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    return cart.reduce((sum, item) => sum + ((Number(item.price) || 0) * (parseFloat(String(item.quantity)) || 0)), 0);
   },
 
   getTotalDiscount: () => {
     const { cart } = get();
-    return cart.reduce((sum, item) => sum + (item.discount || 0), 0);
+    return cart.reduce((sum, item) => sum + (parseFloat(String(item.discount)) || 0), 0);
   },
 
   getTotalGST: () => {
     const { cart } = get();
     return cart.reduce((sum, item) => {
-      const taxableAmount = (item.price * item.quantity) - (item.discount || 0);
-      return sum + (taxableAmount * (item.gstRate / 100));
+      const qty = parseFloat(String(item.quantity)) || 0;
+      const taxableAmount = ((Number(item.price) || 0) * qty) - (parseFloat(String(item.discount)) || 0);
+      return sum + (taxableAmount * ((Number(item.gstRate) || 0) / 100));
     }, 0);
   },
 
