@@ -49,6 +49,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         <Text style={styles.label}>Phone: <Text style={styles.value}>{customer.phone || 'N/A'}</Text></Text>
         <Text style={styles.label}>Address: <Text style={styles.value}>{customer.address || 'N/A'}</Text></Text>
         <Text style={styles.label}>GSTIN: <Text style={styles.value}>{customer.gstin || 'N/A'}</Text></Text>
+        <Text style={styles.label}>Outstanding Balance: <Text style={styles.balance}>₹{Number(customer.outstandingBalance || 0).toFixed(2)}</Text></Text>
       </View>
 
       <TouchableOpacity 

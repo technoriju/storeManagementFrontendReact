@@ -211,6 +211,9 @@ export const initializeDatabase = () => {
       'ALTER TABLE sales ADD COLUMN previousDue REAL DEFAULT 0',
       'ALTER TABLE sales ADD COLUMN advancePayment REAL DEFAULT 0',
       'ALTER TABLE sales ADD COLUMN showPreviousBalance INTEGER DEFAULT 0',
+      'ALTER TABLE purchases ADD COLUMN previousDue REAL DEFAULT 0',
+      'ALTER TABLE purchases ADD COLUMN advancePayment REAL DEFAULT 0',
+      'ALTER TABLE purchases ADD COLUMN showPreviousBalance INTEGER DEFAULT 0',
       'ALTER TABLE sale_items ADD COLUMN brandName TEXT',
       'ALTER TABLE sale_items ADD COLUMN subUnitName TEXT',
     ]) {
@@ -389,6 +392,9 @@ export const initializeDatabase = () => {
         status TEXT NOT NULL,
         paymentStatus TEXT DEFAULT 'Unpaid',
         notes TEXT,
+        previousDue REAL DEFAULT 0,
+        advancePayment REAL DEFAULT 0,
+        showPreviousBalance INTEGER DEFAULT 0,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'

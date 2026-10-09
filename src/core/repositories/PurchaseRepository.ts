@@ -9,15 +9,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
   protected tableName = 'purchases';
 
   protected getInsertColumns(): string {
-    return 'id, invoiceNumber, reference, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, notes, createdAt, updatedAt, syncStatus';
+    return 'id, invoiceNumber, reference, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, notes, previousDue, advancePayment, showPreviousBalance, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'invoiceNumber = ?, reference = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, notes = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'invoiceNumber = ?, reference = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, notes = ?, previousDue = ?, advancePayment = ?, showPreviousBalance = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Purchase): any[] {
@@ -39,6 +39,9 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       entity.status || 'Received',
       entity.paymentStatus || 'Unpaid',
       entity.notes || null,
+      entity.previousDue || 0,
+      entity.advancePayment || 0,
+      entity.showPreviousBalance ? 1 : 0,
       entity.createdAt,
       entity.updatedAt,
       entity.syncStatus || 'synced'
@@ -64,6 +67,9 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       status: (row.status as any) || 'Received',
       paymentStatus: (row.paymentStatus as any) || 'Unpaid',
       notes: row.notes ? String(row.notes) : undefined,
+      previousDue: Number(row.previousDue || 0),
+      advancePayment: Number(row.advancePayment || 0),
+      showPreviousBalance: Boolean(row.showPreviousBalance),
       createdAt: String(row.createdAt || new Date().toISOString()),
       updatedAt: String(row.updatedAt || new Date().toISOString()),
       syncStatus: (row.syncStatus as any) || 'synced'
@@ -948,6 +954,185 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);
+    }
+  }
+
+  public async getSupplierPreviousBalance(
+    supplierId: number | string,
+    supplierName?: string,
+    excludePurchaseId?: number | string
+  ): Promise<{
+    outstandingBalance: number;
+    purchasesDue: number;
+    totalDue: number;
+    advance: number;
+    unpaidCount: number;
+  }> {
+    try {
+      const sIdNum = Number(supplierId);
+      const sName = supplierName ? supplierName.trim() : '';
+
+      if ((isNaN(sIdNum) || sIdNum <= 0) && !sName) {
+        return { outstandingBalance: 0, purchasesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
+      }
+
+      // 1. Resolve accurate supplier details from local DB
+      let localSupplier: any = null;
+      try {
+        if (!isNaN(sIdNum) && sIdNum > 0) {
+          const sRes = await db.execute(
+            `SELECT * FROM suppliers WHERE id = ? OR backendId = ? LIMIT 1`,
+            [sIdNum, sIdNum]
+          );
+          const sRows = this.extractRows(sRes);
+          if (sRows.length > 0 && sRows[0]) {
+            localSupplier = sRows[0];
+          }
+        }
+        if (!localSupplier && sName) {
+          const sRes = await db.execute(
+            `SELECT * FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1`,
+            [sName]
+          );
+          const sRows = this.extractRows(sRes);
+          if (sRows.length > 0 && sRows[0]) {
+            localSupplier = sRows[0];
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query local supplier info:', err);
+      }
+
+      const resolvedLocalId = localSupplier ? Number(localSupplier.id) : (!isNaN(sIdNum) && sIdNum > 0 ? sIdNum : undefined);
+      const resolvedBackendId = localSupplier?.backendId ? Number(localSupplier.backendId) : undefined;
+      const resolvedName = (localSupplier?.name || sName).trim();
+      const serverTargetId = resolvedBackendId || (resolvedLocalId && resolvedLocalId > 0 && resolvedLocalId < 1000000000000 ? resolvedLocalId : undefined);
+
+      let suppBal: number | null = null;
+
+      // 2. Fetch fresh ledger balance from backend if supplier has a server ID
+      if (serverTargetId) {
+        try {
+          const apiRes = await apiClient.get(API_ENDPOINTS.SUPPLIERS.BY_ID(serverTargetId));
+          const apiSupp = apiRes?.data?.data || apiRes?.data;
+          if (apiSupp && apiSupp.outstandingBalance !== undefined && apiSupp.outstandingBalance !== null) {
+            suppBal = Number(apiSupp.outstandingBalance);
+            try {
+              if (resolvedLocalId) {
+                await db.execute('UPDATE suppliers SET outstandingBalance = ? WHERE id = ?', [suppBal, resolvedLocalId]);
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+
+      if (suppBal === null && localSupplier?.outstandingBalance !== undefined && localSupplier?.outstandingBalance !== null) {
+        suppBal = Number(localSupplier.outstandingBalance);
+      }
+
+      // 3. Query previous unpaid purchases for THIS specific supplier from local purchases table
+      let pDue = 0;
+      let unpaidCount = 0;
+      try {
+        const whereConditions: string[] = [];
+        const purchaseArgs: any[] = [];
+
+        const idMatches: string[] = [];
+        if (resolvedLocalId && resolvedLocalId > 0) {
+          idMatches.push('supplierId = ?');
+          purchaseArgs.push(resolvedLocalId);
+        }
+        if (resolvedBackendId && resolvedBackendId > 0 && resolvedBackendId !== resolvedLocalId) {
+          idMatches.push('supplierId = ?');
+          purchaseArgs.push(resolvedBackendId);
+        }
+
+        if (idMatches.length > 0) {
+          whereConditions.push(`(${idMatches.join(' OR ')})`);
+        } else if (resolvedName) {
+          whereConditions.push(`(supplierName IS NOT NULL AND LOWER(TRIM(supplierName)) = LOWER(TRIM(?)))`);
+          purchaseArgs.push(resolvedName);
+        }
+
+        if (whereConditions.length > 0) {
+          let sql = `SELECT id, invoiceNumber, reference, supplierId, supplierName, total, paid, due, paymentStatus, status 
+                     FROM purchases 
+                     WHERE ${whereConditions.join(' AND ')}
+                     AND (status IS NULL OR LOWER(status) != 'cancelled')`;
+
+          if (excludePurchaseId) {
+            const exIdNum = Number(excludePurchaseId);
+            sql += ` AND id != ? AND invoiceNumber != ? AND (reference IS NULL OR reference != ?)`;
+            purchaseArgs.push(exIdNum, String(excludePurchaseId), String(excludePurchaseId));
+          }
+
+          const purchasesRes = await db.execute(sql, purchaseArgs);
+          const pRows = this.extractRows(purchasesRes);
+          for (const row of pRows) {
+            if (!row) continue;
+            const total = Number(row.total || 0);
+            const paid = Number(row.paid || 0);
+            let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
+
+            if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
+              due = total - paid;
+            }
+
+            if (due > 0) {
+              pDue += due;
+              unpaidCount++;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query purchases for supplier balance:', err);
+      }
+
+      // If editing an existing purchase and we have a server balance, subtract the excluded purchase's due from server balance
+      if (excludePurchaseId && suppBal !== null && suppBal > 0) {
+        try {
+          const exPurchRes = await db.execute(
+            `SELECT total, paid, due, paymentStatus FROM purchases WHERE (id = ? OR invoiceNumber = ?) LIMIT 1`,
+            [Number(excludePurchaseId), String(excludePurchaseId)]
+          );
+          const exRows = this.extractRows(exPurchRes);
+          if (exRows.length > 0 && exRows[0]) {
+            const exTot = Number(exRows[0].total || 0);
+            const exPaid = Number(exRows[0].paid || 0);
+            let exDue = Number(exRows[0].due !== undefined ? exRows[0].due : 0);
+            if (exDue <= 0 && exTot > exPaid && String(exRows[0].paymentStatus || '').toLowerCase() !== 'paid') {
+              exDue = exTot - exPaid;
+            }
+            if (exDue > 0) {
+              suppBal = Math.max(0, suppBal - exDue);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. Compute effective total due and advance
+      let totalDue = 0;
+      let advance = 0;
+
+      if (suppBal !== null) {
+        if (suppBal > 0) {
+          totalDue = suppBal;
+        } else if (suppBal < 0) {
+          advance = Math.abs(suppBal);
+        }
+      } else if (pDue > 0) {
+        totalDue = pDue;
+      }
+
+      return {
+        outstandingBalance: suppBal !== null ? suppBal : pDue,
+        purchasesDue: pDue,
+        totalDue,
+        advance,
+        unpaidCount,
+      };
+    } catch {
+      return { outstandingBalance: 0, purchasesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
     }
   }
 

@@ -102,13 +102,13 @@ export const useProductStore = create<ProductState>((set, get) => ({
     if (!force && now - lastProductFetchTime < FETCH_COOLDOWN_MS) {
       return;
     }
+    lastProductFetchTime = now;
 
     // 2. Sync fresh data from API in background
     inFlightFetchPromise = (async () => {
       set({ isLoading: true, error: null });
       try {
         const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE);
-        lastProductFetchTime = Date.now();
         const data = response.data?.data || response.data;
         if (Array.isArray(data)) {
           const normalized = await productRepository.saveRawProducts(data);
