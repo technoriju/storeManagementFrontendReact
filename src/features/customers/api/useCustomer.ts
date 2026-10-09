@@ -26,19 +26,15 @@ export const useAddCustomer = () => {
 
   return useMutation({
     mutationFn: async (data: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
-      const newEntity: Customer = {
-        ...data,
-        id: Math.floor(Math.random() * -1000000000),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_insert',
-      };
-      await customerRepository.insert(newEntity, true);
-      return newEntity;
+      return await customerRepository.createDirect(data);
     },
     onSuccess: (newItem) => {
       queryClient.setQueryData(CUSTOMER_QUERY_KEY, (old: Customer[] | undefined) => {
-        return old ? [...old, newItem] : [newItem];
+        if (!old) return [newItem];
+        const filtered = old.filter(
+          item => String(item.id) !== String(newItem.id) && item.name?.trim().toLowerCase() !== newItem.name?.trim().toLowerCase()
+        );
+        return [newItem, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY, refetchType: 'none' });
     },

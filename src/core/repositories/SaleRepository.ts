@@ -413,7 +413,25 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
 
       const items = entity.items || (await this.getItemsForSale(entity.id));
-      const customerId = entity.customerId && Number(entity.customerId) > 0 ? Number(entity.customerId) : null;
+      let customerId: number | null = null;
+      if (entity.customerId) {
+        const numId = Number(entity.customerId);
+        if (numId > 0 && numId < 1000000000000) {
+          customerId = numId;
+        } else if (entity.customerName) {
+          try {
+            const custRes = await db.execute(
+              `SELECT id, backendId FROM customers WHERE name = ? AND id > 0 LIMIT 1`,
+              [entity.customerName]
+            );
+            const rows = Array.isArray(custRes.rows) ? custRes.rows : [];
+            if (rows.length > 0 && Number(rows[0].id) > 0) {
+              customerId = Number(rows[0].backendId || rows[0].id);
+              await db.execute(`UPDATE sales SET customerId = ? WHERE id = ?`, [customerId, entity.id]);
+            }
+          } catch (_) {}
+        }
+      }
       const apiPayload = {
         branchId: 1,
         warehouseId: 1,
