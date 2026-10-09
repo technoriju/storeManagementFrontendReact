@@ -548,8 +548,80 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
     </View>
   );
 
+  const currentParty: any = entityType === 'customer'
+    ? (customerId ? customerMap[Number(customerId)] : null)
+    : (supplierId ? supplierMap[Number(supplierId)] : null);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Party Balance Banner if opened for specific party */}
+      {currentParty && (
+        <View style={[styles.partyBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <View style={[styles.partyAvatar, { backgroundColor: entityType === 'customer' ? '#EFF6FF' : '#FEF3C7' }]}>
+              {entityType === 'customer' ? <User size={22} color="#2563EB" /> : <Building2 size={22} color="#D97706" />}
+            </View>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.text }}>{currentParty.name}</Text>
+                <View
+                  style={{
+                    backgroundColor:
+                      (currentParty.outstandingBalance || 0) < 0
+                        ? '#DCFCE7'
+                        : (currentParty.outstandingBalance || 0) > 0
+                        ? '#FEE2E2'
+                        : '#F1F5F9',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '700',
+                      color:
+                        (currentParty.outstandingBalance || 0) < 0
+                          ? '#16A34A'
+                          : (currentParty.outstandingBalance || 0) > 0
+                          ? '#DC2626'
+                          : '#64748B',
+                    }}
+                  >
+                    {(currentParty.outstandingBalance || 0) < 0
+                      ? 'ADVANCE AVAILABLE'
+                      : (currentParty.outstandingBalance || 0) > 0
+                      ? (entityType === 'customer' ? 'OVERDUE' : 'PAYABLE DUE')
+                      : 'ALL CLEARED'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>
+                Phone: {currentParty.phone || 'N/A'} • Current Balance:{' '}
+                <Text
+                  style={{
+                    fontWeight: '700',
+                    color:
+                      (currentParty.outstandingBalance || 0) < 0
+                        ? '#16A34A'
+                        : (currentParty.outstandingBalance || 0) > 0
+                        ? '#DC2626'
+                        : '#64748B',
+                  }}
+                >
+                  {(currentParty.outstandingBalance || 0) < 0
+                    ? `₹${Math.abs(currentParty.outstandingBalance || 0).toFixed(2)} Advance Credit`
+                    : (currentParty.outstandingBalance || 0) > 0
+                    ? `₹${(currentParty.outstandingBalance || 0).toFixed(2)} Due`
+                    : '₹0.00 (Cleared)'}
+                </Text>
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* 4 Metric Summary Cards */}
       <View style={styles.metricsGrid}>
         {/* Total Received (In) */}
@@ -964,5 +1036,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#0F172A',
+  },
+  partyBanner: {
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  partyAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

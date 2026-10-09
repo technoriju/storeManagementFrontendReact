@@ -308,10 +308,16 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   }, [suppliers, supplierId, localAddedSuppliers]);
 
   const supplierOptions = useMemo(() => {
-    return allSuppliers.map((s) => ({
-      label: s.name,
-      value: String(s.id),
-    }));
+    return allSuppliers.map((s) => {
+      const bal = Number(s.outstandingBalance || 0);
+      let balText = '';
+      if (bal > 0) balText = ` (Due: ₹${bal.toFixed(2)})`;
+      else if (bal < 0) balText = ` (Advance: ₹${Math.abs(bal).toFixed(2)})`;
+      return {
+        label: `${s.name}${balText}`,
+        value: String(s.id),
+      };
+    });
   }, [allSuppliers]);
 
   const selectedSupplier = useMemo(() => {
@@ -353,10 +359,25 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
           setPreviousBalanceAmount(String(res.advance));
           setShowPreviousBalance(true);
         } else {
-          setSupplierRawBalance(0);
-          setBalanceType('due');
-          setPreviousBalanceAmount('0');
-          setShowPreviousBalance(false);
+          // Check if supplier has outstandingBalance in supplier record
+          const sBal = Number(selectedSupplier?.outstandingBalance || 0);
+          if (sBal > 0) {
+            setSupplierRawBalance(sBal);
+            setBalanceType('due');
+            setPreviousBalanceAmount(String(sBal));
+            setShowPreviousBalance(true);
+          } else if (sBal < 0) {
+            const adv = Math.abs(sBal);
+            setSupplierRawBalance(-adv);
+            setBalanceType('advance');
+            setPreviousBalanceAmount(String(adv));
+            setShowPreviousBalance(true);
+          } else {
+            setSupplierRawBalance(0);
+            setBalanceType('due');
+            setPreviousBalanceAmount('0');
+            setShowPreviousBalance(false);
+          }
         }
       })
       .catch((err) => {
@@ -553,6 +574,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
       const parsedBalanceAmt = Math.abs(parseFloat(previousBalanceAmount) || 0);
       const prevDueVal = showPreviousBalance && balanceType === 'due' ? parsedBalanceAmt : 0;
       const advPaymentVal = showPreviousBalance && balanceType === 'advance' ? parsedBalanceAmt : 0;
+      const adjustedAdvance = Math.min(advPaymentVal, grandTotal);
+      const netPayable = Math.max(0, grandTotal - adjustedAdvance);
 
       let finalPaid = grandTotal;
       let finalDue = 0;
@@ -562,18 +585,21 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         finalPaid = grandTotal;
         finalDue = 0;
       } else if (paymentStatus === 'Unpaid') {
-        finalPaid = 0;
-        finalDue = grandTotal;
+        finalPaid = adjustedAdvance;
+        finalDue = netPayable;
+        effectivePaymentStatus = adjustedAdvance >= grandTotal ? 'Paid' : (adjustedAdvance > 0 ? 'Partial' : 'Unpaid');
       } else if (paymentStatus === 'Partial') {
         const parsed = parseFloat(amountReceived);
-        finalPaid = !isNaN(parsed) && parsed > 0 ? Math.min(grandTotal, parsed) : 0;
+        const cashPaid = !isNaN(parsed) && parsed > 0 ? parsed : 0;
+        finalPaid = Math.min(grandTotal, adjustedAdvance + cashPaid);
         finalDue = Math.max(0, grandTotal - finalPaid);
         if (finalPaid >= grandTotal) effectivePaymentStatus = 'Paid';
-        else if (finalPaid === 0) effectivePaymentStatus = 'Unpaid';
+        else if (finalPaid > 0) effectivePaymentStatus = 'Partial';
+        else effectivePaymentStatus = 'Unpaid';
       } else {
-        finalPaid = status === 'Received' ? grandTotal : 0;
-        finalDue = status === 'Received' ? 0 : grandTotal;
-        effectivePaymentStatus = status === 'Received' ? 'Paid' : 'Unpaid';
+        finalPaid = status === 'Received' ? grandTotal : adjustedAdvance;
+        finalDue = status === 'Received' ? 0 : netPayable;
+        effectivePaymentStatus = status === 'Received' ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
       }
 
       let effectiveSupplierId = Number(supplierId);

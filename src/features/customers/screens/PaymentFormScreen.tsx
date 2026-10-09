@@ -21,6 +21,7 @@ import { useSupplierStore } from '../../suppliers/store/supplierStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { CUSTOMER_QUERY_KEY } from '../api/useCustomer';
 import { SUPPLIER_QUERY_KEY } from '../../suppliers/api/useSupplier';
+import { syncEngine } from '../../../core/sync/SyncEngine';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppSelect, AppSelectOption } from '../../../shared/components/forms/AppSelect';
@@ -110,15 +111,29 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   const selectedCustomer = customers.find((c) => c.id === selectedPartyId);
   const selectedSupplier = suppliers.find((s) => s.id === selectedPartyId);
 
-  const customerOptions: AppSelectOption[] = customers.map((c) => ({
-    label: `${c.name} (Due: ₹${(c.outstandingBalance || 0).toFixed(2)})`,
-    value: c.id,
-  }));
+  const customerOptions: AppSelectOption[] = customers.map((c) => {
+    const bal = Number(c.outstandingBalance || 0);
+    let balLabel = '₹0.00';
+    if (bal > 0) balLabel = `Due: ₹${bal.toFixed(2)}`;
+    else if (bal < 0) balLabel = `Advance: ₹${Math.abs(bal).toFixed(2)}`;
+    else balLabel = 'Clear';
+    return {
+      label: `${c.name} (${balLabel})`,
+      value: c.id,
+    };
+  });
 
-  const supplierOptions: AppSelectOption[] = suppliers.map((s) => ({
-    label: `${s.name} (Due: ₹${(s.outstandingBalance || 0).toFixed(2)})`,
-    value: s.id,
-  }));
+  const supplierOptions: AppSelectOption[] = suppliers.map((s) => {
+    const bal = Number(s.outstandingBalance || 0);
+    let balLabel = '₹0.00';
+    if (bal > 0) balLabel = `Due: ₹${bal.toFixed(2)}`;
+    else if (bal < 0) balLabel = `Advance: ₹${Math.abs(bal).toFixed(2)}`;
+    else balLabel = 'Clear';
+    return {
+      label: `${s.name} (${balLabel})`,
+      value: s.id,
+    };
+  });
 
   const handleEntityTypeChange = (type: 'customer' | 'supplier') => {
     setActiveEntityType(type);
@@ -269,6 +284,10 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
         }
       }
 
+      try {
+        await syncEngine.syncNow();
+      } catch (_) {}
+
       queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
 
@@ -378,19 +397,103 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
               {/* Show party balance preview */}
               {activeEntityType === 'customer' && selectedCustomer && (
-                <View style={styles.balanceInfo}>
-                  <Text style={styles.balanceInfoLabel}>Current Customer Due:</Text>
-                  <Text style={[styles.balanceInfoValue, { color: (selectedCustomer.outstandingBalance || 0) > 0 ? '#DC2626' : '#16A34A' }]}>
-                    ₹{(selectedCustomer.outstandingBalance || 0).toFixed(2)}
+                <View
+                  style={[
+                    styles.balanceInfo,
+                    {
+                      backgroundColor:
+                        (selectedCustomer.outstandingBalance || 0) < 0
+                          ? '#F0FDF4'
+                          : (selectedCustomer.outstandingBalance || 0) > 0
+                          ? '#FEF2F2'
+                          : '#F8FAFC',
+                      borderColor:
+                        (selectedCustomer.outstandingBalance || 0) < 0
+                          ? '#86EFAC'
+                          : (selectedCustomer.outstandingBalance || 0) > 0
+                          ? '#FCA5A5'
+                          : theme.colors.border,
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  <Text style={styles.balanceInfoLabel}>
+                    {(selectedCustomer.outstandingBalance || 0) < 0
+                      ? 'Customer Advance Credit Available:'
+                      : (selectedCustomer.outstandingBalance || 0) > 0
+                      ? 'Current Customer Due:'
+                      : 'Current Customer Balance:'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.balanceInfoValue,
+                      {
+                        color:
+                          (selectedCustomer.outstandingBalance || 0) < 0
+                            ? '#16A34A'
+                            : (selectedCustomer.outstandingBalance || 0) > 0
+                            ? '#DC2626'
+                            : '#64748B',
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {(selectedCustomer.outstandingBalance || 0) < 0
+                      ? `₹${Math.abs(selectedCustomer.outstandingBalance || 0).toFixed(2)} (Advance)`
+                      : (selectedCustomer.outstandingBalance || 0) > 0
+                      ? `₹${(selectedCustomer.outstandingBalance || 0).toFixed(2)} (Due)`
+                      : '₹0.00 (All Cleared)'}
                   </Text>
                 </View>
               )}
 
               {activeEntityType === 'supplier' && selectedSupplier && (
-                <View style={styles.balanceInfo}>
-                  <Text style={styles.balanceInfoLabel}>Current Supplier Balance:</Text>
-                  <Text style={[styles.balanceInfoValue, { color: (selectedSupplier.outstandingBalance || 0) > 0 ? '#DC2626' : '#16A34A' }]}>
-                    ₹{(selectedSupplier.outstandingBalance || 0).toFixed(2)}
+                <View
+                  style={[
+                    styles.balanceInfo,
+                    {
+                      backgroundColor:
+                        (selectedSupplier.outstandingBalance || 0) < 0
+                          ? '#F0FDF4'
+                          : (selectedSupplier.outstandingBalance || 0) > 0
+                          ? '#FEF2F2'
+                          : '#F8FAFC',
+                      borderColor:
+                        (selectedSupplier.outstandingBalance || 0) < 0
+                          ? '#86EFAC'
+                          : (selectedSupplier.outstandingBalance || 0) > 0
+                          ? '#FCA5A5'
+                          : theme.colors.border,
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  <Text style={styles.balanceInfoLabel}>
+                    {(selectedSupplier.outstandingBalance || 0) < 0
+                      ? 'Supplier Advance Paid / Credit:'
+                      : (selectedSupplier.outstandingBalance || 0) > 0
+                      ? 'Current Supplier Payable Due:'
+                      : 'Current Supplier Balance:'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.balanceInfoValue,
+                      {
+                        color:
+                          (selectedSupplier.outstandingBalance || 0) < 0
+                            ? '#16A34A'
+                            : (selectedSupplier.outstandingBalance || 0) > 0
+                            ? '#DC2626'
+                            : '#64748B',
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {(selectedSupplier.outstandingBalance || 0) < 0
+                      ? `₹${Math.abs(selectedSupplier.outstandingBalance || 0).toFixed(2)} (Advance)`
+                      : (selectedSupplier.outstandingBalance || 0) > 0
+                      ? `₹${(selectedSupplier.outstandingBalance || 0).toFixed(2)} (Due)`
+                      : '₹0.00 (All Cleared)'}
                   </Text>
                 </View>
               )}
