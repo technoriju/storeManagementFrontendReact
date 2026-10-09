@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Image, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -31,22 +31,46 @@ interface Props {
 
 export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { products, isLoading, error, fetchProducts, deleteProduct } = useProductStore();
+  const { deleteProduct, fetchPaginatedProducts } = useProductStore();
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [tableProducts, setTableProducts] = useState<any[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [isImportModalVisible, setIsImportModalVisible] = useState(false);
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [brandMap, setBrandMap] = useState<Record<string, string>>({});
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
+  const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
+    setIsLoadingData(true);
+    try {
+      const res = await fetchPaginatedProducts({
+        page: targetPage,
+        limit: targetLimit,
+        search: targetSearch,
+      });
+      setTableProducts(res.data);
+      setTotalItems(res.total);
+      setTotalPages(res.totalPages);
+    } catch (e) {
+      console.warn('Failed to load paginated products:', e);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [fetchPaginatedProducts]);
+
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    loadData(page, rowsPerPage, searchQuery);
+  }, [loadData, page, rowsPerPage, searchQuery]);
 
   useEffect(() => {
     if (lastSyncedAt) {
-      fetchProducts();
+      loadData(page, rowsPerPage, searchQuery);
     }
-  }, [lastSyncedAt, fetchProducts]);
+  }, [loadData, lastSyncedAt, page, rowsPerPage, searchQuery]);
 
   useEffect(() => {
     const loadLookups = async () => {
@@ -233,7 +257,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       </Pressable>
       <Pressable 
         style={[styles.iconButton, { borderColor: theme.colors.border }]}
-        onPress={() => fetchProducts()}
+        onPress={() => loadData(page, rowsPerPage, searchQuery)}
       >
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
@@ -274,6 +298,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     const doDelete = async () => {
       try {
         await deleteProduct(item.id);
+        await loadData(page, rowsPerPage, searchQuery);
       } catch (e: any) {
         Alert.alert('Error', e.message || 'Failed to delete product');
       }
@@ -314,17 +339,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     </>
   );
 
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    const q = searchQuery.toLowerCase().trim();
-    return products.filter((p: any) => {
-      const name = (p.name || '').toLowerCase();
-      const sku = (p.sku || p.productCode || '').toLowerCase();
-      const catName = getCategoryName(p).toLowerCase();
-      const brandName = getBrandName(p).toLowerCase();
-      return name.includes(q) || sku.includes(q) || catName.includes(q) || brandName.includes(q);
-    });
-  }, [products, searchQuery, categoryMap, brandMap]);
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    setPage(1);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -333,11 +351,22 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         subtitle="Manage your products"
         headerActions={headerActions}
         columns={columns}
-        data={filteredProducts}
-        onSearch={setSearchQuery}
+        data={tableProducts}
+        searchValue={searchQuery}
+        onSearch={handleSearch}
+        debounceSearchMs={400}
         filters={filters}
         renderRowActions={renderRowActions}
-        isLoading={isLoading}
+        isLoading={isLoadingData}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setRowsPerPage(newRows);
+          setPage(1);
+        }}
       />
       
       <ImportProductModal 
