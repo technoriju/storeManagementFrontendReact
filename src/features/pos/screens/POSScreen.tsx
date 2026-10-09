@@ -94,9 +94,16 @@ export const POSScreen = () => {
         const rawSubtotal = price * qty;
         const netSubtotal = Math.max(0, rawSubtotal - discount);
         const taxAmt = netSubtotal * ((item.gstRate || 0) / 100);
+        const prod = item.product;
+        const brand = prod.brandName || prod.brand?.name || (prod as any).brand;
+        const validBrand = brand && brand !== 'N/A' ? brand : undefined;
+        const subUnit = item.subUnitName || (prod as any).subUnitName || prod.subUnit?.name;
+        const hasSubUnit = Boolean(prod.subUnitId || prod.subunitId || prod.subUnit || item.subUnitName);
+        const validSubUnit = hasSubUnit ? subUnit : undefined;
+
         return {
-          productId: item.product.id,
-          productName: item.product.name,
+          productId: prod.id,
+          productName: prod.name,
           quantity: qty,
           unitPrice: price,
           discount: discount,
@@ -106,8 +113,13 @@ export const POSScreen = () => {
           total: netSubtotal + taxAmt,
           unit: item.unit,
           unitType: item.unitType,
-          conversionRate: item.conversionRate,
-          hsn: (item.product as any).hsn || (item.product as any).sku || '',
+          baseUnitName: item.baseUnitName || (prod as any).baseUnitName || prod.baseUnit?.name || item.unit,
+          conversionRate: item.conversionRate !== undefined ? Number(item.conversionRate) : ((prod as any).conversionRate ? Number((prod as any).conversionRate) : undefined),
+          brand: validBrand,
+          brandName: validBrand,
+          subUnit: validSubUnit,
+          subUnitName: validSubUnit,
+          hsn: (prod as any).hsn || (prod as any).sku || '',
         };
       });
 

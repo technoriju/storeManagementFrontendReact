@@ -24,6 +24,7 @@ import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/Receip
 import { AddSalesModal } from '../components/AddSalesModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
+import { enrichSaleItemsWithProductMeta } from '../utils/enrichSaleItems';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -188,7 +189,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     }
 
-    return Array.from(itemsMap.values());
+    const filtered = Array.from(itemsMap.values());
+    return await enrichSaleItemsWithProductMeta(filtered);
   };
 
   const handleOpenPrintPreview = async (invoice: any) => {
@@ -200,13 +202,23 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
           sku: i.sku,
+          brand: i.brand || i.brandName || i.product?.brandName,
+          brandName: i.brandName || i.brand || i.product?.brandName,
+          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
+          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
           gst: Number(i.gst) || 0,
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
-          unit: i.unit || 'Pcs',
+          unit: i.unit || i.unitName || i.product?.unitName || i.product?.baseUnitName || 'Pcs',
+          unitName: i.unitName || i.unit || i.product?.unitName || i.product?.baseUnitName,
+          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
+          unitType: i.unitType,
+          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : (i.productUnit?.conversionFactor ? Number(i.productUnit.conversionFactor) : undefined)),
+          product: i.product,
+          productUnit: i.productUnit,
           hsn: i.hsn || '',
         }))
       : [
@@ -442,15 +454,25 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                 {viewInvoice.items && viewInvoice.items.length > 0 && (
                   <View style={{ marginTop: 12 }}>
                     <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 8 }}>Items Purchased:</Text>
-                    {viewInvoice.items.map((i: any, idx: number) => (
-                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
-                        <View style={{ flex: 2 }}>
-                          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{i.productName || `Product #${i.productId}`}</Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity}x @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                    {viewInvoice.items.map((i: any, idx: number) => {
+                      const brand = (i.brand || i.brandName || '').trim();
+                      const subUnit = (i.subUnit || i.subUnitName || '').trim();
+                      const meta = [
+                        brand && brand !== 'N/A' ? `Brand: ${brand}` : null,
+                        subUnit && subUnit !== 'N/A' ? `Sub Unit: ${subUnit}` : null,
+                      ].filter(Boolean).join(' | ');
+
+                      return (
+                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                          <View style={{ flex: 2 }}>
+                            <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{i.productName || `Product #${i.productId}`}</Text>
+                            {meta ? <Text style={{ color: '#64748B', fontSize: 10, marginTop: 1 }}>{meta}</Text> : null}
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }}>{i.quantity} {i.unit || ''} @ ₹{Number(i.unitPrice).toFixed(2)}</Text>
+                          </View>
+                          <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(i.total).toFixed(2)}</Text>
                         </View>
-                        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>₹{Number(i.total).toFixed(2)}</Text>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 )}
 

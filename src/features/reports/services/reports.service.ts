@@ -62,7 +62,7 @@ export class ReportsService {
   // 1. Sales Report
   static async getSalesReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/sales', { params: filters });
+      const apiRes = await apiClient.get('/reports/sales', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -113,7 +113,7 @@ export class ReportsService {
           'UPI' as paymentMethod,
           s.status
         FROM sales s
-        LEFT JOIN customers c ON s.customerId = c.id
+        LEFT JOIN customers c ON (s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId))
         WHERE ${this.buildDateCondition('s.createdAt', filters)}
       `;
 
@@ -135,7 +135,7 @@ export class ReportsService {
   // 2. Purchase Report
   static async getPurchasesReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/purchases', { params: filters });
+      const apiRes = await apiClient.get('/reports/purchases', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -185,7 +185,7 @@ export class ReportsService {
           COALESCE(p.status, 'Received') as status,
           (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchaseId = p.id) as itemsCount
         FROM purchases p
-        LEFT JOIN suppliers s ON p.supplierId = s.id
+        LEFT JOIN suppliers s ON (p.supplierId = s.id OR (s.backendId IS NOT NULL AND p.supplierId = s.backendId))
         WHERE ${this.buildDateCondition('p.createdAt', filters)}
       `;
 
@@ -207,7 +207,7 @@ export class ReportsService {
   // 3. Inventory Report
   static async getInventoryReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/stock', { params: filters });
+      const apiRes = await apiClient.get('/reports/stock', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -262,9 +262,9 @@ export class ReportsService {
             ELSE 'IN_STOCK'
           END as status
         FROM products p
-        LEFT JOIN categories c ON p.categoryId = c.id
-        LEFT JOIN units u ON p.unitId = u.id OR p.baseUnitId = u.id
-        LEFT JOIN sub_units su ON p.subUnitId = su.id OR p.subunitId = su.id
+        LEFT JOIN categories c ON (p.categoryId = c.id OR (c.backendId IS NOT NULL AND p.categoryId = c.backendId))
+        LEFT JOIN units u ON (p.unitId = u.id OR p.baseUnitId = u.id OR (u.backendId IS NOT NULL AND (p.unitId = u.backendId OR p.baseUnitId = u.backendId)))
+        LEFT JOIN sub_units su ON (p.subUnitId = su.id OR p.subunitId = su.id OR (su.backendId IS NOT NULL AND (p.subUnitId = su.backendId OR p.subunitId = su.backendId)))
         WHERE 1=1
       `;
 
@@ -283,7 +283,7 @@ export class ReportsService {
   // 4. Customer Report
   static async getCustomerReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/customer-outstanding', { params: filters });
+      const apiRes = await apiClient.get('/reports/customer-outstanding', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -320,7 +320,7 @@ export class ReportsService {
 
       let whereClause = '1=1';
       if (filters.customerId) {
-        whereClause += ` AND c.id = '${filters.customerId}'`;
+        whereClause += ` AND (c.id = '${filters.customerId}' OR c.backendId = '${filters.customerId}')`;
       }
       if (filters.search && filters.search.trim()) {
         const s = filters.search.trim();
@@ -345,7 +345,7 @@ export class ReportsService {
             ELSE 'Clear'
           END as status
         FROM customers c
-        LEFT JOIN sales s ON (s.customerId = c.id AND ${salesDateCondition})
+        LEFT JOIN sales s ON ((s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId)) AND ${salesDateCondition})
         WHERE ${whereClause}
         GROUP BY c.id
         ORDER BY outstandingBalance DESC, totalBilled DESC
@@ -364,7 +364,7 @@ export class ReportsService {
   // 5. Supplier Report
   static async getSupplierReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/supplier-outstanding', { params: filters });
+      const apiRes = await apiClient.get('/reports/supplier-outstanding', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -401,7 +401,7 @@ export class ReportsService {
 
       let whereClause = '1=1';
       if (filters.supplierId) {
-        whereClause += ` AND s.id = '${filters.supplierId}'`;
+        whereClause += ` AND (s.id = '${filters.supplierId}' OR s.backendId = '${filters.supplierId}')`;
       }
       if (filters.search && filters.search.trim()) {
         const s = filters.search.trim();
@@ -426,7 +426,7 @@ export class ReportsService {
             ELSE 'Clear'
           END as status
         FROM suppliers s
-        LEFT JOIN purchases p ON (p.supplierId = s.id AND ${purDateCondition})
+        LEFT JOIN purchases p ON ((p.supplierId = s.id OR (s.backendId IS NOT NULL AND p.supplierId = s.backendId)) AND ${purDateCondition})
         WHERE ${whereClause}
         GROUP BY s.id
         ORDER BY outstandingBalance DESC, totalPurchased DESC
@@ -445,7 +445,7 @@ export class ReportsService {
   // 6. Product Report
   static async getProductReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/products', { params: filters });
+      const apiRes = await apiClient.get('/reports/products', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -491,7 +491,7 @@ export class ReportsService {
           END as margin,
           p.stockQuantity as currentStock
         FROM products p
-        LEFT JOIN categories c ON p.categoryId = c.id
+        LEFT JOIN categories c ON (p.categoryId = c.id OR (c.backendId IS NOT NULL AND p.categoryId = c.backendId))
         LEFT JOIN sale_items si ON si.productId = p.id
         GROUP BY p.id
         ORDER BY revenue DESC
@@ -506,7 +506,7 @@ export class ReportsService {
   // 7. Invoice Report
   static async getInvoiceReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/invoices', { params: filters });
+      const apiRes = await apiClient.get('/reports/invoices', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -548,7 +548,7 @@ export class ReportsService {
           'UPI' as paymentMethod,
           COALESCE(s.paymentStatus, 'Paid') as paymentStatus
         FROM sales s
-        LEFT JOIN customers c ON s.customerId = c.id
+        LEFT JOIN customers c ON (s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId))
         WHERE ${this.buildDateCondition('s.createdAt', filters)}
         ORDER BY s.id DESC
       `;
@@ -562,7 +562,7 @@ export class ReportsService {
   // 8. Payment Report
   static async getPaymentReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/payments', { params: filters });
+      const apiRes = await apiClient.get('/reports/payments', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => {
@@ -608,8 +608,8 @@ export class ReportsService {
           CASE WHEN LOWER(p.type) = 'receive' THEN p.amount ELSE 0 END as inflow, 
           CASE WHEN LOWER(p.type) = 'pay' THEN p.amount ELSE 0 END as outflow 
         FROM payments p 
-        LEFT JOIN customers c ON p.customerId = c.id 
-        LEFT JOIN suppliers s ON p.supplierId = s.id 
+        LEFT JOIN customers c ON (p.customerId = c.id OR (c.backendId IS NOT NULL AND p.customerId = c.backendId)) 
+        LEFT JOIN suppliers s ON (p.supplierId = s.id OR (s.backendId IS NOT NULL AND p.supplierId = s.backendId)) 
         WHERE ${this.buildDateCondition('p.createdAt', filters)} 
         ORDER BY p.id DESC
       `;
@@ -623,7 +623,7 @@ export class ReportsService {
   // 9. Expense Report
   static async getExpenseReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/expenses', { params: filters });
+      const apiRes = await apiClient.get('/reports/expenses', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any) => ({
@@ -675,7 +675,7 @@ export class ReportsService {
   // 11. Tax (GST) Report
   static async getTaxReport(filters: ReportFilters = {}): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/gst-summary', { params: filters });
+      const apiRes = await apiClient.get('/reports/gst-summary', { params: { limit: 500, ...filters } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((item: any, idx: number) => {
@@ -725,7 +725,7 @@ export class ReportsService {
           0 as igst, 
           COALESCE(s.gst, 0) as totalGst 
         FROM sales s 
-        LEFT JOIN customers c ON s.customerId = c.id 
+        LEFT JOIN customers c ON (s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId)) 
         WHERE ${this.buildDateCondition('s.createdAt', filters)} 
         UNION ALL 
         SELECT 
@@ -744,7 +744,7 @@ export class ReportsService {
           0 as igst, 
           COALESCE(p.gst, 0) as totalGst 
         FROM purchases p 
-        LEFT JOIN suppliers sp ON p.supplierId = sp.id 
+        LEFT JOIN suppliers sp ON (p.supplierId = sp.id OR (sp.backendId IS NOT NULL AND p.supplierId = sp.backendId)) 
         WHERE ${this.buildDateCondition('p.createdAt', filters)} 
         ORDER BY date DESC
       `;
@@ -911,7 +911,7 @@ export class ReportsService {
   // Customer List for Dropdown Picker
   static async getAllCustomersList(): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/customer-outstanding');
+      const apiRes = await apiClient.get('/reports/customer-outstanding', { params: { limit: 500 } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((c: any) => ({
@@ -950,7 +950,7 @@ export class ReportsService {
   // Supplier List for Dropdown Picker
   static async getAllSuppliersList(): Promise<any[]> {
     try {
-      const apiRes = await apiClient.get('/reports/supplier-outstanding');
+      const apiRes = await apiClient.get('/reports/supplier-outstanding', { params: { limit: 500 } });
       const rawList = this.unpackApiArray(apiRes);
       if (rawList.length > 0) {
         return rawList.map((s: any) => ({

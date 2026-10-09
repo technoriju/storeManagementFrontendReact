@@ -53,6 +53,9 @@ interface SaleItemRow {
   unitType?: 'base' | 'sub';
   baseUnitName?: string;
   subUnitName?: string;
+  subUnit?: string;
+  brand?: string;
+  brandName?: string;
   conversionRate?: number;
   basePrice?: number;
   subPrice?: number;
@@ -181,19 +184,25 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   const wholesaleP = prod ? getProductPriceByType(prod, 'wholesale') : Number(item.unitPrice || 0);
                   const retailP = prod ? getProductPriceByType(prod, 'retail') : Number(item.unitPrice || 0);
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
+                  const brandRaw = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+                  const brandName = brandRaw && brandRaw !== 'N/A' ? brandRaw : undefined;
+                  const resolvedSubUnitName = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
 
                   return {
                     productId: Number(item.productId),
                     productName: item.productName || prod?.name || `Product #${item.productId}`,
                     sku: item.sku || prod?.sku,
+                    brand: brandName,
+                    brandName: brandName,
+                    subUnit: resolvedSubUnitName,
+                    subUnitName: resolvedSubUnitName || 'Pcs',
                     quantity: Number(item.quantity || 1),
                     unitPrice: Number(item.unitPrice || 0),
                     discount: Number(item.discount || 0),
                     gst: Number(item.gst || item.taxRate || item.tax || 0),
-                    unit: item.unit || (item.unitType === 'sub' ? (item.subUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
+                    unit: item.unit || (item.unitType === 'sub' ? (resolvedSubUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
                     unitType: item.unitType ? (item.unitType as any) : 'base',
                     baseUnitName: item.baseUnitName || 'Box',
-                    subUnitName: item.subUnitName || 'Pcs',
                     conversionRate: cRate,
                     basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
                     subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
@@ -437,10 +446,14 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
 
       const baseUnit = unitList.find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId));
-      const subUnit = subUnitList.find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId));
+      const subUnit = subUnitList.find((s: any) => 
+        (product.subUnitId && (String(s.id) === String(product.subUnitId) || String(s.backendId) === String(product.subUnitId))) ||
+        (product.subunitId && (String(s.id) === String(product.subunitId) || String(s.backendId) === String(product.subunitId)))
+      );
 
-      const baseUnitName = baseUnit?.name || baseUnit?.shortName || 'Box';
-      const subUnitName = subUnit?.name || 'Pcs';
+      const baseUnitName = baseUnit?.name || baseUnit?.shortName || (product as any).baseUnitName || 'Box';
+      const resolvedSubUnitName = subUnit?.name || (product as any).subUnitName || product.subUnit?.name || undefined;
+      const subUnitName = resolvedSubUnitName || 'Pcs';
 
       // Default for sales: base unit unless explicitly chosen
       const initialType: 'base' | 'sub' = 'base';
@@ -451,6 +464,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
       const initialPrice = basePrice;
       const initialCost = baseCost;
+      const brandRaw = getBrandName(product);
+      const brandName = brandRaw && brandRaw !== 'N/A' ? brandRaw : undefined;
 
       setItems((prev) => [
         ...prev,
@@ -458,6 +473,10 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           productId: product.id,
           productName: product.name,
           sku: product.sku,
+          brand: brandName,
+          brandName: brandName,
+          subUnit: resolvedSubUnitName,
+          subUnitName: resolvedSubUnitName || 'Pcs',
           quantity: 1,
           unitPrice: initialPrice,
           basePrice,
@@ -470,7 +489,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           unit: initialUnit,
           unitType: initialType,
           baseUnitName,
-          subUnitName,
           conversionRate: cRate,
           wholesalePrice: wholesaleP,
           retailPrice: retailP,
@@ -625,20 +643,31 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
       };
 
-      const itemsPayload = calculatedItems.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-        unitPrice: parseFloat(String(item.unitPrice)) || 0,
-        discount: parseFloat(String(item.discount)) || 0,
-        gst: parseFloat(String(item.gst)) || 0,
-        taxAmount: item.taxAmount,
-        unitCost: item.unitCost,
-        total: item.total,
-        unit: item.unit,
-        unitType: item.unitType,
-        conversionRate: item.conversionRate,
-      }));
+      const itemsPayload = calculatedItems.map((item) => {
+        const prod = products.find((p) => p.id === Number(item.productId));
+        const brand = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+        const validBrand = brand && brand !== 'N/A' ? brand : undefined;
+        const validSubUnit = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+
+        return {
+          productId: item.productId,
+          productName: item.productName,
+          brand: validBrand,
+          brandName: validBrand,
+          subUnit: validSubUnit,
+          subUnitName: validSubUnit,
+          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+          unitPrice: parseFloat(String(item.unitPrice)) || 0,
+          discount: parseFloat(String(item.discount)) || 0,
+          gst: parseFloat(String(item.gst)) || 0,
+          taxAmount: item.taxAmount,
+          unitCost: item.unitCost,
+          total: item.total,
+          unit: item.unit,
+          unitType: item.unitType,
+          conversionRate: item.conversionRate,
+        };
+      });
 
       if (editSaleId) {
         await updateSaleMutation.mutateAsync({
@@ -677,18 +706,32 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         advancePayment: advPaymentVal,
         showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
         notes: notes ? `${notes} [${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]` : `[${priceType === 'wholesale' ? 'Wholesale' : 'Retail'}]`,
-        items: calculatedItems.map((item) => ({
-          productId: item.productId,
-          productName: item.productName,
-          sku: item.sku,
-          quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
-          unitPrice: parseFloat(String(item.unitPrice)) || 0,
-          discount: parseFloat(String(item.discount)) || 0,
-          gst: parseFloat(String(item.gst)) || 0,
-          taxAmount: item.taxAmount,
-          total: item.total,
-          unit: item.unit,
-        })),
+        items: calculatedItems.map((item) => {
+          const prod = products.find((p) => p.id === Number(item.productId));
+          const brand = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
+          const validBrand = brand && brand !== 'N/A' ? brand : undefined;
+          const validSubUnit = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+
+          return {
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            brand: validBrand,
+            brandName: validBrand,
+            subUnit: validSubUnit,
+            subUnitName: validSubUnit,
+            unitType: item.unitType,
+            baseUnitName: item.baseUnitName,
+            conversionRate: item.conversionRate,
+            quantity: parseFloat(String(item.quantity)) > 0 ? parseFloat(String(item.quantity)) : 1,
+            unitPrice: parseFloat(String(item.unitPrice)) || 0,
+            discount: parseFloat(String(item.discount)) || 0,
+            gst: parseFloat(String(item.gst)) || 0,
+            taxAmount: item.taxAmount,
+            total: item.total,
+            unit: item.unit,
+          };
+        }),
       };
 
       // Reset & Close

@@ -72,7 +72,7 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
           item?.customerName ||
           item?.fullName ||
           (item?.firstName ? `${item.firstName} ${item.lastName || ''}`.trim() : '') ||
-          'Unnamed Customer';
+          (item?.id ? `Customer #${item.id}` : 'Customer');
         return <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{displayName}</Text>;
       }
     },

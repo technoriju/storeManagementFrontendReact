@@ -85,9 +85,15 @@ export class SaleRepository extends BaseRepository<Sale> {
   public async getItemsForSale(saleId: number): Promise<SaleItem[]> {
     try {
       const res = await db.execute(
-        `SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+        `SELECT si.*, 
+                p.name as fallbackProductName, 
+                p.sku as productSku,
+                COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
          FROM sale_items si
-         LEFT JOIN products p ON si.productId = p.id
+         LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
+         LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+         LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
          WHERE si.saleId = ?
          ORDER BY si.id ASC`,
         [saleId]
@@ -116,6 +122,9 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         const pId = Number(row.productId);
         const existingIdx = items.findIndex((it) => it.productId === pId);
+        const brand = (row.brandName || row.fallbackBrandName || '').trim() || undefined;
+        const subUnit = (row.subUnitName || row.fallbackSubUnitName || '').trim() || undefined;
+
         const newItem: SaleItem = {
           id: Number(row.id),
           saleId: Number(row.saleId || saleId),
@@ -130,6 +139,10 @@ export class SaleRepository extends BaseRepository<Sale> {
           unit: row.unit ? String(row.unit) : undefined,
           unitType: row.unitType || 'sub',
           conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
+          brand: brand && brand !== 'N/A' ? brand : undefined,
+          brandName: brand && brand !== 'N/A' ? brand : undefined,
+          subUnit: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+          subUnitName: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
           total: Number(row.total || 0),
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -221,9 +234,15 @@ export class SaleRepository extends BaseRepository<Sale> {
       // Batch load items for all sales
       try {
         const itemsRes = await db.execute(`
-          SELECT si.*, p.name as fallbackProductName, p.sku as productSku
+          SELECT si.*, 
+                 p.name as fallbackProductName, 
+                 p.sku as productSku,
+                 COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                 COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
           FROM sale_items si
-          LEFT JOIN products p ON si.productId = p.id
+          LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
+          LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+          LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
           ORDER BY si.id ASC
         `);
         let itemRows: any[] = [];
@@ -251,6 +270,9 @@ export class SaleRepository extends BaseRepository<Sale> {
           if (qty <= 0) continue;
 
           const existingIdx = itemsBySaleId[sId].findIndex((it) => it.productId === pId);
+          const brand = (r.brandName || r.fallbackBrandName || '').trim() || undefined;
+          const subUnit = (r.subUnitName || r.fallbackSubUnitName || '').trim() || undefined;
+
           const newItem: SaleItem = {
             id: Number(r.id),
             saleId: sId,
@@ -265,6 +287,10 @@ export class SaleRepository extends BaseRepository<Sale> {
             unit: r.unit ? String(r.unit) : undefined,
             unitType: r.unitType || 'sub',
             conversionRate: r.conversionRate ? Number(r.conversionRate) : 1,
+            brand: brand && brand !== 'N/A' ? brand : undefined,
+            brandName: brand && brand !== 'N/A' ? brand : undefined,
+            subUnit: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+            subUnitName: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
             total: Number(r.total || 0),
             createdAt: r.createdAt,
             updatedAt: r.updatedAt,
@@ -507,6 +533,32 @@ export class SaleRepository extends BaseRepository<Sale> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
+        const existingItem = existingSale?.items?.find(
+          (x) => x.productId === Number(it.productId) || (x.id && it.id && Number(x.id) === Number(it.id))
+        );
+
+        const rawBrand =
+          it.brandName ||
+          (typeof it.brand === 'string' ? it.brand : it.brand?.name) ||
+          it.product?.brandName ||
+          (typeof it.product?.brand === 'string' ? it.product?.brand : it.product?.brand?.name) ||
+          existingItem?.brandName ||
+          existingItem?.brand;
+        const brand = rawBrand && String(rawBrand).trim() !== 'N/A' ? String(rawBrand).trim() : undefined;
+
+        const rawSubUnit =
+          it.subUnitName ||
+          (typeof it.subUnit === 'string' ? it.subUnit : it.subUnit?.name) ||
+          it.sub_unit ||
+          it.product?.subUnitName ||
+          (typeof it.product?.subUnit === 'string' ? it.product?.subUnit : it.product?.subUnit?.name) ||
+          it.product?.subunit?.name ||
+          it.productUnit?.name ||
+          it.productUnit?.unit?.name ||
+          existingItem?.subUnitName ||
+          existingItem?.subUnit;
+        const subUnit = rawSubUnit && String(rawSubUnit).trim() !== 'N/A' ? String(rawSubUnit).trim() : undefined;
+
         items.push({
           id: itemId,
           saleId,
@@ -521,6 +573,10 @@ export class SaleRepository extends BaseRepository<Sale> {
           unit: it.unit ? String(it.unit) : undefined,
           unitType,
           conversionRate,
+          brand,
+          brandName: brand,
+          subUnit,
+          subUnitName: subUnit,
           total: itemTotal,
           createdAt: it.createdAt ? String(it.createdAt) : sale.createdAt,
           updatedAt: it.updatedAt ? String(it.updatedAt) : sale.updatedAt,
@@ -592,8 +648,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           for (const it of items) {
             await db.execute(
               `INSERT INTO sale_items (
-                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 it.id,
                 it.saleId,
@@ -608,6 +664,8 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.unit || null,
                 it.unitType || 'sub',
                 it.conversionRate || 1,
+                it.brandName || it.brand || null,
+                it.subUnitName || it.subUnit || null,
                 it.total,
                 it.createdAt,
                 it.updatedAt,
@@ -663,8 +721,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           for (const it of items) {
             await db.execute(
               `INSERT INTO sale_items (
-                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 it.id,
                 it.saleId,
@@ -679,6 +737,8 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.unit || null,
                 it.unitType || 'sub',
                 it.conversionRate || 1,
+                it.brandName || it.brand || null,
+                it.subUnitName || it.subUnit || null,
                 it.total,
                 it.createdAt,
                 it.updatedAt,
@@ -687,7 +747,8 @@ export class SaleRepository extends BaseRepository<Sale> {
             );
           }
         }
-        return { ...sale, items };
+        const fullItems = await this.getItemsForSale(sale.id);
+        return { ...sale, items: fullItems.length > 0 ? fullItems : items };
       }
 
       return await this.getById(id);
@@ -726,6 +787,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         ...item,
         id: itemId,
         saleId,
+        brand: item.brand || item.brandName || undefined,
+        brandName: item.brandName || item.brand || undefined,
+        subUnit: item.subUnit || item.subUnitName || undefined,
+        subUnitName: item.subUnitName || item.subUnit || undefined,
         createdAt: now,
         updatedAt: now,
         syncStatus: 'pending_insert',
@@ -734,8 +799,8 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       await db.execute(
         `INSERT INTO sale_items (
-          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           itemId,
           saleId,
@@ -750,6 +815,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           item.unit || null,
           unitType,
           conversionRate,
+          item.brandName || item.brand || null,
+          item.subUnitName || item.subUnit || null,
           item.total,
           now,
           now,
@@ -917,6 +984,10 @@ export class SaleRepository extends BaseRepository<Sale> {
         ...item,
         id: itemId,
         saleId,
+        brand: item.brand || item.brandName || undefined,
+        brandName: item.brandName || item.brand || undefined,
+        subUnit: item.subUnit || item.subUnitName || undefined,
+        subUnitName: item.subUnitName || item.subUnit || undefined,
         createdAt: now,
         updatedAt: now,
         syncStatus: 'pending_insert',
@@ -925,8 +996,8 @@ export class SaleRepository extends BaseRepository<Sale> {
 
       await db.execute(
         `INSERT INTO sale_items (
-          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, total, createdAt, updatedAt, syncStatus
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, saleId, productId, productName, quantity, unitPrice, discount, gst, taxAmount, unitCost, unit, unitType, conversionRate, brandName, subUnitName, total, createdAt, updatedAt, syncStatus
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           itemId,
           saleId,
@@ -941,6 +1012,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           item.unit || null,
           unitType,
           conversionRate,
+          item.brandName || item.brand || null,
+          item.subUnitName || item.subUnit || null,
           item.total,
           now,
           now,

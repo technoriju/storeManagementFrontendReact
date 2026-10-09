@@ -33,6 +33,7 @@ export const PrinterSettingsScreen = () => {
     items: [
       {
         productName: 'Basmati Premium Rice (1kg)',
+        brand: 'India Gate',
         quantity: 2,
         unitPrice: 160,
         discount: 10,
@@ -40,9 +41,12 @@ export const PrinterSettingsScreen = () => {
         taxAmount: 15,
         total: 325,
         unit: 'Kg',
+        subUnit: 'Gm',
+        conversionRate: 1000,
       },
       {
         productName: 'Cold Pressed Groundnut Oil (1L)',
+        brand: 'NatureFresh',
         quantity: 2,
         unitPrice: 240,
         discount: 20,
@@ -50,9 +54,12 @@ export const PrinterSettingsScreen = () => {
         taxAmount: 23,
         total: 483,
         unit: 'Bottle',
+        subUnit: 'Ml',
+        conversionRate: 1000,
       },
       {
         productName: 'Organic Green Cardamom (100g)',
+        brand: 'Catch',
         quantity: 1,
         unitPrice: 450,
         discount: 20,
@@ -86,6 +93,7 @@ export const PrinterSettingsScreen = () => {
     items: [
       {
         productName: 'Grade-A Wheat Flour (Chakki Atta 30kg Bag)',
+        brand: 'Aashirvaad',
         hsn: '1101',
         quantity: 10,
         unitPrice: 950,
@@ -94,9 +102,12 @@ export const PrinterSettingsScreen = () => {
         taxAmount: 460,
         total: 9660,
         unit: 'Bag',
+        subUnit: 'Kg',
+        conversionRate: 30,
       },
       {
         productName: 'Refined Sunflower Oil Tin (15L Box)',
+        brand: 'Fortune',
         hsn: '1512',
         quantity: 5,
         unitPrice: 1780,
@@ -105,6 +116,8 @@ export const PrinterSettingsScreen = () => {
         taxAmount: 420,
         total: 8820,
         unit: 'Tin',
+        subUnit: 'Ltr',
+        conversionRate: 15,
       },
     ],
   };

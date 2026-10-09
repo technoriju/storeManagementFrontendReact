@@ -26,6 +26,7 @@ import {
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
+import { enrichSaleItemsWithProductMeta } from '../utils/enrichSaleItems';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -193,7 +194,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       }
     }
 
-    return Array.from(itemsMap.values());
+    const filtered = Array.from(itemsMap.values());
+    return await enrichSaleItemsWithProductMeta(filtered);
   };
 
   const handleOpenPrintPreview = async (order: any) => {
@@ -205,13 +207,22 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           productId: i.productId,
           productName: i.productName || `Product #${i.productId || 1}`,
           sku: i.sku,
+          brand: i.brand || i.brandName || i.product?.brandName,
+          brandName: i.brandName || i.brand || i.product?.brandName,
+          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
+          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
+          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : undefined),
+          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
+          unitType: i.unitType,
           quantity: Number(i.quantity) || 1,
           unitPrice: Number(i.unitPrice) || 0,
           discount: Number(i.discount) || 0,
           gst: Number(i.gst) || 0,
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
-          unit: i.unit || 'Pcs',
+          unit: i.unit || i.product?.unitName || i.product?.baseUnitName || 'Pcs',
+          product: i.product,
+          productUnit: i.productUnit,
           hsn: i.hsn || '',
         }))
       : [

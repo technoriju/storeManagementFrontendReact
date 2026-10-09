@@ -88,6 +88,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
         items: [
           {
             productName: 'Grade-A Wheat Flour (Chakki Atta 30kg Bag)',
+            brand: 'Aashirvaad',
             hsn: '1101',
             quantity: 10,
             unitPrice: 950,
@@ -96,9 +97,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
             taxAmount: 460,
             total: 9660,
             unit: 'Bag',
+            subUnit: 'Kg',
+            conversionRate: 30,
           },
           {
             productName: 'Refined Sunflower Oil Tin (15L Box)',
+            brand: 'Fortune',
             hsn: '1512',
             quantity: 5,
             unitPrice: 1780,
@@ -107,6 +111,8 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
             taxAmount: 420,
             total: 8820,
             unit: 'Tin',
+            subUnit: 'Ltr',
+            conversionRate: 15,
           },
         ],
       };
@@ -131,6 +137,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
       items: [
         {
           productName: 'Basmati Premium Rice (1kg)',
+          brand: 'India Gate',
           hsn: '1006',
           quantity: 2,
           unitPrice: 160,
@@ -139,9 +146,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
           taxAmount: 15,
           total: 325,
           unit: 'Kg',
+          subUnit: 'Gm',
+          conversionRate: 1000,
         },
         {
           productName: 'Cold Pressed Groundnut Oil (1L)',
+          brand: 'NatureFresh',
           hsn: '1508',
           quantity: 2,
           unitPrice: 240,
@@ -150,9 +160,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
           taxAmount: 23,
           total: 483,
           unit: 'Bottle',
+          subUnit: 'Ml',
+          conversionRate: 1000,
         },
         {
           productName: 'Organic Green Cardamom (100g)',
+          brand: 'Catch',
           hsn: '0908',
           quantity: 1,
           unitPrice: 450,
@@ -732,12 +745,30 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                     const raw = Number(it.unitPrice || 0) * qty;
                     const disc = Number(it.discount || 0);
                     const taxable = Math.max(0, raw - disc);
+                    const brand = (it.brand || it.brandName || '').trim();
+                    const subUnit = (it.subUnit || it.subUnitName || '').trim();
+                    const metaParts: string[] = [];
+                    if (brand && brand !== 'N/A') metaParts.push(`Brand: ${brand}`);
+                    if (subUnit && subUnit !== 'N/A') {
+                      const conv = it.conversionRate && Number(it.conversionRate) > 1 && it.unit && it.unit !== subUnit
+                        ? ` (1 ${it.unit} = ${it.conversionRate} ${subUnit})`
+                        : '';
+                      metaParts.push(`Sub Unit: ${subUnit}${conv}`);
+                    }
+                    const metaText = metaParts.join(' | ');
+
                     return (
                       <View key={idx} style={[styles.p140TableRow, idx % 2 === 1 && styles.p140TableRowAlt]}>
                         <Text style={[styles.p140Td, { width: 22, textAlign: 'center' }]}>{idx + 1}</Text>
-                        <Text style={[styles.p140Td, { flex: 2, fontWeight: '600' }]}>{it.productName}</Text>
+                        <View style={{ flex: 2 }}>
+                          <Text style={[styles.p140Td, { fontWeight: '600' }]}>{it.productName}</Text>
+                          {metaText ? <Text style={{ fontSize: 7.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
+                        </View>
                         {customerType === 'wholesale' && <Text style={[styles.p140Td, { width: 40, textAlign: 'center' }]}>{it.hsn || '1006'}</Text>}
-                        <Text style={[styles.p140Td, { width: 35, textAlign: 'center' }]}>{it.quantity} {it.unit || ''}</Text>
+                        <Text style={[styles.p140Td, { width: 35, textAlign: 'center' }]}>
+                          {it.quantity} {it.unit || ''}
+                          {subUnit && subUnit !== it.unit ? `\n(${subUnit})` : ''}
+                        </Text>
                         <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>{Number(it.unitPrice).toFixed(2)}</Text>
                         <Text style={[styles.p140Td, { width: 45, textAlign: 'right' }]}>{disc > 0 ? disc.toFixed(2) : '-'}</Text>
                         <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>{taxable.toFixed(2)}</Text>
@@ -905,21 +936,36 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                   <Text style={[styles.rcTh, { width: 65, textAlign: 'right' }]}>TOTAL</Text>
                 </View>
 
-                {sampleData.items.map((it, idx) => (
-                  <View key={idx} style={styles.rcItemBlock}>
-                    <Text style={styles.rcItemName}>{it.productName}</Text>
-                    <View style={styles.rcItemDetails}>
-                      <Text style={styles.rcItemSub}>
-                        {it.discount ? `Disc: -₹${Number(it.discount).toFixed(2)}` : ''} GST {it.gst || 5}%
-                      </Text>
-                      <Text style={{ width: 35, textAlign: 'center', fontSize: 10 }}>{it.quantity}</Text>
-                      <Text style={{ width: 60, textAlign: 'right', fontSize: 10 }}>{Number(it.unitPrice).toFixed(2)}</Text>
-                      <Text style={{ width: 65, textAlign: 'right', fontWeight: '700', fontSize: 10.5 }}>
-                        ₹{Number(it.total).toFixed(2)}
-                      </Text>
+                {sampleData.items.map((it, idx) => {
+                  const brand = (it.brand || it.brandName || '').trim();
+                  const subUnit = (it.subUnit || it.subUnitName || '').trim();
+                  const metaParts: string[] = [];
+                  if (brand && brand !== 'N/A') metaParts.push(`Brand: ${brand}`);
+                  if (subUnit && subUnit !== 'N/A') {
+                    const conv = it.conversionRate && Number(it.conversionRate) > 1 && it.unit && it.unit !== subUnit
+                      ? ` (1 ${it.unit} = ${it.conversionRate} ${subUnit})`
+                      : '';
+                    metaParts.push(`Sub Unit: ${subUnit}${conv}`);
+                  }
+                  const metaText = metaParts.join(' | ');
+
+                  return (
+                    <View key={idx} style={styles.rcItemBlock}>
+                      <Text style={styles.rcItemName}>{it.productName}</Text>
+                      {metaText ? <Text style={{ fontSize: 9.5, color: '#64748B', marginTop: 1, marginBottom: 2 }}>{metaText}</Text> : null}
+                      <View style={styles.rcItemDetails}>
+                        <Text style={styles.rcItemSub}>
+                          {it.discount ? `Disc: -₹${Number(it.discount).toFixed(2)}` : ''} GST {it.gst || 5}%
+                        </Text>
+                        <Text style={{ width: 35, textAlign: 'center', fontSize: 10 }}>{it.quantity}{it.unit ? ` ${it.unit}` : ''}</Text>
+                        <Text style={{ width: 60, textAlign: 'right', fontSize: 10 }}>{Number(it.unitPrice).toFixed(2)}</Text>
+                        <Text style={{ width: 65, textAlign: 'right', fontWeight: '700', fontSize: 10.5 }}>
+                          ₹{Number(it.total).toFixed(2)}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
 
                 <Text style={styles.rcDashedLine}>- - - - - - - - - - - - - - - - - - - - - - - - -</Text>
 
@@ -1072,13 +1118,31 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                     const raw = Number(it.unitPrice || 0) * qty;
                     const disc = Number(it.discount || 0);
                     const taxable = Math.max(0, raw - disc);
+                    const brand = (it.brand || it.brandName || '').trim();
+                    const subUnit = (it.subUnit || it.subUnitName || '').trim();
+                    const metaParts: string[] = [];
+                    if (brand && brand !== 'N/A') metaParts.push(`Brand: ${brand}`);
+                    if (subUnit && subUnit !== 'N/A') {
+                      const conv = it.conversionRate && Number(it.conversionRate) > 1 && it.unit && it.unit !== subUnit
+                        ? ` (1 ${it.unit} = ${it.conversionRate} ${subUnit})`
+                        : '';
+                      metaParts.push(`Sub Unit: ${subUnit}${conv}`);
+                    }
+                    const metaText = metaParts.join(' | ');
+
                     return (
                       <View key={idx} style={[styles.invTableRow, idx % 2 === 1 && styles.invTableRowAlt]}>
                         <Text style={[styles.invTd, { width: 25, textAlign: 'center' }]}>{idx + 1}</Text>
-                        <Text style={[styles.invTd, { flex: 2, fontWeight: '600' }]}>{it.productName}</Text>
+                        <View style={{ flex: 2 }}>
+                          <Text style={[styles.invTd, { fontWeight: '600' }]}>{it.productName}</Text>
+                          {metaText ? <Text style={{ fontSize: 7.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
+                        </View>
                         {customerType === 'wholesale' && <Text style={[styles.invTd, { width: 55, textAlign: 'center' }]}>{it.hsn || '1006'}</Text>}
                         <Text style={[styles.invTd, { width: 40, textAlign: 'center' }]}>{it.quantity}</Text>
-                        <Text style={[styles.invTd, { width: 45, textAlign: 'center' }]}>{it.unit || 'Pcs'}</Text>
+                        <Text style={[styles.invTd, { width: 45, textAlign: 'center' }]}>
+                          {it.unit || 'Pcs'}
+                          {subUnit && subUnit !== it.unit ? `\n(${subUnit})` : ''}
+                        </Text>
                         <Text style={[styles.invTd, { width: 65, textAlign: 'right' }]}>{Number(it.unitPrice).toFixed(2)}</Text>
                         <Text style={[styles.invTd, { width: 55, textAlign: 'right' }]}>{disc > 0 ? disc.toFixed(2) : '-'}</Text>
                         <Text style={[styles.invTd, { width: 65, textAlign: 'right' }]}>{taxable.toFixed(2)}</Text>

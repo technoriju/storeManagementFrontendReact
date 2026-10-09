@@ -379,10 +379,10 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       render: (val: any, item: Payment) => {
         const isCust = !!item.customerId;
         const name = isCust
-          ? customerMap[item.customerId!]?.name || 'Customer'
+          ? (item as any).customerName || (item as any).partyName || customerMap[Number(item.customerId)]?.name || customerMap[String(item.customerId) as any]?.name || (item.customerId ? `Customer #${item.customerId}` : 'Customer')
           : item.supplierId
-          ? supplierMap[item.supplierId]?.name || 'Supplier'
-          : 'General';
+          ? (item as any).supplierName || (item as any).partyName || supplierMap[Number(item.supplierId)]?.name || supplierMap[String(item.supplierId) as any]?.name || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier')
+          : (item as any).partyName || 'General';
 
         return (
           <View>
