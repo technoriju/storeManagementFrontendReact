@@ -1043,7 +1043,7 @@ export class ReportsService {
 
         const totalBilled = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
         const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
-        const totalDue = Math.max(0, totalBilled - totalPaid);
+        const totalDue = sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0);
 
         return {
           customer: custInfo,
@@ -1054,7 +1054,7 @@ export class ReportsService {
             totalBilled,
             totalPaid,
             totalDue,
-            outstandingBalance: Number(custInfo.outstandingBalance || totalDue),
+            outstandingBalance: Number(custInfo.outstandingBalance !== undefined ? custInfo.outstandingBalance : totalDue),
           },
         };
       }
@@ -1118,7 +1118,7 @@ export class ReportsService {
       if (customer) {
         const totalBilled = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
         const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
-        const totalDue = Math.max(0, totalBilled - totalPaid);
+        const totalDue = sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0);
 
         return {
           customer: {
@@ -1132,7 +1132,7 @@ export class ReportsService {
             totalBilled,
             totalPaid,
             totalDue,
-            outstandingBalance: Number(customer.outstandingBalance || totalDue),
+            outstandingBalance: Number(customer.outstandingBalance !== undefined ? customer.outstandingBalance : totalDue),
           },
         };
       }

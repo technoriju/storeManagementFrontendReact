@@ -125,7 +125,8 @@ export const POSScreen = () => {
 
       let prevDue = 0;
       let advPay = 0;
-      if (customer?.id && Number(customer.id) !== 1) {
+      const isWalkIn = !customer?.name || customer.name.toLowerCase().includes('walk-in');
+      if (customer?.id && !isWalkIn) {
         try {
           const cBal = await saleRepository.getCustomerPreviousBalance(customer.id, customer.name);
           if (cBal.totalDue > 0) prevDue = cBal.totalDue;
@@ -137,7 +138,7 @@ export const POSScreen = () => {
         sale: {
           invoiceNumber: invNum,
           reference: invNum,
-          customerId: customer?.id || 1,
+          customerId: (!isWalkIn && customer?.id) ? customer.id : undefined,
           customerName: customer?.name || 'Walk-in Customer',
           date: new Date().toISOString().split('T')[0],
           subtotal: sub,
