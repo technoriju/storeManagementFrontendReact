@@ -64,6 +64,11 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
   // Overview data for "All Customers"
   const [allCustomersData, setAllCustomersData] = useState<any[]>([]);
+  const [overviewPage, setOverviewPage] = useState(1);
+  const [overviewRowsPerPage, setOverviewRowsPerPage] = useState(10);
+  const [overviewTotalItems, setOverviewTotalItems] = useState(0);
+  const [overviewTotalPages, setOverviewTotalPages] = useState(1);
+  const [overviewSummary, setOverviewSummary] = useState<any>(null);
 
   // Sync prop changes
   useEffect(() => {
@@ -82,15 +87,23 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   }, []);
 
   // Fetch data depending on whether a customer is selected or all
-  const loadData = async () => {
+  const loadData = async (targetPage = overviewPage, targetLimit = overviewRowsPerPage, targetSearch = customerSearchQuery) => {
     setIsLoading(true);
     try {
       if (selectedCustomerId) {
         const stmt = await ReportsService.getCustomerWiseStatement(selectedCustomerId, filters);
         setStatementData(stmt);
       } else {
-        const res = await ReportsService.getCustomerReport(filters);
-        setAllCustomersData(res);
+        const res = await ReportsService.getCustomerReport({
+          ...filters,
+          page: targetPage,
+          limit: targetLimit,
+          search: targetSearch.trim() || undefined,
+        });
+        setAllCustomersData(res.data);
+        setOverviewTotalItems(res.total);
+        setOverviewTotalPages(res.totalPages);
+        setOverviewSummary(res.summary);
       }
     } catch (err) {
       console.error('Error loading customer-wise report', err);
@@ -100,13 +113,14 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   };
 
   useEffect(() => {
-    loadData();
-  }, [selectedCustomerId, filters.startDate, filters.endDate]);
+    loadData(overviewPage, overviewRowsPerPage, customerSearchQuery);
+  }, [selectedCustomerId, filters.startDate, filters.endDate, overviewPage, overviewRowsPerPage, customerSearchQuery]);
 
   const handleChooseCustomer = (id: number | string | null) => {
     setSelectedCustomerId(id);
     setIsCustomerDropdownOpen(false);
     setTransactionSearchQuery('');
+    setOverviewPage(1);
     if (onSelectCustomer) {
       onSelectCustomer(id);
     }
@@ -376,6 +390,9 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
               { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
             ]}
             data={filteredInvoices}
+            searchValue={transactionSearchQuery}
+            onSearch={setTransactionSearchQuery}
+            debounceSearchMs={400}
             hasCheckbox={false}
             isLoading={isLoading}
           />
@@ -391,6 +408,9 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
               { key: 'amount', title: 'Amount Paid (₹)', width: 140, render: (val: number) => <Text style={{ fontWeight: '700', color: '#10B981' }}>+₹{Number(val || 0).toLocaleString()}</Text> },
             ]}
             data={filteredPayments}
+            searchValue={transactionSearchQuery}
+            onSearch={setTransactionSearchQuery}
+            debounceSearchMs={400}
             hasCheckbox={false}
             isLoading={isLoading}
           />
@@ -400,9 +420,10 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   }
 
   // "All Customers Overview" View
-  const totalAllBilled = filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalBilled || 0), 0);
-  const totalAllPaid = filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalPaid || 0), 0);
-  const totalAllDue = filteredAllCustomers.reduce((sum, c) => sum + Number(c.outstandingBalance || 0), 0);
+  const totalAllBilled = overviewSummary?.totalBilled ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalBilled || 0), 0);
+  const totalAllPaid = overviewSummary?.totalPaid ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalPaid || 0), 0);
+  const totalAllDue = overviewSummary?.totalOutstanding ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.outstandingBalance || 0), 0);
+  const totalAllCount = overviewTotalItems || filteredAllCustomers.length;
 
   return (
     <View style={styles.container}>
@@ -474,7 +495,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           </View>
           <View>
             <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Customers</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{filteredAllCustomers.length}</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{totalAllCount}</Text>
             <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Accounts in record</Text>
           </View>
         </View>
@@ -542,6 +563,21 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           },
         ]}
         data={filteredAllCustomers}
+        searchValue={customerSearchQuery}
+        onSearch={(text) => {
+          setCustomerSearchQuery(text);
+          setOverviewPage(1);
+        }}
+        debounceSearchMs={400}
+        page={overviewPage}
+        rowsPerPage={overviewRowsPerPage}
+        totalItems={overviewTotalItems}
+        totalPages={overviewTotalPages}
+        onPageChange={(newPage) => setOverviewPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setOverviewRowsPerPage(newRows);
+          setOverviewPage(1);
+        }}
         hasCheckbox={false}
         isLoading={isLoading}
       />

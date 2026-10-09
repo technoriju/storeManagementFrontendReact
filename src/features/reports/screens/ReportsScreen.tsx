@@ -94,8 +94,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const [activeReportId, setActiveReportId] = useState<string>(normalizedInitial);
   const [data, setData] = useState<any[]>([]);
   const [statementData, setStatementData] = useState<any>(null);
+  const [summaryData, setSummaryData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [selectedFilterStatus, setSelectedFilterStatus] = useState<string | undefined>(undefined);
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
 
@@ -128,14 +133,16 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   }, [activeReportId]);
 
   // Fetch report data
-  const loadReportData = async () => {
+  const loadReportData = async (targetPage = page, targetLimit = rowsPerPage, targetSearch = searchQuery) => {
     setIsLoading(true);
     try {
-      const filters: ReportFilters = {};
-      
-      // Calculate date filters from dynamic dateRange state
-      filters.startDate = dateRange.startDate;
-      filters.endDate = dateRange.endDate;
+      const filters: ReportFilters = {
+        page: targetPage,
+        limit: targetLimit,
+        search: targetSearch.trim() || undefined,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      };
 
       if (activeReportId === 'customer_wise' || activeReportId === 'supplier_wise') {
         // Handled by dedicated CustomerWiseReportView and SupplierWiseReportView
@@ -146,57 +153,90 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       switch (activeReportId) {
         case 'sales_report': {
           const res = await ReportsService.getSalesReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'purchase_report': {
           const res = await ReportsService.getPurchasesReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'inventory_report': {
           const res = await ReportsService.getInventoryReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'customer_report': {
           const res = await ReportsService.getCustomerReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'supplier_report': {
           const res = await ReportsService.getSupplierReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'product_report': {
           const res = await ReportsService.getProductReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'invoice_report': {
           const res = await ReportsService.getInvoiceReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'payment_report': {
           const res = await ReportsService.getPaymentReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'expense_report': {
           const res = await ReportsService.getExpenseReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'income_report': {
           const res = await ReportsService.getIncomeReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'tax_report': {
           const res = await ReportsService.getTaxReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
         case 'profit_loss': {
@@ -211,7 +251,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         }
         default: {
           const res = await ReportsService.getSalesReport(filters);
-          setData(res);
+          setData(res.data);
+          setTotalItems(res.total);
+          setTotalPages(res.totalPages);
+          setSummaryData(res.summary);
           break;
         }
       }
@@ -223,31 +266,28 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   };
 
   useEffect(() => {
-    loadReportData();
-  }, [activeReportId, dateRange.startDate, dateRange.endDate]);
+    loadReportData(page, rowsPerPage, searchQuery);
+  }, [activeReportId, dateRange.startDate, dateRange.endDate, page, rowsPerPage, searchQuery]);
 
   const handleSelectTab = (tabId: string) => {
     setActiveReportId(tabId);
     setSearchQuery('');
+    setPage(1);
     setSelectedFilterStatus(undefined);
     if (onNavigateReport) {
       onNavigateReport(tabId);
     }
   };
 
-  // Client-side search and filtering
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    setPage(1);
+  };
+
+  // Client-side filtering (status)
   const filteredData = useMemo(() => {
     if (!Array.isArray(data)) return [];
     let items = [...data];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      items = items.filter((item) => {
-        return Object.values(item).some((val) =>
-          String(val).toLowerCase().includes(q)
-        );
-      });
-    }
 
     if (selectedFilterStatus) {
       items = items.filter((item) => {
@@ -257,15 +297,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     return items;
-  }, [data, searchQuery, selectedFilterStatus]);
+  }, [data, selectedFilterStatus]);
 
   // Contextual KPI cards calculation
   const reportKPIs = useMemo(() => {
     if (activeReportId === 'sales_report') {
-      const totalSales = filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
-      const totalPaid = filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
-      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
-      const invoiceCount = filteredData.length;
+      const totalSales = summaryData?.totalSales ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
+      const totalPaid = summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
+      const totalDue = summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
+      const invoiceCount = totalItems || filteredData.length;
       const avgValue = invoiceCount > 0 ? Math.round(totalSales / invoiceCount) : 0;
 
       return [
@@ -277,22 +317,23 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'purchase_report') {
-      const totalPurchase = filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
-      const totalPaid = filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
-      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
+      const totalPurchase = summaryData?.totalPurchases ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
+      const totalPaid = summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
+      const totalDue = summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
+      const orderCount = totalItems || filteredData.length;
 
       return [
-        { title: 'Total Procurement', value: `₹${totalPurchase.toLocaleString()}`, sub: `${filteredData.length} purchase orders`, icon: ShoppingBag, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Total Procurement', value: `₹${totalPurchase.toLocaleString()}`, sub: `${orderCount} purchase orders`, icon: ShoppingBag, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'Paid to Suppliers', value: `₹${totalPaid.toLocaleString()}`, sub: 'Disbursed payments', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Supplier Payables Due', value: `₹${totalDue.toLocaleString()}`, sub: 'Balance pending', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
-        { title: 'Purchase Orders', value: String(filteredData.length), sub: 'Active vendor POs', icon: Layers, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Purchase Orders', value: String(orderCount), sub: 'Active vendor POs', icon: Layers, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
     if (activeReportId === 'inventory_report') {
-      const totalSKUs = filteredData.length;
-      const totalUnits = filteredData.reduce((sum, i) => sum + Number(i.stockQuantity || 0), 0);
-      const totalValuation = filteredData.reduce((sum, i) => sum + Number(i.stockValuation || 0), 0);
+      const totalSKUs = totalItems || filteredData.length;
+      const totalUnits = summaryData?.totalQuantity ?? filteredData.reduce((sum, i) => sum + Number(i.stockQuantity || 0), 0);
+      const totalValuation = summaryData?.estimatedStockValue ?? filteredData.reduce((sum, i) => sum + Number(i.stockValuation || 0), 0);
       const lowStockCount = filteredData.filter((i) => i.status === 'LOW_STOCK' || i.status === 'OUT_OF_STOCK').length;
 
       return [
@@ -304,9 +345,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'customer_report') {
-      const totalCust = filteredData.length;
+      const totalCust = totalItems || filteredData.length;
       const totalBilled = filteredData.reduce((sum, i) => sum + Number(i.totalBilled || 0), 0);
-      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
+      const totalDue = summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
       const overdueCust = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
 
       return [
@@ -318,9 +359,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'supplier_report') {
-      const totalSupp = filteredData.length;
+      const totalSupp = totalItems || filteredData.length;
       const totalPurchased = filteredData.reduce((sum, i) => sum + Number(i.totalPurchased || 0), 0);
-      const totalDue = filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
+      const totalDue = summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
       const pendingSupp = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
 
       return [
@@ -332,9 +373,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'product_report') {
-      const totalRevenue = filteredData.reduce((sum, i) => sum + Number(i.revenue || 0), 0);
-      const totalProfit = filteredData.reduce((sum, i) => sum + Number(i.profit || 0), 0);
-      const totalUnits = filteredData.reduce((sum, i) => sum + Number(i.unitsSold || 0), 0);
+      const totalRevenue = summaryData?.totalRevenue ?? filteredData.reduce((sum, i) => sum + Number(i.revenue || 0), 0);
+      const totalProfit = summaryData?.totalProfit ?? filteredData.reduce((sum, i) => sum + Number(i.profit || 0), 0);
+      const totalUnits = summaryData?.totalQuantitySold ?? filteredData.reduce((sum, i) => sum + Number(i.unitsSold || 0), 0);
       const avgMargin = totalRevenue > 0 ? Number(((totalProfit / totalRevenue) * 100).toFixed(1)) : 0;
 
       return [
@@ -346,13 +387,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'invoice_report') {
-      const grandTotal = filteredData.reduce((sum, i) => sum + Number(i.grandTotal || 0), 0);
-      const taxAmount = filteredData.reduce((sum, i) => sum + Number(i.taxAmount || 0), 0);
+      const grandTotal = summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.grandTotal || 0), 0);
+      const taxAmount = summaryData?.totalTax ?? filteredData.reduce((sum, i) => sum + Number(i.taxAmount || 0), 0);
       const paidCount = filteredData.filter((i) => i.paymentStatus === 'Paid').length;
       const unpaidCount = filteredData.filter((i) => i.paymentStatus !== 'Paid').length;
 
       return [
-        { title: 'Invoiced Amount', value: `₹${grandTotal.toLocaleString()}`, sub: `${filteredData.length} tax bills`, icon: FileText, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Invoiced Amount', value: `₹${grandTotal.toLocaleString()}`, sub: `${totalItems || filteredData.length} tax bills`, icon: FileText, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'GST Collected', value: `₹${taxAmount.toLocaleString()}`, sub: 'Total tax component', icon: Activity, color: '#7C3AED', bg: '#F5F3FF' },
         { title: 'Paid Invoices', value: String(paidCount), sub: 'Settled receipts', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Unpaid / Partial', value: String(unpaidCount), sub: 'Pending collection', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
@@ -360,7 +401,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'payment_report') {
-      const totalInflow = filteredData.reduce((sum, i) => sum + Number(i.inflow || 0), 0);
+      const totalInflow = summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.inflow || 0), 0);
       const totalOutflow = filteredData.reduce((sum, i) => sum + Number(i.outflow || 0), 0);
       const netCash = totalInflow - totalOutflow;
 
@@ -368,15 +409,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         { title: 'Total Collections (In)', value: `₹${totalInflow.toLocaleString()}`, sub: 'Receipts from customers', icon: ArrowUpRight, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Total Payouts (Out)', value: `₹${totalOutflow.toLocaleString()}`, sub: 'Vendor & expense payouts', icon: ArrowDownLeft, color: '#EF4444', bg: '#FEF2F2' },
         { title: 'Net Cash Flow', value: `₹${netCash.toLocaleString()}`, sub: 'Inflow minus outflow', icon: DollarSign, color: netCash >= 0 ? '#10B981' : '#EF4444', bg: netCash >= 0 ? '#ECFDF5' : '#FEF2F2' },
-        { title: 'Total Transactions', value: String(filteredData.length), sub: 'Vouchers recorded', icon: Layers, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Total Transactions', value: String(totalItems || filteredData.length), sub: 'Vouchers recorded', icon: Layers, color: '#2563EB', bg: '#EFF6FF' },
       ];
     }
 
     if (activeReportId === 'expense_report') {
-      const totalExp = filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      const totalExp = summaryData?.totalExpenses ?? filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
 
       return [
-        { title: 'Total Expenses', value: `₹${totalExp.toLocaleString()}`, sub: `${filteredData.length} cost vouchers`, icon: FileMinus, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Total Expenses', value: `₹${totalExp.toLocaleString()}`, sub: `${totalItems || filteredData.length} cost vouchers`, icon: FileMinus, color: '#EF4444', bg: '#FEF2F2' },
         { title: 'Top Category', value: 'Rent & Facility', sub: '₹25,000 monthly', icon: PieChart, color: '#D97706', bg: '#FFFBEB' },
         { title: 'Operational Overhead', value: `₹${totalExp.toLocaleString()}`, sub: 'Direct business costs', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
       ];
@@ -386,27 +427,28 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       const totalInc = filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
 
       return [
-        { title: 'Total Inflow Recorded', value: `₹${totalInc.toLocaleString()}`, sub: `${filteredData.length} credit entries`, icon: FilePlus, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Total Inflow Recorded', value: `₹${totalInc.toLocaleString()}`, sub: `${totalItems || filteredData.length} credit entries`, icon: FilePlus, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Primary Source', value: 'Sales Operations', sub: 'Core store revenues', icon: TrendingUp, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'Other Inflows', value: '₹10,800', sub: 'Interest & scrap sales', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
     if (activeReportId === 'tax_report') {
+      const totalTax = summaryData?.totalTax;
       const salesTax = filteredData.filter((i) => i.type === 'SALE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
       const purchaseTax = filteredData.filter((i) => i.type === 'PURCHASE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
-      const netTaxPayable = Math.max(0, salesTax - purchaseTax);
+      const netTaxPayable = totalTax !== undefined ? totalTax : Math.max(0, salesTax - purchaseTax);
 
       return [
         { title: 'Output GST (Sales)', value: `₹${salesTax.toLocaleString()}`, sub: 'Collected from buyers', icon: ArrowUpRight, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'Input Tax Credit (ITC)', value: `₹${purchaseTax.toLocaleString()}`, sub: 'Paid to suppliers', icon: ArrowDownLeft, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Net GST Payable', value: `₹${netTaxPayable.toLocaleString()}`, sub: 'Government tax liability', icon: Activity, color: '#EF4444', bg: '#FEF2F2' },
-        { title: 'Tax Invoices Logged', value: String(filteredData.length), sub: 'GSTR compliance ready', icon: FileText, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Tax Invoices Logged', value: String(totalItems || filteredData.length), sub: 'GSTR compliance ready', icon: FileText, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
     return [];
-  }, [activeReportId, filteredData]);
+  }, [activeReportId, filteredData, summaryData, totalItems]);
 
   // Helper status badge renderer
   const renderStatusBadge = (status: string) => {
@@ -736,7 +778,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     <View style={styles.actionButtonsRow}>
       <Pressable
         style={[styles.iconButton, { borderColor: theme.colors.border }]}
-        onPress={loadReportData}
+        onPress={() => loadReportData()}
       >
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
@@ -769,7 +811,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Date Range filter control
   const dateFilters = (
-    <DateFilterBar currentRange={dateRange} onChangeRange={setDateRange} />
+    <DateFilterBar
+      currentRange={dateRange}
+      onChangeRange={(newRange) => {
+        setDateRange(newRange);
+        setPage(1);
+      }}
+    />
   );
 
   return (
@@ -887,10 +935,21 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               columns={tableColumns}
               data={filteredData}
               searchPlaceholder={`Search in ${activeTabConfig.label.toLowerCase()}...`}
-              onSearch={setSearchQuery}
+              searchValue={searchQuery}
+              onSearch={handleSearch}
+              debounceSearchMs={400}
               filters={dateFilters}
               isLoading={isLoading}
               hasCheckbox={false}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              totalItems={totalItems}
+              totalPages={totalPages}
+              onPageChange={(newPage) => setPage(newPage)}
+              onRowsPerPageChange={(newRows) => {
+                setRowsPerPage(newRows);
+                setPage(1);
+              }}
             />
           </View>
         )}
