@@ -294,20 +294,42 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     try {
       setIsSavingCustomer(true);
       setCustomerModalError(null);
+
+      // 1. If customer already exists in list, select immediately
+      const existing = allCustomers.find(
+        (c) => c.name?.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (existing) {
+        setCustomerId(String(existing.id));
+        setNewCustomerName('');
+        setShowAddCustomerModal(false);
+        return;
+      }
+
       const created = await addCustomerMutation.mutateAsync({
         name: trimmed,
       });
 
-      setLocalAddedCustomers((prev) => [...prev, created]);
-      try {
-        useCustomerStore.getState().addCustomer(created);
-      } catch (_) {}
+      if (created && created.id) {
+        setLocalAddedCustomers((prev) => {
+          const filtered = prev.filter(
+            (p) =>
+              String(p.id) !== String(created.id) &&
+              p.name?.trim().toLowerCase() !== created.name?.trim().toLowerCase()
+          );
+          return [...filtered, created];
+        });
+        try {
+          useCustomerStore.getState().addCustomer(created);
+        } catch (_) {}
 
-      setCustomerId(String(created.id));
+        setCustomerId(String(created.id));
+      }
       setNewCustomerName('');
       setShowAddCustomerModal(false);
     } catch (err: any) {
-      setCustomerModalError(err?.message || 'Failed to add customer.');
+      const msg = err?.response?.data?.message || err?.message || 'Failed to add customer.';
+      setCustomerModalError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setIsSavingCustomer(false);
     }
@@ -317,12 +339,37 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const allCustomers = useMemo(() => {
     const list = [...customers];
     for (const c of localAddedCustomers) {
-      if (!list.some((existing) => String(existing.id) === String(c.id))) {
+      if (
+        !list.some(
+          (existing) =>
+            String(existing.id) === String(c.id) ||
+            existing.name?.trim().toLowerCase() === c.name?.trim().toLowerCase()
+        )
+      ) {
         list.push(c);
       }
     }
     return list;
   }, [customers, localAddedCustomers]);
+
+  // Keep customerId in sync if a temp negative customer ID resolves to positive server ID in customers
+  useEffect(() => {
+    if (!customerId) return;
+    const num = Number(customerId);
+    if (num < 0) {
+      const local = localAddedCustomers.find((l) => String(l.id) === customerId);
+      if (local && local.name) {
+        const matched = customers.find(
+          (c) =>
+            c.name?.trim().toLowerCase() === local.name.trim().toLowerCase() &&
+            Number(c.id) > 0
+        );
+        if (matched) {
+          setCustomerId(String(matched.id));
+        }
+      }
+    }
+  }, [customers, customerId, localAddedCustomers]);
 
   const customerOptions = useMemo(() => {
     return allCustomers.map((c) => ({
@@ -632,11 +679,24 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         effectivePaymentStatus = status === 'Completed' ? 'Paid' : 'Unpaid';
       }
 
+      let effectiveCustomerId = Number(customerId);
+      const custName = selectedCustomer?.name;
+      if (effectiveCustomerId < 0 && custName) {
+        const positiveMatch = customers.find(
+          (c) =>
+            c.name?.trim().toLowerCase() === custName.trim().toLowerCase() &&
+            Number(c.id) > 0
+        );
+        if (positiveMatch) {
+          effectiveCustomerId = Number(positiveMatch.id);
+        }
+      }
+
       const salePayload = {
         invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
         reference: reference || `SL-${Date.now().toString().slice(-6)}`,
-        customerId: Number(customerId),
-        customerName: selectedCustomer?.name || 'Walk-in Customer',
+        customerId: effectiveCustomerId,
+        customerName: custName || 'Walk-in Customer',
         supplierId: supplierId ? Number(supplierId) : undefined,
         supplierName: selectedSupplier?.name || undefined,
         date: date || new Date().toISOString().split('T')[0],
@@ -696,7 +756,10 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         });
       }
 
-      const customerObj = allCustomers.find((c) => String(c.id) === customerId);
+      const customerObj =
+        allCustomers.find((c) => String(c.id) === String(effectiveCustomerId)) ||
+        allCustomers.find((c) => String(c.id) === customerId) ||
+        selectedCustomer;
 
       const receiptData: ReceiptPrintData = {
         invoiceNumber: reference,

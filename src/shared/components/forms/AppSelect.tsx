@@ -39,6 +39,10 @@ export const AppSelect = ({
   const searchInputRef = useRef<any>(null);
   const [dropdownLayout, setDropdownLayout] = useState<any>({ left: 0, top: 0, width: 0 });
 
+  useEffect(() => {
+    setInternalValue(isMulti ? (Array.isArray(value) ? value : []) : value);
+  }, [value, isMulti]);
+
   const openModal = () => {
     setSearchQuery('');
     if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
