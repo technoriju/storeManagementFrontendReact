@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
@@ -6,7 +6,7 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddSalesModal } from '../components/AddSalesModal';
-import { useSales, useDeleteSale } from '../api/useSales';
+import { useDeleteSale, fetchPaginatedSales } from '../api/useSales';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { 
   FileText, 
@@ -131,7 +131,13 @@ const ActionMenu = ({
 
 export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [tableOrders, setTableOrders] = useState<any[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editSaleId, setEditSaleId] = useState<number | string | null>(null);
   const [dismissedOrderIds, setDismissedOrderIds] = useState<string[]>([]);
@@ -144,13 +150,8 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
-
-  useEffect(() => {
-    refetch();
-  }, [lastSyncedAt, refetch]);
 
   const loadOrderItems = async (order: any) => {
     if (!order) return [];
@@ -286,59 +287,77 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     { id: '5', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', reference: 'SL005', date: '2023-03-17', status: 'Completed', grandTotal: 800, paid: 800, due: 0, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
   ], []);
 
-  const allOrders = useMemo(() => {
-    if (dbSales && dbSales.length > 0) {
-      const seen = new Set<string>();
-      const list: any[] = [];
-      for (const s of dbSales) {
-        if (dismissedOrderIds.includes(String(s.id))) continue;
-        const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
-        if (invNum && seen.has(invNum)) continue;
-        if (invNum) seen.add(invNum);
+  const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
+    setIsLoadingData(true);
+    try {
+      const res = await fetchPaginatedSales({
+        page: targetPage,
+        limit: targetLimit,
+        search: targetSearch,
+      });
 
-        list.push({
-          id: String(s.id),
-          customerName: s.customerName || 'Walk-in Customer',
-          customerPhone: (s as any).customerPhone || '',
-          customerAddress: (s as any).customerAddress || '',
-          customerGstin: (s as any).customerGstin || '',
-          avatar: `https://i.pravatar.cc/150?u=${s.id}`,
-          reference: s.reference || s.invoiceNumber || `SL-${s.id}`,
-          date: s.date || s.createdAt?.split('T')[0] || '',
-          subtotal: Number(s.subtotal || 0),
-          discount: Number(s.discount || 0),
-          gst: Number((s.orderTax || 0) + (s.gst || 0)),
-          orderTax: Number(s.orderTax || 0),
-          shipping: Number(s.shipping || 0),
-          status: s.status || 'Completed',
-          grandTotal: Number(s.total || 0),
-          paid: Number(s.paid || 0),
-          due: Number(s.due || 0),
-          paymentStatus: s.paymentStatus || 'Unpaid',
-          biller: s.biller || 'Admin',
-          items: s.items || [],
-          previousDue: s.previousDue !== undefined ? Number(s.previousDue) : 0,
-          advancePayment: s.advancePayment !== undefined ? Number(s.advancePayment) : 0,
-          showPreviousBalance: s.showPreviousBalance !== undefined ? Boolean(s.showPreviousBalance) : (Number(s.previousDue || 0) > 0 || Number(s.advancePayment || 0) > 0),
-          syncStatus: s.syncStatus || 'synced',
-        });
+      if (res.data.length > 0 || targetSearch) {
+        const seen = new Set<string>();
+        const list: any[] = [];
+        for (const s of res.data) {
+          if (dismissedOrderIds.includes(String(s.id))) continue;
+          const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
+          if (invNum && seen.has(invNum)) continue;
+          if (invNum) seen.add(invNum);
+
+          list.push({
+            id: String(s.id),
+            customerName: s.customerName || 'Walk-in Customer',
+            customerPhone: (s as any).customerPhone || '',
+            customerAddress: (s as any).customerAddress || '',
+            customerGstin: (s as any).customerGstin || '',
+            avatar: `https://i.pravatar.cc/150?u=${s.id}`,
+            reference: s.reference || s.invoiceNumber || `SL-${s.id}`,
+            date: s.date || s.createdAt?.split('T')[0] || '',
+            subtotal: Number(s.subtotal || 0),
+            discount: Number(s.discount || 0),
+            gst: Number((s.orderTax || 0) + (s.gst || 0)),
+            orderTax: Number(s.orderTax || 0),
+            shipping: Number(s.shipping || 0),
+            status: s.status || 'Completed',
+            grandTotal: Number(s.total || 0),
+            paid: Number(s.paid || 0),
+            due: Number(s.due || 0),
+            paymentStatus: s.paymentStatus || 'Unpaid',
+            biller: s.biller || 'Admin',
+            items: s.items || [],
+            previousDue: s.previousDue !== undefined ? Number(s.previousDue) : 0,
+            advancePayment: s.advancePayment !== undefined ? Number(s.advancePayment) : 0,
+            showPreviousBalance: s.showPreviousBalance !== undefined ? Boolean(s.showPreviousBalance) : (Number(s.previousDue || 0) > 0 || Number(s.advancePayment || 0) > 0),
+            syncStatus: s.syncStatus || 'synced',
+          });
+        }
+        setTableOrders(list);
+        setTotalItems(res.total);
+        setTotalPages(res.totalPages);
+      } else {
+        const filtered = fallbackOrders.filter((item) => !dismissedOrderIds.includes(String(item.id)));
+        const paginated = filtered.slice((targetPage - 1) * targetLimit, targetPage * targetLimit);
+        setTableOrders(paginated);
+        setTotalItems(filtered.length);
+        setTotalPages(Math.ceil(filtered.length / targetLimit) || 1);
       }
-      return list;
+    } catch (e) {
+      console.warn('Failed to load paginated orders:', e);
+    } finally {
+      setIsLoadingData(false);
     }
-    return fallbackOrders.filter((item) => !dismissedOrderIds.includes(String(item.id)));
-  }, [dbSales, fallbackOrders, dismissedOrderIds]);
+  }, [dismissedOrderIds, fallbackOrders]);
 
-  const filteredOrders = useMemo(() => {
-    if (!searchQuery.trim()) return allOrders;
-    const q = searchQuery.toLowerCase().trim();
-    return allOrders.filter((item) =>
-      item.customerName?.toLowerCase().includes(q) ||
-      item.reference?.toLowerCase().includes(q) ||
-      item.status?.toLowerCase().includes(q) ||
-      item.paymentStatus?.toLowerCase().includes(q) ||
-      item.biller?.toLowerCase().includes(q)
-    );
-  }, [allOrders, searchQuery]);
+  useEffect(() => {
+    loadData(page, rowsPerPage, searchQuery);
+  }, [loadData, page, rowsPerPage, searchQuery]);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      loadData(page, rowsPerPage, searchQuery);
+    }
+  }, [loadData, lastSyncedAt, page, rowsPerPage, searchQuery]);
 
   const handleDelete = (item: any) => {
     setDeleteError(null);
@@ -355,7 +374,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       await deleteSaleMutation.mutateAsync(targetId);
       setDismissedOrderIds((prev) => [...prev, String(deleteTarget.id)]);
       setDeleteTarget(null);
-      refetch();
+      await loadData(page, rowsPerPage, searchQuery);
     } catch (err: any) {
       console.error('Failed to delete sale order:', err);
       setDeleteError(err?.message || 'Server failed to delete sale order');
@@ -469,7 +488,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const headerActions = (
     <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => loadData(page, rowsPerPage, searchQuery)}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
@@ -506,6 +525,11 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     />
   );
 
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    setPage(1);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <AdvancedTable
@@ -513,11 +537,22 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         subtitle="Manage your pos orders and sales transactions"
         headerActions={headerActions}
         columns={columns}
-        data={filteredOrders}
-        onSearch={setSearchQuery}
+        data={tableOrders}
+        searchValue={searchQuery}
+        onSearch={handleSearch}
+        debounceSearchMs={400}
         filters={filters}
         renderRowActions={renderRowActions}
-        isLoading={isLoading}
+        isLoading={isLoadingData}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setRowsPerPage(newRows);
+          setPage(1);
+        }}
       />
 
 
@@ -624,7 +659,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         onClose={() => {
           setShowAddModal(false);
           setEditSaleId(null);
-          refetch();
+          loadData(page, rowsPerPage, searchQuery);
         }}
       />
 
