@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TouchableWithoutFeedback,
+  Pressable,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -124,10 +124,9 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -283,9 +282,8 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
                 />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

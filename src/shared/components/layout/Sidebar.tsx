@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, useWindowDimensions, Platform } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { useAuthStore } from '../../../core/auth/auth.store';
 import { Icon, IconName } from '../Icon';
@@ -215,7 +215,7 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
         Animated.timing(animatedRotate, {
           toValue: 1,
           duration: 300,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         })
       ]).start();
     }
@@ -236,7 +236,7 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
       Animated.timing(animatedRotate, {
         toValue,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web',
       })
     ]).start();
   };

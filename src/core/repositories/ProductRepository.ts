@@ -257,6 +257,13 @@ export class ProductRepository extends BaseRepository<Product> {
       );
     }
 
+    normalizedProducts.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
+
     return normalizedProducts;
   }
 
@@ -314,6 +321,38 @@ export class ProductRepository extends BaseRepository<Product> {
     }
   }
 
+  public override async getAll(): Promise<Product[]> {
+    const res = await db.execute(
+      `SELECT * FROM ${this.tableName} ORDER BY COALESCE(updatedAt, createdAt, '') DESC, id DESC`
+    );
+    let rawRows: any[] = [];
+    if (res.rows && Array.isArray(res.rows)) {
+      rawRows = res.rows;
+    } else if (res.rows && typeof res.rows === 'object') {
+      if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+        rawRows = (res.rows as any)._array;
+      } else if ('item' in res.rows && typeof (res.rows as any).length === 'number') {
+        const len = (res.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((res.rows as any).item(i));
+        }
+      }
+    }
+    return rawRows.map((r) => this.fromRow(r));
+  }
+
+  public override async insert(entity: Product, shouldSync = true): Promise<void> {
+    const now = new Date().toISOString();
+    if (!entity.createdAt) entity.createdAt = now;
+    entity.updatedAt = now;
+    return super.insert(entity, shouldSync);
+  }
+
+  public override async update(entity: Product, shouldSync = true): Promise<void> {
+    entity.updatedAt = new Date().toISOString();
+    return super.update(entity, shouldSync);
+  }
+
   public async getPaginated(params: {
     page?: number;
     limit?: number;
@@ -343,7 +382,7 @@ export class ProductRepository extends BaseRepository<Product> {
       }
 
       const dataRes = await db.execute(
-        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY COALESCE(updatedAt, createdAt, '') DESC, id DESC LIMIT ? OFFSET ?`,
         [...queryParams, limit, offset]
       );
       
@@ -384,6 +423,12 @@ export class ProductRepository extends BaseRepository<Product> {
             (p.brandName && p.brandName.toLowerCase().includes(s))
         );
       }
+      filtered.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
       const total = filtered.length;
       return {
         data: filtered.slice(offset, offset + limit),

@@ -62,10 +62,17 @@ export const useProductStore = create<ProductState>((set, get) => ({
   error: null,
 
   setProducts: (products) => set({ products }),
-  addProduct: (product) => set((state) => ({ products: [product, ...state.products] })),
-  updateProduct: (updated) => set((state) => ({
-    products: state.products.map((p) => (String(p.id) === String(updated.id) ? { ...p, ...updated } : p)),
+  addProduct: (product) => set((state) => ({
+    products: [product, ...state.products.filter((p) => String(p.id) !== String(product.id))],
   })),
+  updateProduct: (updated) => set((state) => {
+    const existing = state.products.find((p) => String(p.id) === String(updated.id));
+    const merged = existing ? { ...existing, ...updated } : updated;
+    const remaining = state.products.filter((p) => String(p.id) !== String(updated.id));
+    return {
+      products: [merged, ...remaining],
+    };
+  }),
   deleteProduct: async (id: number | string) => {
     const numId = Number(id);
     set((state) => ({
@@ -191,13 +198,19 @@ export const useProductStore = create<ProductState>((set, get) => ({
       // Handle wrapped or unwrapped array (unpaginated backend response): slice by page & limit
       const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
       if (Array.isArray(list)) {
+        const sortedList = [...list].sort((a: any, b: any) => {
+          const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          return Number(b.id || 0) - Number(a.id || 0);
+        });
         const offset = (page - 1) * limit;
         return {
-          data: list.slice(offset, offset + limit) as Product[],
-          total: list.length,
+          data: sortedList.slice(offset, offset + limit) as Product[],
+          total: sortedList.length,
           page,
           limit,
-          totalPages: Math.max(1, Math.ceil(list.length / limit)),
+          totalPages: Math.max(1, Math.ceil(sortedList.length / limit)),
         };
       }
     } catch (err: any) {
