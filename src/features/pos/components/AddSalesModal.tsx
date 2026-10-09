@@ -130,9 +130,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
   useEffect(() => {
     if (visible) {
-      if (products.length === 0) {
-        fetchProducts().catch(() => {});
-      }
+      fetchProducts().catch(() => {});
+      setSearchQuery('');
+      setIsSearching(false);
       setErrorMessage(null);
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
@@ -161,6 +161,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
             if (!existingItems || existingItems.length === 0) {
               existingItems = await saleRepository.getItemsForSale(numericId);
             }
+            if ((!existingItems || existingItems.length === 0) && existingSale?.items && existingSale.items.length > 0) {
+              existingItems = existingSale.items;
+            }
 
             if (existingSale) {
               setCustomerId(existingSale.customerId ? String(existingSale.customerId) : '');
@@ -178,9 +181,22 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               setPaymentStatus((existingSale.paymentStatus as any) || (paidNum >= totalNum && totalNum > 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Unpaid'));
               setAmountReceived(paidNum > 0 ? String(paidNum) : '');
 
+              const prevDueVal = Number(existingSale.previousDue || 0);
+              const advVal = Number(existingSale.advancePayment || 0);
+              if (existingSale.showPreviousBalance && prevDueVal > 0) {
+                setShowPreviousBalance(true);
+                setBalanceType('due');
+                setPreviousBalanceAmount(String(prevDueVal));
+              } else if (existingSale.showPreviousBalance && advVal > 0) {
+                setShowPreviousBalance(true);
+                setBalanceType('advance');
+                setPreviousBalanceAmount(String(advVal));
+              }
+
               if (existingItems && existingItems.length > 0) {
+                const latestProds = useProductStore.getState().products;
                 const mappedItems: SaleItemRow[] = existingItems.map((item: any) => {
-                  const prod = products.find((p) => p.id === Number(item.productId));
+                  const prod = latestProds.find((p) => p.id === Number(item.productId)) || products.find((p) => p.id === Number(item.productId));
                   const wholesaleP = prod ? getProductPriceByType(prod, 'wholesale') : Number(item.unitPrice || 0);
                   const retailP = prod ? getProductPriceByType(prod, 'retail') : Number(item.unitPrice || 0);
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
@@ -232,9 +248,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         setNotes('');
         setPaymentStatus('Paid');
         setAmountReceived('');
+        setShowPreviousBalance(false);
+        setPreviousBalanceAmount('0');
+        setCustomerRawBalance(0);
+        setUnpaidInvoicesCount(0);
       }
     }
-  }, [visible, editSaleId, products.length, fetchProducts]);
+  }, [visible, editSaleId, fetchProducts]);
 
   // Handle Wholesale vs Retail Price Type Switching
   const handlePriceTypeChange = (newType: PriceType) => {
@@ -323,18 +343,28 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   }, [allCustomers, customerId]);
 
   useEffect(() => {
+    // Immediately clear previous balance states so new customer doesn't show old customer's dues
+    setShowPreviousBalance(false);
+    setPreviousBalanceAmount('0');
+    setCustomerRawBalance(0);
+    setUnpaidInvoicesCount(0);
+
     if (!customerId || !selectedCustomer) {
-      setShowPreviousBalance(false);
-      setPreviousBalanceAmount('0');
-      setCustomerRawBalance(0);
-      setUnpaidInvoicesCount(0);
+      setIsLoadingBalance(false);
       return;
     }
 
+    let isCurrent = true;
     setIsLoadingBalance(true);
+
     saleRepository
-      .getCustomerPreviousBalance(selectedCustomer.id, selectedCustomer.name)
+      .getCustomerPreviousBalance(
+        selectedCustomer.id,
+        selectedCustomer.name,
+        editSaleId ? Number(editSaleId) : undefined
+      )
       .then((res) => {
+        if (!isCurrent) return;
         setUnpaidInvoicesCount(res.unpaidCount || 0);
         if (res.totalDue > 0) {
           setCustomerRawBalance(res.totalDue);
@@ -347,46 +377,30 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           setPreviousBalanceAmount(String(res.advance));
           setShowPreviousBalance(true);
         } else {
-          // Fallback to customer's own outstandingBalance if set
-          const bal = Number(selectedCustomer.outstandingBalance || 0);
-          setCustomerRawBalance(bal);
-          if (bal > 0) {
-            setBalanceType('due');
-            setPreviousBalanceAmount(String(bal));
-            setShowPreviousBalance(true);
-          } else if (bal < 0) {
-            setBalanceType('advance');
-            setPreviousBalanceAmount(String(Math.abs(bal)));
-            setShowPreviousBalance(true);
-          } else {
-            setBalanceType('due');
-            setPreviousBalanceAmount('0');
-            setShowPreviousBalance(false);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to fetch customer invoice dues:', err);
-        const bal = Number(selectedCustomer.outstandingBalance || 0);
-        setCustomerRawBalance(bal);
-        if (bal > 0) {
-          setBalanceType('due');
-          setPreviousBalanceAmount(String(bal));
-          setShowPreviousBalance(true);
-        } else if (bal < 0) {
-          setBalanceType('advance');
-          setPreviousBalanceAmount(String(Math.abs(bal)));
-          setShowPreviousBalance(true);
-        } else {
+          setCustomerRawBalance(0);
           setBalanceType('due');
           setPreviousBalanceAmount('0');
           setShowPreviousBalance(false);
         }
       })
+      .catch((err) => {
+        if (!isCurrent) return;
+        console.warn('Failed to fetch customer invoice dues:', err);
+        setCustomerRawBalance(0);
+        setBalanceType('due');
+        setPreviousBalanceAmount('0');
+        setShowPreviousBalance(false);
+      })
       .finally(() => {
-        setIsLoadingBalance(false);
+        if (isCurrent) {
+          setIsLoadingBalance(false);
+        }
       });
-  }, [customerId, selectedCustomer]);
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [customerId, selectedCustomer?.id, editSaleId]);
 
   const selectedSupplier = useMemo(() => {
     return suppliers.find((s) => String(s.id) === String(supplierId));
@@ -1051,7 +1065,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               </View>
 
               {/* Row 2: Live Product Search */}
-              <View style={{ zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
+              <View
+                style={{
+                  zIndex: isSearching && (filteredProducts.length > 0 || searchQuery.trim().length > 0) ? 9999 : 100,
+                  elevation: Platform.OS === 'android' ? (isSearching ? 50 : 5) : undefined,
+                }}
+              >
                 <Text style={{ color: theme.colors.text, marginBottom: 6, fontWeight: '500' }}>
                   Search & Add Product * ({priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})
                 </Text>
@@ -1096,7 +1115,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   >
                     <ScrollView
                       nestedScrollEnabled={true}
-                      keyboardShouldPersistTaps="handled"
+                      keyboardShouldPersistTaps="always"
                       style={{ maxHeight: 260 }}
                       showsVerticalScrollIndicator={true}
                     >

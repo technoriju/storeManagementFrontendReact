@@ -158,6 +158,72 @@ export class SaleRepository extends BaseRepository<Sale> {
           items.push(newItem);
         }
       }
+
+      // Fallback: If 0 items returned by saleId, check if items exist under matching invoiceNumber
+      if (items.length === 0 && Number(saleId) > 0) {
+        try {
+          const altRes = await db.execute(
+            `SELECT si.*, 
+                    p.name as fallbackProductName, 
+                    p.sku as productSku,
+                    COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                    COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
+             FROM sale_items si
+             LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
+             LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+             LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
+             WHERE si.saleId IN (
+               SELECT id FROM sales WHERE (invoiceNumber IS NOT NULL AND invoiceNumber != '' AND invoiceNumber = (SELECT invoiceNumber FROM sales WHERE id = ? LIMIT 1))
+               OR (reference IS NOT NULL AND reference != '' AND reference = (SELECT reference FROM sales WHERE id = ? LIMIT 1))
+             )
+             ORDER BY si.id ASC`,
+            [saleId, saleId]
+          );
+          const altRows = this.extractRows(altRes);
+          for (const row of altRows) {
+            if (!row) continue;
+            const qty = Number(row.quantity || 1);
+            if (qty <= 0) continue;
+            const pId = Number(row.productId);
+            const existingIdx = items.findIndex((it) => it.productId === pId);
+            const brand = (row.brandName || row.fallbackBrandName || '').trim() || undefined;
+            const subUnit = (row.subUnitName || row.fallbackSubUnitName || '').trim() || undefined;
+
+            const newItem: SaleItem = {
+              id: Number(row.id),
+              saleId: Number(row.saleId || saleId),
+              productId: pId,
+              productName: row.productName || row.fallbackProductName || `Product #${row.productId}`,
+              quantity: qty,
+              unitPrice: Number(row.unitPrice || 0),
+              discount: Number(row.discount || 0),
+              gst: Number(row.gst || 0),
+              taxAmount: Number(row.taxAmount || 0),
+              unitCost: Number(row.unitCost || 0),
+              unit: row.unit ? String(row.unit) : undefined,
+              unitType: row.unitType || 'sub',
+              conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
+              brand: brand && brand !== 'N/A' ? brand : undefined,
+              brandName: brand && brand !== 'N/A' ? brand : undefined,
+              subUnit: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+              subUnitName: subUnit && subUnit !== 'N/A' ? subUnit : undefined,
+              total: Number(row.total || 0),
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+              syncStatus: row.syncStatus,
+            };
+
+            if (existingIdx >= 0) {
+              if (newItem.syncStatus === 'synced' || newItem.total > items[existingIdx].total) {
+                items[existingIdx] = newItem;
+              }
+            } else {
+              items.push(newItem);
+            }
+          }
+        } catch (_) {}
+      }
+
       return items;
     } catch (e) {
       console.error('Failed to get sale items:', e);
@@ -347,7 +413,7 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
 
       const items = entity.items || (await this.getItemsForSale(entity.id));
-      const customerId = entity.customerId && Number(entity.customerId) > 0 ? Number(entity.customerId) : 1;
+      const customerId = entity.customerId && Number(entity.customerId) > 0 ? Number(entity.customerId) : null;
       const apiPayload = {
         branchId: 1,
         warehouseId: 1,
@@ -619,7 +685,8 @@ export class SaleRepository extends BaseRepository<Sale> {
             if (oldId && oldId !== rawId) {
               const oldSale = await super.getById(oldId);
               if (oldSale && !existing) existing = oldSale;
-              await db.execute(`DELETE FROM sale_items WHERE saleId = ?`, [oldId]);
+              // Rebase sale_items to rawId instead of deleting them
+              await db.execute(`UPDATE sale_items SET saleId = ?, syncStatus = 'synced' WHERE saleId = ?`, [rawId, oldId]);
               await db.execute(`DELETE FROM sales WHERE id = ?`, [oldId]);
               await outboxRepo.removeForEntity(this.tableName, oldId);
             }
@@ -628,18 +695,15 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         const { sale, items } = this.normalizeApiSale(raw, existing);
 
-        if (existing && existing.syncStatus !== 'synced') {
-          // Do not overwrite local pending changes
-          continue;
-        }
-
         if (existing) {
-          await super.update(sale, false);
+          if (existing.syncStatus === 'synced') {
+            await super.update(sale, false);
+          }
         } else {
           await super.insert(sale, false);
         }
 
-        if (items.length > 0) {
+        if (items.length > 0 && (!existing || existing.syncStatus === 'synced')) {
           await db.execute(
             'DELETE FROM sale_items WHERE saleId = ?',
             [sale.id]
@@ -747,11 +811,9 @@ export class SaleRepository extends BaseRepository<Sale> {
             );
           }
         }
-        const fullItems = await this.getItemsForSale(sale.id);
-        return { ...sale, items: fullItems.length > 0 ? fullItems : items };
       }
-
-      return await this.getById(id);
+      const fullItems = await this.getItemsForSale(sale.id);
+      return { ...(existing || sale), items: fullItems.length > 0 ? fullItems : (items.length > 0 ? items : existing?.items || []) };
     } catch (e) {
       console.warn(`[SaleRepository] fetchByIdFromApi(${id}) error:`, e);
       return await this.getById(id);
@@ -857,21 +919,40 @@ export class SaleRepository extends BaseRepository<Sale> {
     // If sale has paid amount, record in payments table
     if (sale.paid && Number(sale.paid) > 0) {
       try {
-        await db.execute(
-          `INSERT INTO payments (amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            Number(sale.paid),
-            'cash',
-            'receive',
-            sale.invoiceNumber,
-            `Payment for Invoice ${sale.invoiceNumber}`,
-            sale.customerId ? Number(sale.customerId) : null,
-            now,
-            now,
-            'pending_insert'
-          ]
+        const invNum = sale.invoiceNumber || sale.reference;
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' LIMIT 1`,
+          [invNum]
         );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (existingRows.length > 0) {
+          await db.execute(
+            `UPDATE payments SET amount = ?, customerId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+            [Number(sale.paid), sale.customerId ? Number(sale.customerId) : null, now, existingRows[0].id]
+          );
+        } else {
+          const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+          await db.execute(
+            `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              paymentId,
+              null,
+              Number(sale.paid),
+              'cash',
+              'receive',
+              invNum,
+              `Payment for Invoice ${invNum}`,
+              sale.customerId ? Number(sale.customerId) : null,
+              now,
+              now,
+              'pending_insert'
+            ]
+          );
+        }
       } catch (payErr) {
         console.warn('Failed to insert payment for sale:', payErr);
       }
@@ -1022,7 +1103,54 @@ export class SaleRepository extends BaseRepository<Sale> {
       );
     }
 
-    // 5. Outbox & API sync
+    // 5. Update or insert payment record if paid amount is set
+    if (saleData.paid !== undefined) {
+      try {
+        const invNum = updatedSale.invoiceNumber || updatedSale.reference;
+        const newPaid = Number(saleData.paid || 0);
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' LIMIT 1`,
+          [invNum]
+        );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (newPaid > 0) {
+          if (existingRows.length > 0) {
+            await db.execute(
+              `UPDATE payments SET amount = ?, customerId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+              [newPaid, updatedSale.customerId ? Number(updatedSale.customerId) : null, now, existingRows[0].id]
+            );
+          } else {
+            const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+            await db.execute(
+              `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                paymentId,
+                null,
+                newPaid,
+                'cash',
+                'receive',
+                invNum,
+                `Payment for Invoice ${invNum}`,
+                updatedSale.customerId ? Number(updatedSale.customerId) : null,
+                now,
+                now,
+                'pending_insert'
+              ]
+            );
+          }
+        } else if (existingRows.length > 0) {
+          await db.execute(`DELETE FROM payments WHERE id = ?`, [existingRows[0].id]);
+        }
+      } catch (payErr) {
+        console.warn('Failed to update payment for sale update:', payErr);
+      }
+    }
+
+    // 6. Outbox & API sync
     await outboxRepo.add(this.tableName, saleId, 'UPDATE', { sale: updatedSale, items: fullItems });
     this.requestSync();
 
@@ -1041,7 +1169,27 @@ export class SaleRepository extends BaseRepository<Sale> {
           conversionRate: Number(it.conversionRate || 1),
         })),
       };
-      await apiClient.put(API_ENDPOINTS.SALES.BY_ID(targetServerId), apiPayload);
+      const putRes = await apiClient.put(API_ENDPOINTS.SALES.BY_ID(targetServerId), apiPayload);
+      if (putRes && putRes.status >= 200 && putRes.status < 300) {
+        const body = putRes?.data?.data || putRes?.data || {};
+        const returnedId = Number(body.id || body._id);
+        const finalId = returnedId || saleId;
+        if (finalId !== saleId) {
+          await db.execute(`UPDATE sales SET id = ?, syncStatus = 'synced' WHERE id = ?`, [finalId, saleId]);
+          await db.execute(`UPDATE sale_items SET saleId = ?, syncStatus = 'synced' WHERE saleId = ?`, [finalId, saleId]);
+          await outboxRepo.rebaseEntity(this.tableName, saleId, finalId, finalId);
+        } else {
+          await db.execute(`UPDATE sales SET syncStatus = 'synced' WHERE id = ?`, [saleId]);
+          await db.execute(`UPDATE sale_items SET syncStatus = 'synced' WHERE saleId = ?`, [saleId]);
+          await outboxRepo.removeForEntity(this.tableName, saleId);
+        }
+        updatedSale.id = finalId;
+        updatedSale.syncStatus = 'synced';
+        fullItems.forEach((fi) => {
+          fi.saleId = finalId;
+          fi.syncStatus = 'synced';
+        });
+      }
     } catch (e) {
       console.warn('Direct API sale update error (will sync via outbox):', e);
     }
@@ -1074,7 +1222,8 @@ export class SaleRepository extends BaseRepository<Sale> {
 
   public async getCustomerPreviousBalance(
     customerId: number | string,
-    customerName?: string
+    customerName?: string,
+    excludeSaleId?: number | string
   ): Promise<{
     outstandingBalance: number;
     salesDue: number;
@@ -1095,73 +1244,97 @@ export class SaleRepository extends BaseRepository<Sale> {
         return { outstandingBalance: 0, salesDue: 0, totalDue: 0, advance: 0, unpaidCount: 0 };
       }
 
-      let custBal = 0;
+      // 1. Resolve accurate customer details from local DB
+      let localCustomer: any = null;
+      try {
+        if (!isNaN(cIdNum) && cIdNum > 0) {
+          const cRes = await db.execute(
+            `SELECT * FROM customers WHERE id = ? OR backendId = ? LIMIT 1`,
+            [cIdNum, cIdNum]
+          );
+          const cRows = this.extractRows(cRes);
+          if (cRows.length > 0 && cRows[0]) {
+            localCustomer = cRows[0];
+          }
+        }
+        if (!localCustomer && cName && !isWalkIn) {
+          const cRes = await db.execute(
+            `SELECT * FROM customers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1`,
+            [cName]
+          );
+          const cRows = this.extractRows(cRes);
+          if (cRows.length > 0 && cRows[0]) {
+            localCustomer = cRows[0];
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to query local customer info:', err);
+      }
 
-      // 1. Try fetching latest balance from backend if customer has a valid server ID
-      if (!isNaN(cIdNum) && cIdNum > 0) {
+      const resolvedLocalId = localCustomer ? Number(localCustomer.id) : (!isNaN(cIdNum) && cIdNum > 0 ? cIdNum : undefined);
+      const resolvedBackendId = localCustomer?.backendId ? Number(localCustomer.backendId) : undefined;
+      const resolvedName = (localCustomer?.name || cName).trim();
+      const serverTargetId = resolvedBackendId || (resolvedLocalId && resolvedLocalId > 0 && resolvedLocalId < 1000000000000 ? resolvedLocalId : undefined);
+
+      let custBal: number | null = null;
+
+      // 2. Fetch fresh ledger balance from backend if customer has a server ID
+      if (serverTargetId) {
         try {
-          const apiRes = await apiClient.get(API_ENDPOINTS.CUSTOMERS.BY_ID(cIdNum));
+          const apiRes = await apiClient.get(API_ENDPOINTS.CUSTOMERS.BY_ID(serverTargetId));
           const apiCust = apiRes?.data?.data || apiRes?.data;
-          if (apiCust && apiCust.outstandingBalance !== undefined) {
-            custBal = Number(apiCust.outstandingBalance || 0);
+          if (apiCust && apiCust.outstandingBalance !== undefined && apiCust.outstandingBalance !== null) {
+            custBal = Number(apiCust.outstandingBalance);
             try {
-              await db.execute('UPDATE customers SET outstandingBalance = ? WHERE id = ?', [custBal, cIdNum]);
+              if (resolvedLocalId) {
+                await db.execute('UPDATE customers SET outstandingBalance = ? WHERE id = ?', [custBal, resolvedLocalId]);
+              }
             } catch (_) {}
           }
         } catch (_) {}
       }
 
-      // 2. Fetch customer opening/ledger balance from local customers table if not obtained from API
-      if (custBal === 0) {
-        try {
-          const whereParts: string[] = [];
-          const whereArgs: any[] = [];
-          if (!isNaN(cIdNum) && cIdNum > 0) {
-            whereParts.push('id = ?');
-            whereArgs.push(cIdNum);
-          }
-          if (cName) {
-            whereParts.push('(name IS NOT NULL AND LOWER(name) = LOWER(?))');
-            whereArgs.push(cName);
-          }
-          if (whereParts.length > 0) {
-            const custRes = await db.execute(
-              `SELECT outstandingBalance FROM customers WHERE ${whereParts.join(' OR ')} LIMIT 1`,
-              whereArgs
-            );
-            const cRows = this.extractRows(custRes);
-            if (cRows.length > 0 && cRows[0]) {
-              custBal = Number(cRows[0].outstandingBalance || 0);
-            }
-          }
-        } catch (err) {
-          console.warn('Failed to query customer balance:', err);
-        }
+      if (custBal === null && localCustomer?.outstandingBalance !== undefined && localCustomer?.outstandingBalance !== null) {
+        custBal = Number(localCustomer.outstandingBalance);
       }
 
-      // 3. Query previous invoices for THIS specific customer from local sales table
+      // 3. Query previous unpaid invoices for THIS specific customer from local sales table
       let sDue = 0;
       let unpaidCount = 0;
       try {
-        const whereSaleParts: string[] = [];
+        const whereSaleConditions: string[] = [];
         const saleArgs: any[] = [];
-        if (!isNaN(cIdNum) && cIdNum > 0) {
-          whereSaleParts.push('customerId = ?');
-          saleArgs.push(cIdNum);
+
+        const idMatches: string[] = [];
+        if (resolvedLocalId && resolvedLocalId > 0) {
+          idMatches.push('customerId = ?');
+          saleArgs.push(resolvedLocalId);
         }
-        if (cName) {
-          whereSaleParts.push('(customerName IS NOT NULL AND customerName != \'\' AND LOWER(customerName) = LOWER(?))');
-          saleArgs.push(cName);
+        if (resolvedBackendId && resolvedBackendId > 0 && resolvedBackendId !== resolvedLocalId) {
+          idMatches.push('customerId = ?');
+          saleArgs.push(resolvedBackendId);
         }
 
-        if (whereSaleParts.length > 0) {
-          const salesRes = await db.execute(
-            `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
-             FROM sales 
-             WHERE (${whereSaleParts.join(' OR ')})
-             AND (status IS NULL OR LOWER(status) != 'cancelled')`,
-            saleArgs
-          );
+        if (idMatches.length > 0) {
+          whereSaleConditions.push(`(${idMatches.join(' OR ')})`);
+        } else if (resolvedName && !isWalkIn) {
+          whereSaleConditions.push(`(customerName IS NOT NULL AND LOWER(TRIM(customerName)) = LOWER(TRIM(?)))`);
+          saleArgs.push(resolvedName);
+        }
+
+        if (whereSaleConditions.length > 0) {
+          let sql = `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
+                     FROM sales 
+                     WHERE ${whereSaleConditions.join(' AND ')}
+                     AND (status IS NULL OR LOWER(status) != 'cancelled')`;
+
+          if (excludeSaleId) {
+            const exIdNum = Number(excludeSaleId);
+            sql += ` AND id != ? AND invoiceNumber != ? AND (reference IS NULL OR reference != ?)`;
+            saleArgs.push(exIdNum, String(excludeSaleId), String(excludeSaleId));
+          }
+
+          const salesRes = await db.execute(sql, saleArgs);
           const sRows = this.extractRows(salesRes);
           for (const row of sRows) {
             if (!row) continue;
@@ -1183,23 +1356,44 @@ export class SaleRepository extends BaseRepository<Sale> {
         console.warn('Failed to query sales for customer balance:', err);
       }
 
+      // If editing an existing sale and we have a server balance, subtract the excluded sale's due from server balance
+      if (excludeSaleId && custBal !== null && custBal > 0) {
+        try {
+          const exSaleRes = await db.execute(
+            `SELECT total, paid, due, paymentStatus FROM sales WHERE (id = ? OR invoiceNumber = ?) LIMIT 1`,
+            [Number(excludeSaleId), String(excludeSaleId)]
+          );
+          const exRows = this.extractRows(exSaleRes);
+          if (exRows.length > 0 && exRows[0]) {
+            const exTot = Number(exRows[0].total || 0);
+            const exPaid = Number(exRows[0].paid || 0);
+            let exDue = Number(exRows[0].due !== undefined ? exRows[0].due : 0);
+            if (exDue <= 0 && exTot > exPaid && String(exRows[0].paymentStatus || '').toLowerCase() !== 'paid') {
+              exDue = exTot - exPaid;
+            }
+            if (exDue > 0) {
+              custBal = Math.max(0, custBal - exDue);
+            }
+          }
+        } catch (_) {}
+      }
+
       // 4. Compute effective total due and advance
       let totalDue = 0;
       let advance = 0;
 
-      if (sDue > 0) {
-        totalDue = sDue;
-        if (custBal > 0 && custBal > sDue) {
+      if (custBal !== null) {
+        if (custBal > 0) {
           totalDue = custBal;
+        } else if (custBal < 0) {
+          advance = Math.abs(custBal);
         }
-      } else if (custBal > 0) {
-        totalDue = custBal;
-      } else if (custBal < 0) {
-        advance = Math.abs(custBal);
+      } else if (sDue > 0) {
+        totalDue = sDue;
       }
 
       return {
-        outstandingBalance: custBal,
+        outstandingBalance: custBal !== null ? custBal : sDue,
         salesDue: sDue,
         totalDue,
         advance,
@@ -1287,6 +1481,11 @@ export class SaleRepository extends BaseRepository<Sale> {
 
     await db.execute('DELETE FROM sale_items WHERE saleId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    if (sale?.invoiceNumber || sale?.reference) {
+      try {
+        await db.execute(`DELETE FROM payments WHERE reference = ?`, [sale.invoiceNumber || sale.reference]);
+      } catch (_) {}
+    }
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);

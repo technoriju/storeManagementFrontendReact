@@ -519,7 +519,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         renderRowActions={renderRowActions}
         isLoading={isLoading}
       />
-      <AddSalesModal visible={showAddModal} onClose={() => setShowAddModal(false)} />
+
 
       {selectedOrder && (
         <Modal visible={!!selectedOrder} transparent animationType="fade">

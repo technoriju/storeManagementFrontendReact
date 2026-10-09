@@ -368,9 +368,32 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         if (await tombstoneRepo.isDeleted(this.tableName, rawId)) {
           continue;
         }
-        const { purchase, items } = this.normalizeApiPurchase(raw);
+        // Check if existing locally by server ID first
+        let existing = await super.getById(rawId);
 
-        const existing = await super.getById(purchase.id);
+        // If not found by server ID, check if a local row exists with the same invoiceNumber or reference
+        if (!existing && (raw.invoiceNumber || raw.reference)) {
+          const matchRes = await db.execute(
+            `SELECT id FROM purchases WHERE invoiceNumber = ? OR (reference IS NOT NULL AND reference = ?)`,
+            [raw.invoiceNumber || raw.reference, raw.invoiceNumber || raw.reference]
+          );
+          let matchedRows: any[] = [];
+          if (matchRes.rows && Array.isArray(matchRes.rows)) matchedRows = matchRes.rows;
+          else if (matchRes.rows && typeof matchRes.rows === 'object' && '_array' in matchRes.rows) matchedRows = (matchRes.rows as any)._array;
+
+          for (const m of matchedRows) {
+            const oldId = Number(m.id);
+            if (oldId && oldId !== rawId) {
+              const oldPurchase = await super.getById(oldId);
+              if (oldPurchase && !existing) existing = oldPurchase;
+              await db.execute(`DELETE FROM purchase_items WHERE purchaseId = ?`, [oldId]);
+              await db.execute(`DELETE FROM purchases WHERE id = ?`, [oldId]);
+              await outboxRepo.removeForEntity(this.tableName, oldId);
+            }
+          }
+        }
+
+        const { purchase, items } = this.normalizeApiPurchase(raw);
         if (existing && existing.syncStatus !== 'synced') {
           // Do not overwrite local pending modifications
           continue;
@@ -588,21 +611,40 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     // If purchase has paid amount, record in payments table (type = 'pay')
     if (purchase.paid && Number(purchase.paid) > 0) {
       try {
-        await db.execute(
-          `INSERT INTO payments (amount, method, type, reference, notes, supplierId, createdAt, updatedAt, syncStatus)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            Number(purchase.paid),
-            'cash',
-            'pay',
-            purchase.invoiceNumber || purchase.reference,
-            `Payment for Purchase ${purchase.invoiceNumber || purchase.reference}`,
-            purchase.supplierId ? Number(purchase.supplierId) : null,
-            now,
-            now,
-            'pending_insert'
-          ]
+        const invNum = purchase.invoiceNumber || purchase.reference;
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'pay' LIMIT 1`,
+          [invNum]
         );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (existingRows.length > 0) {
+          await db.execute(
+            `UPDATE payments SET amount = ?, supplierId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+            [Number(purchase.paid), purchase.supplierId ? Number(purchase.supplierId) : null, now, existingRows[0].id]
+          );
+        } else {
+          const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+          await db.execute(
+            `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, supplierId, createdAt, updatedAt, syncStatus)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              paymentId,
+              null,
+              Number(purchase.paid),
+              'cash',
+              'pay',
+              invNum,
+              `Payment for Purchase ${invNum}`,
+              purchase.supplierId ? Number(purchase.supplierId) : null,
+              now,
+              now,
+              'pending_insert'
+            ]
+          );
+        }
       } catch (payErr) {
         console.warn('Failed to insert payment for purchase:', payErr);
       }
@@ -747,7 +789,54 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       );
     }
 
-    // 5. Outbox & API sync
+    // 5. Update or insert payment record if paid amount is set
+    if (purchaseData.paid !== undefined) {
+      try {
+        const invNum = updatedPurchase.invoiceNumber || updatedPurchase.reference;
+        const newPaid = Number(purchaseData.paid || 0);
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'pay' LIMIT 1`,
+          [invNum]
+        );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (newPaid > 0) {
+          if (existingRows.length > 0) {
+            await db.execute(
+              `UPDATE payments SET amount = ?, supplierId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+              [newPaid, updatedPurchase.supplierId ? Number(updatedPurchase.supplierId) : null, now, existingRows[0].id]
+            );
+          } else {
+            const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+            await db.execute(
+              `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, supplierId, createdAt, updatedAt, syncStatus)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                paymentId,
+                null,
+                newPaid,
+                'cash',
+                'pay',
+                invNum,
+                `Payment for Purchase ${invNum}`,
+                updatedPurchase.supplierId ? Number(updatedPurchase.supplierId) : null,
+                now,
+                now,
+                'pending_insert'
+              ]
+            );
+          }
+        } else if (existingRows.length > 0) {
+          await db.execute(`DELETE FROM payments WHERE id = ?`, [existingRows[0].id]);
+        }
+      } catch (payErr) {
+        console.warn('Failed to update payment for purchase update:', payErr);
+      }
+    }
+
+    // 6. Outbox & API sync
     await outboxRepo.add(this.tableName, purchaseId, 'UPDATE', { purchase: updatedPurchase, items: fullItems });
     this.requestSync();
 
@@ -851,6 +940,11 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
     await db.execute('DELETE FROM purchase_items WHERE purchaseId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    if (purchase?.invoiceNumber || purchase?.reference) {
+      try {
+        await db.execute(`DELETE FROM payments WHERE reference = ?`, [purchase.invoiceNumber || purchase.reference]);
+      } catch (_) {}
+    }
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);

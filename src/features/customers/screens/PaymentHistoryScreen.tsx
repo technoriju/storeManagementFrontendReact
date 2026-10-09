@@ -75,7 +75,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
 
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
-  const loadData = async () => {
+  const loadData = async (shouldSync = true) => {
     setLoading(true);
     try {
       const [allCustomers, allSuppliers] = await Promise.all([
@@ -107,11 +107,63 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       }
 
       setPayments(data);
+
+      if (shouldSync) {
+        void Promise.allSettled([
+          paymentRepository.fetchFromApi(),
+          customerRepository.fetchFromApi(),
+          supplierRepository.fetchFromApi(),
+        ]).then(async () => {
+          const [freshCustomers, freshSuppliers] = await Promise.all([
+            customerRepository.getAll(),
+            supplierRepository.getAll(),
+          ]);
+
+          const freshCMap: Record<number, Customer> = {};
+          freshCustomers.forEach((c) => {
+            if (c.id) freshCMap[c.id] = c;
+            if (c.backendId) freshCMap[c.backendId] = c;
+          });
+          setCustomerMap(freshCMap);
+
+          const freshSMap: Record<number, Supplier> = {};
+          freshSuppliers.forEach((s) => {
+            if (s.id) freshSMap[s.id] = s;
+            if (s.backendId) freshSMap[s.backendId] = s;
+          });
+          setSupplierMap(freshSMap);
+
+          let freshData: Payment[] = [];
+          if (customerId) {
+            freshData = await paymentRepository.getByCustomerId(customerId);
+          } else if (supplierId) {
+            freshData = await paymentRepository.getBySupplierId(supplierId);
+          } else {
+            freshData = await paymentRepository.getAll();
+          }
+
+          setPayments(freshData);
+        }).catch((err) => {
+          console.warn('[PaymentHistoryScreen] API sync error (offline):', err);
+        });
+      }
     } catch (e) {
       console.error('Failed to load payments data', e);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      await Promise.allSettled([
+        paymentRepository.fetchFromApi(),
+        customerRepository.fetchFromApi(),
+        supplierRepository.fetchFromApi(),
+      ]);
+    } catch (_) {}
+    await loadData(false);
   };
 
   useEffect(() => {
@@ -171,10 +223,10 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const partyName = item.customerId
-          ? (customerMap[item.customerId]?.name || '').toLowerCase()
+          ? ((item as any).customerName || customerMap[Number(item.customerId)]?.name || '').toLowerCase()
           : item.supplierId
-          ? (supplierMap[item.supplierId]?.name || '').toLowerCase()
-          : '';
+          ? ((item as any).supplierName || supplierMap[Number(item.supplierId)]?.name || '').toLowerCase()
+          : ((item as any).partyName || '').toLowerCase();
         const ref = (item.reference || '').toLowerCase();
         const notes = (item.notes || '').toLowerCase();
         const amountStr = String(item.amount);
@@ -270,7 +322,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
         <FileSpreadsheet size={16} color="#10B981" />
       </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={loadData}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={handleRefresh}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
 
@@ -377,12 +429,12 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       flex: 2,
       minWidth: 180,
       render: (val: any, item: Payment) => {
-        const isCust = !!item.customerId;
+        const custId = item.customerId ? Number(item.customerId) : null;
+        const suppId = item.supplierId ? Number(item.supplierId) : null;
+        const isCust = !!custId || item.type === 'receive';
         const name = isCust
-          ? (item as any).customerName || (item as any).partyName || customerMap[Number(item.customerId)]?.name || customerMap[String(item.customerId) as any]?.name || (item.customerId ? `Customer #${item.customerId}` : 'Customer')
-          : item.supplierId
-          ? (item as any).supplierName || (item as any).partyName || supplierMap[Number(item.supplierId)]?.name || supplierMap[String(item.supplierId) as any]?.name || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier')
-          : (item as any).partyName || 'General';
+          ? (item as any).customerName || (custId ? customerMap[custId]?.name : null) || (item as any).partyName || (custId ? `Customer #${custId}` : 'Customer')
+          : (item as any).supplierName || (suppId ? supplierMap[suppId]?.name : null) || (item as any).partyName || (suppId ? `Supplier #${suppId}` : 'Supplier');
 
         return (
           <View>
