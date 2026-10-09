@@ -1,6 +1,8 @@
 import { Payment } from '../../types/models';
 import { CrudConfig, OfflineCrudRepository, endpointFor, idOf, now } from './OfflineCrudRepository';
 import { db } from '../database/db';
+import { apiClient } from '../api/api-client';
+import { outboxRepo } from '../sync/outbox';
 
 const config: CrudConfig<Payment> = {
   tableName: 'payments',
@@ -133,6 +135,82 @@ export class PaymentRepository extends OfflineCrudRepository<Payment> {
       return this.extractRows(results).map((row) => this.fromRow(row));
     } catch (error) {
       throw error;
+    }
+  }
+
+  public override async fetchFromApi(): Promise<Payment[]> {
+    try {
+      const response = await apiClient.get<any>(config.endpoint.BASE);
+      const extractList = (data: any): any[] => {
+        if (Array.isArray(data)) return data;
+        if (!data || typeof data !== 'object') return [];
+        for (const key of ['data', 'items', 'results', 'rows', 'records']) {
+          if (data[key]) {
+            const found = extractList(data[key]);
+            if (found.length) return found;
+          }
+        }
+        for (const val of Object.values(data)) {
+          if (Array.isArray(val)) return val;
+        }
+        return [];
+      };
+
+      const rawList = extractList(response.data);
+      if (!Array.isArray(rawList)) return await this.getAll();
+
+      const serverIds: number[] = [];
+      for (const raw of rawList) {
+        if (!raw.id) continue;
+        if (raw.deletedAt) continue;
+        const item = config.normalize(raw);
+        const serverId = Number(item.id);
+        serverIds.push(serverId);
+
+        // 1. Check if row exists locally by server ID
+        let existing = await super.getById(serverId);
+
+        // 2. If not found by server ID, check by reference & type (e.g. bill payment created locally)
+        if (!existing && item.reference) {
+          const matchRes = await db.execute(
+            `SELECT * FROM ${this.tableName} WHERE reference = ? AND type = ? LIMIT 1`,
+            [item.reference, item.type]
+          );
+          let matchedRows: any[] = [];
+          if (matchRes.rows && Array.isArray(matchRes.rows)) matchedRows = matchRes.rows;
+          else if (matchRes.rows && typeof matchRes.rows === 'object' && '_array' in matchRes.rows) matchedRows = (matchRes.rows as any)._array;
+
+          if (matchedRows.length > 0) {
+            const oldId = Number(matchedRows[0].id);
+            if (oldId && oldId !== serverId) {
+              await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [oldId]);
+              await outboxRepo.removeForEntity(config.entityType, oldId);
+            }
+          }
+        }
+
+        if (existing) {
+          await super.update(item, false);
+        } else {
+          await super.insert(item, false);
+        }
+      }
+
+      // Cleanup local records marked synced that were deleted from server
+      if (serverIds.length > 0) {
+        const placeholders = serverIds.map(() => '?').join(',');
+        await db.execute(
+          `DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`,
+          serverIds
+        );
+      } else {
+        await db.execute(`DELETE FROM ${this.tableName} WHERE syncStatus = 'synced'`);
+      }
+
+      return await this.getAll();
+    } catch (error) {
+      console.warn('[PaymentRepository] fetchFromApi error (offline):', error);
+      return await this.getAll();
     }
   }
 }

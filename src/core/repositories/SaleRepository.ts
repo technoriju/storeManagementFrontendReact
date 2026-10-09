@@ -857,21 +857,40 @@ export class SaleRepository extends BaseRepository<Sale> {
     // If sale has paid amount, record in payments table
     if (sale.paid && Number(sale.paid) > 0) {
       try {
-        await db.execute(
-          `INSERT INTO payments (amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            Number(sale.paid),
-            'cash',
-            'receive',
-            sale.invoiceNumber,
-            `Payment for Invoice ${sale.invoiceNumber}`,
-            sale.customerId ? Number(sale.customerId) : null,
-            now,
-            now,
-            'pending_insert'
-          ]
+        const invNum = sale.invoiceNumber || sale.reference;
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' LIMIT 1`,
+          [invNum]
         );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (existingRows.length > 0) {
+          await db.execute(
+            `UPDATE payments SET amount = ?, customerId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+            [Number(sale.paid), sale.customerId ? Number(sale.customerId) : null, now, existingRows[0].id]
+          );
+        } else {
+          const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+          await db.execute(
+            `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              paymentId,
+              null,
+              Number(sale.paid),
+              'cash',
+              'receive',
+              invNum,
+              `Payment for Invoice ${invNum}`,
+              sale.customerId ? Number(sale.customerId) : null,
+              now,
+              now,
+              'pending_insert'
+            ]
+          );
+        }
       } catch (payErr) {
         console.warn('Failed to insert payment for sale:', payErr);
       }
@@ -1022,7 +1041,54 @@ export class SaleRepository extends BaseRepository<Sale> {
       );
     }
 
-    // 5. Outbox & API sync
+    // 5. Update or insert payment record if paid amount is set
+    if (saleData.paid !== undefined) {
+      try {
+        const invNum = updatedSale.invoiceNumber || updatedSale.reference;
+        const newPaid = Number(saleData.paid || 0);
+        const existingRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' LIMIT 1`,
+          [invNum]
+        );
+        let existingRows: any[] = [];
+        if (existingRes.rows && Array.isArray(existingRes.rows)) existingRows = existingRes.rows;
+        else if (existingRes.rows && typeof existingRes.rows === 'object' && '_array' in existingRes.rows) existingRows = (existingRes.rows as any)._array;
+
+        if (newPaid > 0) {
+          if (existingRows.length > 0) {
+            await db.execute(
+              `UPDATE payments SET amount = ?, customerId = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+              [newPaid, updatedSale.customerId ? Number(updatedSale.customerId) : null, now, existingRows[0].id]
+            );
+          } else {
+            const paymentId = Date.now() + Math.floor(Math.random() * 10000);
+            await db.execute(
+              `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                paymentId,
+                null,
+                newPaid,
+                'cash',
+                'receive',
+                invNum,
+                `Payment for Invoice ${invNum}`,
+                updatedSale.customerId ? Number(updatedSale.customerId) : null,
+                now,
+                now,
+                'pending_insert'
+              ]
+            );
+          }
+        } else if (existingRows.length > 0) {
+          await db.execute(`DELETE FROM payments WHERE id = ?`, [existingRows[0].id]);
+        }
+      } catch (payErr) {
+        console.warn('Failed to update payment for sale update:', payErr);
+      }
+    }
+
+    // 6. Outbox & API sync
     await outboxRepo.add(this.tableName, saleId, 'UPDATE', { sale: updatedSale, items: fullItems });
     this.requestSync();
 
@@ -1287,6 +1353,11 @@ export class SaleRepository extends BaseRepository<Sale> {
 
     await db.execute('DELETE FROM sale_items WHERE saleId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
+    if (sale?.invoiceNumber || sale?.reference) {
+      try {
+        await db.execute(`DELETE FROM payments WHERE reference = ?`, [sale.invoiceNumber || sale.reference]);
+      } catch (_) {}
+    }
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);
