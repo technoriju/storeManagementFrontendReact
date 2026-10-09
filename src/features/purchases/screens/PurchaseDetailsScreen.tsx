@@ -88,6 +88,14 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                   <Text style={styles.label}>Total Amount</Text>
                   <Text style={[styles.val, { color: '#F97316', fontWeight: '700' }]}>₹{purchase.total?.toFixed(2)}</Text>
                 </View>
+                <View style={styles.gridItem}>
+                  <Text style={styles.label}>Paid Amount</Text>
+                  <Text style={[styles.val, { color: '#10B981', fontWeight: '600' }]}>₹{(purchase.paid || 0).toFixed(2)}</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={styles.label}>Due Amount</Text>
+                  <Text style={[styles.val, { color: (purchase.due || 0) > 0 ? '#EF4444' : theme.colors.text, fontWeight: '600' }]}>₹{(purchase.due || 0).toFixed(2)}</Text>
+                </View>
               </View>
 
               {purchase.notes ? (
@@ -160,6 +168,35 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                 <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total</Text>
                 <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 18 }}>₹{purchase.total?.toFixed(2)}</Text>
               </View>
+              {purchase.showPreviousBalance && (Boolean(purchase.previousDue) || Boolean(purchase.advancePayment)) ? (
+                <>
+                  <View style={[styles.summaryLine, { marginTop: 4 }]}>
+                    <Text style={styles.label}>
+                      {purchase.previousDue ? 'Previous Due' : 'Advance Payment'}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.val,
+                        { color: purchase.previousDue ? '#DC2626' : '#10B981', fontWeight: '600' },
+                      ]}
+                    >
+                      {purchase.previousDue ? '+' : '-'}₹{((purchase.previousDue || purchase.advancePayment) || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={[styles.summaryLine, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 6, marginTop: 4 }]}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 15 }}>
+                      {purchase.previousDue ? 'Net Payable (with Due)' : 'Net Payable (after Adv)'}
+                    </Text>
+                    <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 17 }}>
+                      ₹{(
+                        purchase.previousDue
+                          ? (purchase.total || 0) + (purchase.previousDue || 0)
+                          : Math.max(0, (purchase.total || 0) - (purchase.advancePayment || 0))
+                      ).toFixed(2)}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </View>
           </View>
         )}

@@ -164,6 +164,9 @@ export interface Purchase extends BaseEntity {
   status: 'Received' | 'Pending' | 'Ordered';
   paymentStatus: 'Paid' | 'Unpaid' | 'Overdue' | 'Partial';
   notes?: string;
+  previousDue?: number;
+  advancePayment?: number;
+  showPreviousBalance?: boolean;
   items?: PurchaseItem[];
 }
 

@@ -23,8 +23,12 @@ import {
   Trash2,
   PackageCheck,
   AlertCircle,
+  Truck,
+  Check,
 } from 'lucide-react-native';
-import { useSuppliers } from '../../suppliers/api/useSupplier';
+import { useSuppliers, useAddSupplier } from '../../suppliers/api/useSupplier';
+import { useSupplierStore } from '../../suppliers/store/supplierStore';
+import { Supplier } from '../../../types/models';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreatePurchase, useUpdatePurchase } from '../api/usePurchases';
 import { purchaseRepository } from '../../../core/repositories/PurchaseRepository';
@@ -68,6 +72,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const { data: brandsList = [] } = useBrands();
   const createPurchaseMutation = useCreatePurchase();
   const updatePurchaseMutation = useUpdatePurchase();
+  const addSupplierMutation = useAddSupplier();
 
   // Form State
   const [supplierId, setSupplierId] = useState<string>('');
@@ -78,6 +83,25 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const [orderDiscount, setOrderDiscount] = useState<string>('0');
   const [shipping, setShipping] = useState<string>('0');
   const [description, setDescription] = useState<string>('');
+
+  // Quick Add Supplier State
+  const [showAddSupplierModal, setShowAddSupplierModal] = useState<boolean>(false);
+  const [newSupplierName, setNewSupplierName] = useState<string>('');
+  const [supplierModalError, setSupplierModalError] = useState<string | null>(null);
+  const [isSavingSupplier, setIsSavingSupplier] = useState<boolean>(false);
+  const [localAddedSuppliers, setLocalAddedSuppliers] = useState<Supplier[]>([]);
+
+  // Supplier Previous Balance / Advance in Purchase State
+  const [showPreviousBalance, setShowPreviousBalance] = useState<boolean>(false);
+  const [balanceType, setBalanceType] = useState<'due' | 'advance'>('due');
+  const [previousBalanceAmount, setPreviousBalanceAmount] = useState<string>('0');
+  const [supplierRawBalance, setSupplierRawBalance] = useState<number>(0);
+  const [unpaidPurchasesCount, setUnpaidPurchasesCount] = useState<number>(0);
+  const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
+
+  // Payment Status & Paid Amount State
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Paid');
+  const [amountReceived, setAmountReceived] = useState<string>('');
 
   // Product Search & Items Table
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -91,6 +115,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         fetchProducts().catch(() => {});
       }
       setErrorMessage(null);
+      setShowAddSupplierModal(false);
+      setNewSupplierName('');
+      setSupplierModalError(null);
 
       if (editPurchaseId) {
         const numericId = Number(editPurchaseId);
@@ -124,6 +151,23 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               setOrderDiscount(String(existingPurchase.discount || 0));
               setShipping(String(existingPurchase.shipping || 0));
               setDescription(existingPurchase.notes || '');
+
+              const paidNum = Number(existingPurchase.paid || 0);
+              const totalNum = Number(existingPurchase.total || 0);
+              setPaymentStatus((existingPurchase.paymentStatus as any) || (paidNum >= totalNum && totalNum > 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Unpaid'));
+              setAmountReceived(paidNum > 0 ? String(paidNum) : '');
+
+              const prevDueVal = Number(existingPurchase.previousDue || 0);
+              const advVal = Number(existingPurchase.advancePayment || 0);
+              if (existingPurchase.showPreviousBalance && prevDueVal > 0) {
+                setShowPreviousBalance(true);
+                setBalanceType('due');
+                setPreviousBalanceAmount(String(prevDueVal));
+              } else if (existingPurchase.showPreviousBalance && advVal > 0) {
+                setShowPreviousBalance(true);
+                setBalanceType('advance');
+                setPreviousBalanceAmount(String(advVal));
+              }
 
               if (existingItems && existingItems.length > 0) {
                 const mappedItems: PurchaseItemRow[] = existingItems.map((item: any) => {
@@ -165,26 +209,185 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         setOrderDiscount('0');
         setShipping('0');
         setDescription('');
+        setPaymentStatus('Paid');
+        setAmountReceived('');
+        setShowPreviousBalance(false);
+        setPreviousBalanceAmount('0');
+        setSupplierRawBalance(0);
+        setUnpaidPurchasesCount(0);
       }
     }
   }, [visible, editPurchaseId, products.length, fetchProducts]);
 
-  // Supplier options
+  // Quick Add Supplier Handler
+  const handleQuickAddSupplier = async () => {
+    const trimmed = newSupplierName.trim();
+    if (!trimmed) {
+      setSupplierModalError('Please enter supplier name.');
+      return;
+    }
+
+    try {
+      setIsSavingSupplier(true);
+      setSupplierModalError(null);
+
+      // 1. If supplier already exists in list, select immediately
+      const existing = allSuppliers.find(
+        (s) => s.name?.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (existing) {
+        setSupplierId(String(existing.id));
+        setNewSupplierName('');
+        setShowAddSupplierModal(false);
+        return;
+      }
+
+      const created = await addSupplierMutation.mutateAsync({
+        name: trimmed,
+      });
+
+      if (created && created.id) {
+        setLocalAddedSuppliers((prev) => {
+          const filtered = prev.filter(
+            (p) =>
+              String(p.id) !== String(created.id) &&
+              p.name?.trim().toLowerCase() !== created.name?.trim().toLowerCase()
+          );
+          return [...filtered, created];
+        });
+        try {
+          useSupplierStore.getState().addSupplier(created);
+        } catch (_) {}
+
+        setSupplierId(String(created.id));
+      }
+      setNewSupplierName('');
+      setShowAddSupplierModal(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to add supplier.';
+      setSupplierModalError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setIsSavingSupplier(false);
+    }
+  };
+
+  // Merged Supplier Options
+  const allSuppliers = useMemo(() => {
+    const list = [...suppliers];
+    for (const s of localAddedSuppliers) {
+      if (
+        !list.some(
+          (existing) =>
+            String(existing.id) === String(s.id) ||
+            existing.name?.trim().toLowerCase() === s.name?.trim().toLowerCase()
+        )
+      ) {
+        list.push(s);
+      }
+    }
+    return list;
+  }, [suppliers, localAddedSuppliers]);
+
+  // Keep supplierId in sync if a temp negative supplier ID resolves to positive server ID in suppliers
+  useEffect(() => {
+    if (!supplierId) return;
+    const num = Number(supplierId);
+    if (num < 0) {
+      const local = localAddedSuppliers.find((l) => String(l.id) === supplierId);
+      if (local && local.name) {
+        const matched = suppliers.find(
+          (s) =>
+            s.name?.trim().toLowerCase() === local.name.trim().toLowerCase() &&
+            Number(s.id) > 0
+        );
+        if (matched) {
+          setSupplierId(String(matched.id));
+        }
+      }
+    }
+  }, [suppliers, supplierId, localAddedSuppliers]);
+
   const supplierOptions = useMemo(() => {
-    return suppliers.map((s) => ({
+    return allSuppliers.map((s) => ({
       label: s.name,
       value: String(s.id),
     }));
-  }, [suppliers]);
+  }, [allSuppliers]);
 
   const selectedSupplier = useMemo(() => {
-    return suppliers.find((s) => String(s.id) === String(supplierId));
-  }, [suppliers, supplierId]);
+    return allSuppliers.find((s) => String(s.id) === String(supplierId));
+  }, [allSuppliers, supplierId]);
+
+  useEffect(() => {
+    // Immediately clear previous balance states so new supplier doesn't show old supplier's dues
+    setShowPreviousBalance(false);
+    setPreviousBalanceAmount('0');
+    setSupplierRawBalance(0);
+    setUnpaidPurchasesCount(0);
+
+    if (!supplierId || !selectedSupplier) {
+      setIsLoadingBalance(false);
+      return;
+    }
+
+    let isCurrent = true;
+    setIsLoadingBalance(true);
+
+    purchaseRepository
+      .getSupplierPreviousBalance(
+        selectedSupplier.id,
+        selectedSupplier.name,
+        editPurchaseId ? Number(editPurchaseId) : undefined
+      )
+      .then((res) => {
+        if (!isCurrent) return;
+        setUnpaidPurchasesCount(res.unpaidCount || 0);
+        if (res.totalDue > 0) {
+          setSupplierRawBalance(res.totalDue);
+          setBalanceType('due');
+          setPreviousBalanceAmount(String(res.totalDue));
+          setShowPreviousBalance(true);
+        } else if (res.advance > 0) {
+          setSupplierRawBalance(-res.advance);
+          setBalanceType('advance');
+          setPreviousBalanceAmount(String(res.advance));
+          setShowPreviousBalance(true);
+        } else {
+          setSupplierRawBalance(0);
+          setBalanceType('due');
+          setPreviousBalanceAmount('0');
+          setShowPreviousBalance(false);
+        }
+      })
+      .catch((err) => {
+        if (!isCurrent) return;
+        console.warn('Failed to fetch supplier purchase dues:', err);
+        setSupplierRawBalance(0);
+        setBalanceType('due');
+        setPreviousBalanceAmount('0');
+        setShowPreviousBalance(false);
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsLoadingBalance(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [supplierId, selectedSupplier?.id, editPurchaseId]);
 
   const statusOptions = [
     { label: 'Received', value: 'Received' },
     { label: 'Pending', value: 'Pending' },
     { label: 'Ordered', value: 'Ordered' },
+  ];
+
+  const paymentStatusOptions = [
+    { label: 'Paid (Cash / Full)', value: 'Paid' },
+    { label: 'Unpaid (Due / Udhar)', value: 'Unpaid' },
+    { label: 'Partial (Partial Due)', value: 'Partial' },
   ];
 
   const brandsMap = useMemo(() => {
@@ -347,11 +550,50 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
     }
 
     try {
+      const parsedBalanceAmt = Math.abs(parseFloat(previousBalanceAmount) || 0);
+      const prevDueVal = showPreviousBalance && balanceType === 'due' ? parsedBalanceAmt : 0;
+      const advPaymentVal = showPreviousBalance && balanceType === 'advance' ? parsedBalanceAmt : 0;
+
+      let finalPaid = grandTotal;
+      let finalDue = 0;
+      let effectivePaymentStatus: 'Paid' | 'Unpaid' | 'Partial' = paymentStatus;
+
+      if (paymentStatus === 'Paid') {
+        finalPaid = grandTotal;
+        finalDue = 0;
+      } else if (paymentStatus === 'Unpaid') {
+        finalPaid = 0;
+        finalDue = grandTotal;
+      } else if (paymentStatus === 'Partial') {
+        const parsed = parseFloat(amountReceived);
+        finalPaid = !isNaN(parsed) && parsed > 0 ? Math.min(grandTotal, parsed) : 0;
+        finalDue = Math.max(0, grandTotal - finalPaid);
+        if (finalPaid >= grandTotal) effectivePaymentStatus = 'Paid';
+        else if (finalPaid === 0) effectivePaymentStatus = 'Unpaid';
+      } else {
+        finalPaid = status === 'Received' ? grandTotal : 0;
+        finalDue = status === 'Received' ? 0 : grandTotal;
+        effectivePaymentStatus = status === 'Received' ? 'Paid' : 'Unpaid';
+      }
+
+      let effectiveSupplierId = Number(supplierId);
+      const suppName = selectedSupplier?.name;
+      if (effectiveSupplierId < 0 && suppName) {
+        const positiveMatch = suppliers.find(
+          (s) =>
+            s.name?.trim().toLowerCase() === suppName.trim().toLowerCase() &&
+            Number(s.id) > 0
+        );
+        if (positiveMatch) {
+          effectiveSupplierId = Number(positiveMatch.id);
+        }
+      }
+
       const purchasePayload = {
         invoiceNumber: reference || `PO-${Date.now().toString().slice(-6)}`,
         reference: reference || `PO-${Date.now().toString().slice(-6)}`,
-        supplierId: Number(supplierId),
-        supplierName: selectedSupplier?.name || 'Unknown Supplier',
+        supplierId: effectiveSupplierId,
+        supplierName: suppName || 'Unknown Supplier',
         date: date || new Date().toISOString().split('T')[0],
         subtotal: itemsSubtotal,
         discount: totalDiscount,
@@ -359,11 +601,14 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         shipping: shippingNum,
         gst: itemsTax,
         total: grandTotal,
-        paid: status === 'Received' ? grandTotal : 0,
-        due: status === 'Received' ? 0 : grandTotal,
+        paid: finalPaid,
+        due: finalDue,
         status,
-        paymentStatus: (status === 'Received' ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid',
+        paymentStatus: effectivePaymentStatus,
         notes: description || undefined,
+        previousDue: prevDueVal,
+        advancePayment: advPaymentVal,
+        showPreviousBalance: Boolean(showPreviousBalance && (prevDueVal > 0 || advPaymentVal > 0)),
       };
 
       const itemsPayload = calculatedItems.map((item) => ({
@@ -399,6 +644,12 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
       setSupplierId('');
       setSearchQuery('');
       setDescription('');
+      setShowPreviousBalance(false);
+      setPreviousBalanceAmount('0');
+      setSupplierRawBalance(0);
+      setUnpaidPurchasesCount(0);
+      setPaymentStatus('Paid');
+      setAmountReceived('');
       onClose();
       Alert.alert('Success', editPurchaseId ? 'Purchase updated successfully!' : 'Purchase created successfully!');
     } catch (err: any) {
@@ -407,7 +658,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <>
+      <Modal visible={visible} transparent animationType="fade">
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)', padding: isMobile ? 8 : 16 }]}>
         <View
           style={[
@@ -456,7 +708,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   <View style={{ flex: 1 }}>
                     <AppSelect
                       label="Supplier Name *"
-                      placeholder={suppliers.length === 0 ? 'No suppliers available' : 'Select Supplier'}
+                      placeholder={allSuppliers.length === 0 ? 'No suppliers available' : 'Select Supplier'}
                       options={supplierOptions}
                       value={supplierId}
                       onSelect={(val) => setSupplierId(String(val))}
@@ -466,15 +718,13 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   <TouchableOpacity
                     style={[styles.plusBtn, { marginTop: 24 }]}
                     onPress={() => {
-                      Alert.alert(
-                        'Supplier Info',
-                        suppliers.length === 0
-                          ? 'No suppliers found. Please add suppliers from the Suppliers module first.'
-                          : `Total suppliers loaded: ${suppliers.length}`
-                      );
+                      setNewSupplierName('');
+                      setSupplierModalError(null);
+                      setShowAddSupplierModal(true);
                     }}
+                    activeOpacity={0.8}
                   >
-                    <Plus size={16} color="white" />
+                    <Plus size={18} color="white" />
                   </TouchableOpacity>
                 </View>
 
@@ -502,6 +752,150 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   />
                 </View>
               </View>
+
+              {/* Supplier Previous Due / Advance Purchase Option */}
+              {selectedSupplier && (
+                <View
+                  style={[
+                    styles.balanceCard,
+                    {
+                      borderColor: showPreviousBalance
+                        ? (balanceType === 'due' ? '#FCA5A5' : '#86EFAC')
+                        : theme.colors.border,
+                      backgroundColor: showPreviousBalance
+                        ? (balanceType === 'due' ? '#FFF5F5' : '#F0FDF4')
+                        : '#F8FAFC',
+                    },
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 240 }}>
+                      <View
+                        style={[
+                          styles.balanceIndicatorDot,
+                          {
+                            backgroundColor: supplierRawBalance > 0
+                              ? '#DC2626'
+                              : supplierRawBalance < 0
+                              ? '#16A34A'
+                              : '#64748B',
+                          },
+                        ]}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.text }}>
+                          {selectedSupplier.name} Balance:{' '}
+                          <Text
+                            style={{
+                              color: supplierRawBalance > 0
+                                ? '#DC2626'
+                                : supplierRawBalance < 0
+                                ? '#16A34A'
+                                : '#64748B',
+                            }}
+                          >
+                            {supplierRawBalance > 0
+                              ? `₹${supplierRawBalance.toFixed(2)} Due`
+                              : supplierRawBalance < 0
+                              ? `₹${Math.abs(supplierRawBalance).toFixed(2)} Advance`
+                              : '₹0.00 (Cleared)'}
+                          </Text>
+                        </Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 }}>
+                          {isLoadingBalance
+                            ? 'Fetching previous purchase dues...'
+                            : supplierRawBalance > 0
+                            ? unpaidPurchasesCount > 0
+                              ? `Fetched ₹${supplierRawBalance.toFixed(2)} due from ${unpaidPurchasesCount} previous purchase bill(s)`
+                              : 'Supplier has outstanding due from prior transactions'
+                            : supplierRawBalance < 0
+                            ? 'Supplier has excess advance credit available'
+                            : 'No prior balance recorded for this supplier'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Toggle: Show on invoice / bill or not */}
+                    <TouchableOpacity
+                      style={[
+                        styles.invoiceOptionToggle,
+                        showPreviousBalance && styles.invoiceOptionToggleActive,
+                      ]}
+                      onPress={() => setShowPreviousBalance(!showPreviousBalance)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkboxBox, showPreviousBalance && styles.checkboxBoxActive]}>
+                        {showPreviousBalance && <Check size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.invoiceOptionToggleText, showPreviousBalance && { color: '#2563EB', fontWeight: '700' }]}>
+                        Show on Bill
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Config details when toggled ON */}
+                  {showPreviousBalance && (
+                    <View style={[styles.balanceConfigRow, { borderTopColor: theme.colors.border }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          {/* Due vs Advance Selector */}
+                          <View style={styles.miniSegmentGroup}>
+                            <TouchableOpacity
+                              style={[styles.miniSegmentBtn, balanceType === 'due' && styles.miniSegmentBtnRedActive]}
+                              onPress={() => setBalanceType('due')}
+                            >
+                              <Text style={[styles.miniSegmentText, balanceType === 'due' && styles.miniSegmentTextActive]}>
+                                Previous Due
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.miniSegmentBtn, balanceType === 'advance' && styles.miniSegmentBtnGreenActive]}
+                              onPress={() => setBalanceType('advance')}
+                            >
+                              <Text style={[styles.miniSegmentText, balanceType === 'advance' && styles.miniSegmentTextActive]}>
+                                Advance Payment
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Editable Amount */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>Amount:</Text>
+                            <View style={[styles.miniAmountInputContainer, { borderColor: theme.colors.border }]}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary }}>₹</Text>
+                              <TextInput
+                                style={[styles.miniAmountInput, { color: theme.colors.text }]}
+                                keyboardType="decimal-pad"
+                                value={previousBalanceAmount}
+                                onChangeText={(v) => {
+                                  const clean = v.replace(/[^0-9.]/g, '');
+                                  const parts = clean.split('.');
+                                  setPreviousBalanceAmount(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                                }}
+                                placeholder="0.00"
+                              />
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Live calculation preview */}
+                        <View
+                          style={[
+                            styles.livePreviewBadge,
+                            { backgroundColor: balanceType === 'due' ? '#FEE2E2' : '#DCFCE7' },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: balanceType === 'due' ? '#991B1B' : '#166534' }}>
+                            {balanceType === 'due'
+                              ? `Current Bill ₹${grandTotal.toFixed(2)} + Prev Due ₹${(parseFloat(previousBalanceAmount) || 0).toFixed(2)} = Total ₹${(grandTotal + (parseFloat(previousBalanceAmount) || 0)).toFixed(2)}`
+                              : `Current Bill ₹${grandTotal.toFixed(2)} - Advance ₹${(parseFloat(previousBalanceAmount) || 0).toFixed(2)} = Net ₹${Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0)).toFixed(2)}`}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Row 2: Live Product Search */}
               <View style={{ zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
@@ -844,7 +1238,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               </ScrollView>
               </View>
 
-              {/* Row 3: Order Tax, Discount, Shipping, Status */}
+              {/* Row 3: Order Tax, Discount, Shipping, Status, Payment Status */}
               <View style={[styles.row, isMobile && { flexDirection: 'column' }]}>
                 <View style={{ flex: 1 }}>
                   <AppInput
@@ -891,9 +1285,36 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                     placeholder="Select Status"
                     options={statusOptions}
                     value={status}
-                    onSelect={(val) => setStatus(val)}
+                    onSelect={(val) => {
+                      setStatus(val);
+                      if (val === 'Pending') setPaymentStatus('Unpaid');
+                    }}
                   />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <AppSelect
+                    label="Payment Status *"
+                    placeholder="Select Payment"
+                    options={paymentStatusOptions}
+                    value={paymentStatus}
+                    onSelect={(val) => setPaymentStatus(val as any)}
+                  />
+                </View>
+                {paymentStatus === 'Partial' && (
+                  <View style={{ flex: 1 }}>
+                    <AppInput
+                      label="Amount Paid (₹) *"
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      value={amountReceived}
+                      onChangeText={(v: string) => {
+                        const clean = v.replace(/[^0-9.]/g, '');
+                        const parts = clean.split('.');
+                        setAmountReceived(parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean);
+                      }}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* Bottom Section: Notes & Live Grand Total Summary */}
@@ -955,6 +1376,22 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                       +₹{shippingNum.toFixed(2)}
                     </Text>
                   </View>
+                  {showPreviousBalance && (
+                    <View style={styles.summaryLine}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                        {balanceType === 'due' ? 'Previous Due' : 'Advance Payment'}
+                      </Text>
+                      <Text
+                        style={{
+                          color: balanceType === 'due' ? '#DC2626' : '#16A34A',
+                          fontWeight: '600',
+                          fontSize: 13,
+                        }}
+                      >
+                        {balanceType === 'due' ? '+' : '-'}₹{(parseFloat(previousBalanceAmount) || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
                   <View
                     style={[
                       styles.summaryLine,
@@ -967,10 +1404,22 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                     ]}
                   >
                     <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 15 }}>
-                      Grand Total
+                      {showPreviousBalance
+                        ? balanceType === 'due'
+                          ? 'Net Payable (with Prev Due)'
+                          : 'Net Payable (after Advance)'
+                        : 'Grand Total'}
                     </Text>
                     <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 17 }}>
-                      ₹{grandTotal.toFixed(2)}
+                      ₹{
+                        (
+                          showPreviousBalance
+                            ? balanceType === 'due'
+                              ? grandTotal + (parseFloat(previousBalanceAmount) || 0)
+                              : Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0))
+                            : grandTotal
+                        ).toFixed(2)
+                      }
                     </Text>
                   </View>
                 </View>
@@ -1003,6 +1452,123 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         </View>
       </View>
     </Modal>
+
+    {/* Quick Add Supplier Modal */}
+    <Modal
+      visible={showAddSupplierModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (!isSavingSupplier) {
+          setShowAddSupplierModal(false);
+          setNewSupplierName('');
+          setSupplierModalError(null);
+        }
+      }}
+    >
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+        <View
+          style={[
+            styles.quickSupplierModal,
+            {
+              backgroundColor: theme.colors.surface,
+              borderRadius: theme.borderRadius.lg,
+              width: isMobile ? '92%' : 440,
+            },
+          ]}
+        >
+          {/* Modal Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Truck size={18} color="#F97316" />
+              <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>
+                Add Supplier
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setShowAddSupplierModal(false);
+                setNewSupplierName('');
+                setSupplierModalError(null);
+              }}
+              style={styles.closeBtn}
+              disabled={isSavingSupplier}
+            >
+              <X size={16} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Modal Body */}
+          <View style={{ padding: 20, gap: 16 }}>
+            {supplierModalError && (
+              <View style={styles.errorBanner}>
+                <AlertCircle size={14} color="#DC2626" />
+                <Text style={[styles.errorText, { fontSize: 12 }]}>{supplierModalError}</Text>
+              </View>
+            )}
+
+            <View>
+              <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+                Supplier Name *
+              </Text>
+              <TextInput
+                style={[
+                  styles.supplierInput,
+                  {
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+                placeholder="Enter supplier name"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newSupplierName}
+                onChangeText={(val) => {
+                  setNewSupplierName(val);
+                  if (supplierModalError) setSupplierModalError(null);
+                }}
+                autoFocus
+              />
+            </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                ]}
+                onPress={() => {
+                  setShowAddSupplierModal(false);
+                  setNewSupplierName('');
+                  setSupplierModalError(null);
+                }}
+                disabled={isSavingSupplier}
+              >
+                <Text style={{ color: theme.colors.textSecondary, fontWeight: '600', fontSize: 13 }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveBtn,
+                  { backgroundColor: '#F97316' },
+                  isSavingSupplier && { opacity: 0.7 },
+                ]}
+                onPress={handleQuickAddSupplier}
+                disabled={isSavingSupplier}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>
+                  {isSavingSupplier ? 'Saving...' : 'Add Supplier'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 };
 
@@ -1133,5 +1699,127 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     gap: 12,
     flexShrink: 0,
+  },
+  balanceCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 4,
+  },
+  balanceIndicatorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  invoiceOptionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceOptionToggleActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxBoxActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#2563EB',
+  },
+  invoiceOptionToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  balanceConfigRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  miniSegmentGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+    padding: 2,
+  },
+  miniSegmentBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  miniSegmentBtnRedActive: {
+    backgroundColor: '#DC2626',
+  },
+  miniSegmentBtnGreenActive: {
+    backgroundColor: '#16A34A',
+  },
+  miniSegmentText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  miniSegmentTextActive: {
+    color: '#FFFFFF',
+  },
+  miniAmountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    height: 32,
+    backgroundColor: '#FFFFFF',
+  },
+  miniAmountInput: {
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 60,
+    height: 30,
+    padding: 0,
+    marginLeft: 2,
+  },
+  livePreviewBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  quickSupplierModal: {
+    overflow: 'hidden',
+  },
+  supplierInput: {
+    borderWidth: 1,
+    borderRadius: 6,
+    height: 42,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSaveBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
