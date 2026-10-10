@@ -2,8 +2,76 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { purchaseRepository } from '../../../core/repositories/PurchaseRepository';
 import { Purchase, PurchaseItem } from '../../../types/models';
 import { useProductStore } from '../../products/store/productStore';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 
 export const PURCHASE_QUERY_KEY = ['purchases'] as const;
+
+export interface PaginatedPurchasesResult {
+  data: Purchase[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const fetchPaginatedPurchases = async (params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<PaginatedPurchasesResult> => {
+  const page = params.page || 1;
+  const limit = params.limit || 10;
+  const search = params.search || '';
+
+  try {
+    const response = await apiClient.get(API_ENDPOINTS.PURCHASES.BASE, {
+      params: {
+        page,
+        limit,
+        search: search.trim() || undefined,
+      },
+    });
+
+    const raw = response.data;
+    if (raw?.data && typeof raw.data === 'object' && Array.isArray(raw.data.data)) {
+      const p = raw.data;
+      return {
+        data: p.data,
+        total: Number(p.total ?? p.data.length),
+        page: Number(p.page ?? page),
+        limit: Number(p.limit ?? limit),
+        totalPages: Number(p.totalPages ?? Math.max(1, Math.ceil((p.total ?? p.data.length) / limit))),
+      };
+    }
+
+    if (raw && typeof raw === 'object' && Array.isArray(raw.data) && (raw.total !== undefined || raw.totalPages !== undefined)) {
+      return {
+        data: raw.data,
+        total: Number(raw.total ?? raw.data.length),
+        page: Number(raw.page ?? page),
+        limit: Number(raw.limit ?? limit),
+        totalPages: Number(raw.totalPages ?? Math.max(1, Math.ceil((raw.total ?? raw.data.length) / limit))),
+      };
+    }
+
+    const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
+    if (Array.isArray(list)) {
+      const offset = (page - 1) * limit;
+      return {
+        data: list.slice(offset, offset + limit),
+        total: list.length,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(list.length / limit)),
+      };
+    }
+  } catch (err: any) {
+    console.warn('[fetchPaginatedPurchases] API failed, falling back to SQLite:', err.message);
+  }
+
+  return await purchaseRepository.getPaginated({ page, limit, search });
+};
 
 export const usePurchases = () => {
   const queryClient = useQueryClient();

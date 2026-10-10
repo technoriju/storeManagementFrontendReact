@@ -52,12 +52,20 @@ export class SaleRepository extends BaseRepository<Sale> {
   }
 
   protected fromRow(row: any): Sale {
+    const rawName = row.customerName ? String(row.customerName).trim() : '';
+    const resolvedName = (rawName && rawName.toLowerCase() !== 'walk-in customer')
+      ? rawName
+      : (row.resolvedCustomerName || rawName || undefined);
+
     return {
       id: Number(row.id),
       invoiceNumber: String(row.invoiceNumber || ''),
       reference: row.reference ? String(row.reference) : undefined,
       customerId: row.customerId ? Number(row.customerId) : undefined,
-      customerName: row.customerName ? String(row.customerName) : undefined,
+      customerName: resolvedName,
+      customerPhone: row.resolvedCustomerPhone || row.customerPhone || undefined,
+      customerAddress: row.resolvedCustomerAddress || row.customerAddress || undefined,
+      customerGstin: row.resolvedCustomerGstin || row.customerGstin || undefined,
       supplierId: row.supplierId ? Number(row.supplierId) : undefined,
       supplierName: row.supplierName ? String(row.supplierName) : undefined,
       date: String(row.date || ''),
@@ -1513,6 +1521,79 @@ export class SaleRepository extends BaseRepository<Sale> {
     if (shouldSync) {
       await tombstoneRepo.add(this.tableName, id);
       await outboxRepo.removeForEntity(this.tableName, id);
+    }
+  }
+
+  public async getPaginated(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: Sale[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.max(1, params.limit || 10);
+    const offset = (page - 1) * limit;
+    const search = (params.search || '').trim();
+
+    try {
+      let whereClause = '';
+      const queryParams: any[] = [];
+      if (search) {
+        whereClause = `WHERE (invoiceNumber LIKE ? OR reference LIKE ? OR customerName LIKE ? OR status LIKE ? OR paymentStatus LIKE ? OR notes LIKE ?)`;
+        const pattern = `%${search}%`;
+        queryParams.push(pattern, pattern, pattern, pattern, pattern, pattern);
+      }
+
+      const countRes = await db.execute(`SELECT COUNT(*) as totalCount FROM ${this.tableName} ${whereClause}`, queryParams);
+      let total = 0;
+      const countRows = this.extractRows(countRes);
+      if (countRows.length > 0) {
+        total = Number(countRows[0].totalCount || 0);
+      }
+
+      const joinClause = `SELECT s.*, 
+              c.name AS resolvedCustomerName,
+              c.phone AS resolvedCustomerPhone,
+              c.address AS resolvedCustomerAddress,
+              COALESCE(c.taxId, c.gstin) AS resolvedCustomerGstin
+       FROM ${this.tableName} s
+       LEFT JOIN customers c ON (s.customerId IS NOT NULL AND s.customerId > 0 AND (s.customerId = c.id OR s.customerId = c.backendId))
+       ${whereClause ? whereClause.replace(/\b(invoiceNumber|reference|customerName|status|paymentStatus|notes)\b/g, 's.$1') : ''}
+       ORDER BY s.id DESC LIMIT ? OFFSET ?`;
+
+      const dataRes = await db.execute(joinClause, [...queryParams, limit, offset]);
+      const rows = this.extractRows(dataRes);
+      const items = rows.map((r) => this.fromRow(r));
+
+      return {
+        data: items,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    } catch (e) {
+      console.warn('Local SQLite getPaginated sales failed:', e);
+      const all = await this.getAll();
+      let filtered = all;
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = all.filter(
+          (p) =>
+            (p.invoiceNumber && p.invoiceNumber.toLowerCase().includes(s)) ||
+            (p.reference && p.reference.toLowerCase().includes(s)) ||
+            (p.customerName && p.customerName.toLowerCase().includes(s)) ||
+            (p.status && p.status.toLowerCase().includes(s)) ||
+            (p.paymentStatus && p.paymentStatus.toLowerCase().includes(s))
+        );
+      }
+      const total = filtered.length;
+      return {
+        data: filtered.slice(offset, offset + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
     }
   }
 }

@@ -717,6 +717,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       const selectedBrandObj = brands.find(b => String(b.value) === String(selectedBrand));
       const stockQty = parseFloat(quantity) || 0;
 
+      const now = new Date().toISOString();
+      const existingProduct = productId ? products.find((p) => String(p.id) === String(productId)) : null;
+
       const productData: Product = {
         id: productId ? (isNaN(Number(productId)) ? Math.floor(Math.random() * -1000000000) : Number(productId)) : Math.floor(Math.random() * -1000000000),
         name: productName.trim(),
@@ -744,8 +747,8 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         openingStock: stockQty,
         stockQuantity: stockQty,
         lowStockThreshold: parseFloat(quantityAlert) || 5,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: existingProduct?.createdAt || now,
+        updatedAt: now,
         syncStatus: 'pending'
       };
 
@@ -789,21 +792,31 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           stockQuantity: productData.stockQuantity,
         };
         if (productId) {
-          await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
+          const res = await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
+          const serverData = res.data?.data || res.data;
+          if (serverData) {
+            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
+            productData.syncStatus = 'synced';
+            await productRepository.update(productData as any);
+            updateProduct(productData);
+          }
         } else {
           const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
           const serverData = res.data?.data || res.data;
           if (serverData?.id) {
             productData.id = Number(serverData.id);
+            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
+            if (serverData.createdAt) productData.createdAt = serverData.createdAt;
             productData.syncStatus = 'synced';
             await productRepository.update(productData as any);
+            addProduct(productData);
           }
         }
       } catch (apiErr) {
         console.warn('API sync warning:', apiErr);
       }
 
-      fetchProducts().catch(() => {});
+      fetchProducts(true).catch(() => {});
 
       Alert.alert('Success', `Product ${productId ? 'updated' : 'added'} successfully!`);
       onNavigate('list');

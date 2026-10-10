@@ -4,6 +4,14 @@ import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
 import { productRepository } from '../../../core/repositories/ProductRepository';
 
+export interface PaginatedProductsResponse {
+  data: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 interface ProductState {
   products: Product[];
   categories: Category[];
@@ -31,6 +39,13 @@ interface ProductState {
   addUnitConversion: (conversion: UnitConversion) => void;
 
   fetchProducts: (force?: boolean) => Promise<void>;
+  fetchPaginatedProducts: (params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    categoryId?: number;
+    brandId?: number;
+  }) => Promise<PaginatedProductsResponse>;
 }
 
 let inFlightFetchPromise: Promise<void> | null = null;
@@ -47,10 +62,17 @@ export const useProductStore = create<ProductState>((set, get) => ({
   error: null,
 
   setProducts: (products) => set({ products }),
-  addProduct: (product) => set((state) => ({ products: [product, ...state.products] })),
-  updateProduct: (updated) => set((state) => ({
-    products: state.products.map((p) => (String(p.id) === String(updated.id) ? { ...p, ...updated } : p)),
+  addProduct: (product) => set((state) => ({
+    products: [product, ...state.products.filter((p) => String(p.id) !== String(product.id))],
   })),
+  updateProduct: (updated) => set((state) => {
+    const existing = state.products.find((p) => String(p.id) === String(updated.id));
+    const merged = existing ? { ...existing, ...updated } : updated;
+    const remaining = state.products.filter((p) => String(p.id) !== String(updated.id));
+    return {
+      products: [merged, ...remaining],
+    };
+  }),
   deleteProduct: async (id: number | string) => {
     const numId = Number(id);
     set((state) => ({
@@ -130,6 +152,77 @@ export const useProductStore = create<ProductState>((set, get) => ({
     })();
 
     return inFlightFetchPromise;
+  },
+
+  fetchPaginatedProducts: async (params) => {
+    const page = params.page || 1;
+    const limit = params.limit || 10;
+    const search = params.search || '';
+
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, {
+        params: {
+          page,
+          limit,
+          search: search.trim() || undefined,
+          categoryId: params.categoryId || undefined,
+          brandId: params.brandId || undefined,
+        },
+      });
+
+      const raw = response.data;
+
+      // Handle TransformInterceptor wrapped paginated object: { statusCode, data: { data: [...], total, page, limit, totalPages } }
+      if (raw?.data && typeof raw.data === 'object' && Array.isArray(raw.data.data)) {
+        const p = raw.data;
+        return {
+          data: p.data as Product[],
+          total: Number(p.total ?? p.data.length),
+          page: Number(p.page ?? page),
+          limit: Number(p.limit ?? limit),
+          totalPages: Number(p.totalPages ?? Math.max(1, Math.ceil((p.total ?? p.data.length) / limit))),
+        };
+      }
+
+      // Handle direct paginated object: { data: [...], total, page, limit, totalPages }
+      if (raw && typeof raw === 'object' && Array.isArray(raw.data) && (raw.total !== undefined || raw.totalPages !== undefined)) {
+        return {
+          data: raw.data as Product[],
+          total: Number(raw.total ?? raw.data.length),
+          page: Number(raw.page ?? page),
+          limit: Number(raw.limit ?? limit),
+          totalPages: Number(raw.totalPages ?? Math.max(1, Math.ceil((raw.total ?? raw.data.length) / limit))),
+        };
+      }
+
+      // Handle wrapped or unwrapped array (unpaginated backend response): slice by page & limit
+      const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
+      if (Array.isArray(list)) {
+        const sortedList = [...list].sort((a: any, b: any) => {
+          const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          return Number(b.id || 0) - Number(a.id || 0);
+        });
+        const offset = (page - 1) * limit;
+        return {
+          data: sortedList.slice(offset, offset + limit) as Product[],
+          total: sortedList.length,
+          page,
+          limit,
+          totalPages: Math.max(1, Math.ceil(sortedList.length / limit)),
+        };
+      }
+    } catch (err: any) {
+      console.warn('API fetchPaginatedProducts failed, falling back to SQLite:', err.message);
+    }
+
+    const localResult = await productRepository.getPaginated({
+      page,
+      limit,
+      search,
+    });
+    return localResult as PaginatedProductsResponse;
   },
 }));
 

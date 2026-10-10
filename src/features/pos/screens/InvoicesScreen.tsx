@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
-import { useSales, useDeleteSale } from '../api/useSales';
+import { useDeleteSale, fetchPaginatedSales } from '../api/useSales';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { 
   FileText, 
@@ -32,7 +32,13 @@ interface Props {
 
 export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [tableInvoices, setTableInvoices] = useState<any[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [viewInvoice, setViewInvoice] = useState<any | null>(null);
   const [printData, setPrintData] = useState<ReceiptPrintData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -45,13 +51,8 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  const { data: dbSales = [], isLoading, refetch } = useSales();
   const deleteSaleMutation = useDeleteSale();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
-
-  useEffect(() => {
-    refetch();
-  }, [lastSyncedAt, refetch]);
 
   const fallbackInvoices = useMemo(() => [
     { id: 1, invoiceNumber: 'INV001', customerName: 'Carl Evans', date: '2024-12-24', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
@@ -61,67 +62,87 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     { id: 5, invoiceNumber: 'INV005', customerName: 'Mark Joslyn', date: '2024-10-30', total: 800, paid: 800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
   ], []);
 
-  const allInvoices = useMemo(() => {
-    if (dbSales && dbSales.length > 0) {
-      const seen = new Set<string>();
-      const list: any[] = [];
-      for (const s of dbSales) {
-        if (dismissedInvoiceIds.includes(s.id)) continue;
-        const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
-        if (invNum && seen.has(invNum)) continue;
-        if (invNum) seen.add(invNum);
+  const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
+    setIsLoadingData(true);
+    try {
+      const res = await fetchPaginatedSales({
+        page: targetPage,
+        limit: targetLimit,
+        search: targetSearch,
+      });
 
-        const total = Number(s.total || 0);
-        const paid = Number(s.paid || 0);
-        const due = Number(s.due !== undefined ? s.due : Math.max(0, total - paid));
-        let payStatus = s.paymentStatus || 'Unpaid';
-        if (!s.paymentStatus) {
-          if (paid >= total && total > 0) payStatus = 'Paid';
-          else if (paid > 0) payStatus = 'Partial';
-          else payStatus = 'Unpaid';
+      if (res.data.length > 0 || targetSearch) {
+        const seen = new Set<string>();
+        const list: any[] = [];
+        for (const s of res.data) {
+          if (dismissedInvoiceIds.includes(s.id)) continue;
+          const invNum = (s.invoiceNumber || s.reference || String(s.id)).trim();
+          if (invNum && seen.has(invNum)) continue;
+          if (invNum) seen.add(invNum);
+
+          const total = Number(s.total || 0);
+          const paid = Number(s.paid || 0);
+          const due = Number(s.due !== undefined ? s.due : Math.max(0, total - paid));
+          let payStatus = s.paymentStatus || 'Unpaid';
+          if (!s.paymentStatus) {
+            if (paid >= total && total > 0) payStatus = 'Paid';
+            else if (paid > 0) payStatus = 'Partial';
+            else payStatus = 'Unpaid';
+          }
+          list.push({
+            id: s.id,
+            invoiceNumber: s.invoiceNumber || `INV-${s.id}`,
+            reference: s.reference,
+            customerName: s.customer?.name || s.customerName || 'Walk-in Customer',
+            customerPhone: (s as any).customer?.phone || (s as any).customerPhone || '',
+            customerAddress: (s as any).customer?.address || (s as any).customerAddress || '',
+            customerGstin: (s as any).customer?.taxNumber || (s as any).customer?.taxId || (s as any).customer?.gstin || (s as any).customerGstin || '',
+            date: s.date || (s.createdAt ? s.createdAt.split('T')[0] : ''),
+            subtotal: Number(s.subtotal || 0),
+            discount: Number(s.discount || 0),
+            orderTax: Number(s.orderTax || 0),
+            gst: Number((s.orderTax || 0) + (s.gst || 0)),
+            shipping: Number(s.shipping || 0),
+            total,
+            paid,
+            due,
+            status: s.status || 'Completed',
+            paymentStatus: payStatus,
+            biller: s.biller || 'Admin',
+            notes: s.notes,
+            items: s.items || [],
+            previousDue: s.previousDue,
+            advancePayment: s.advancePayment,
+            showPreviousBalance: s.showPreviousBalance,
+            syncStatus: s.syncStatus || 'synced',
+          });
         }
-        list.push({
-          id: s.id,
-          invoiceNumber: s.invoiceNumber || `INV-${s.id}`,
-          reference: s.reference,
-          customerName: s.customerName || 'Walk-in Customer',
-          customerPhone: (s as any).customerPhone || '',
-          customerAddress: (s as any).customerAddress || '',
-          customerGstin: (s as any).customerGstin || '',
-          date: s.date || (s.createdAt ? s.createdAt.split('T')[0] : ''),
-          subtotal: Number(s.subtotal || 0),
-          discount: Number(s.discount || 0),
-          orderTax: Number(s.orderTax || 0),
-          gst: Number((s.orderTax || 0) + (s.gst || 0)),
-          shipping: Number(s.shipping || 0),
-          total,
-          paid,
-          due,
-          status: s.status || 'Completed',
-          paymentStatus: payStatus,
-          biller: s.biller || 'Admin',
-          notes: s.notes,
-          items: s.items || [],
-          previousDue: s.previousDue,
-          advancePayment: s.advancePayment,
-          showPreviousBalance: s.showPreviousBalance,
-          syncStatus: s.syncStatus || 'synced',
-        });
+        setTableInvoices(list);
+        setTotalItems(res.total);
+        setTotalPages(res.totalPages);
+      } else {
+        const filtered = fallbackInvoices.filter((item) => !dismissedInvoiceIds.includes(item.id));
+        const paginated = filtered.slice((targetPage - 1) * targetLimit, targetPage * targetLimit);
+        setTableInvoices(paginated);
+        setTotalItems(filtered.length);
+        setTotalPages(Math.ceil(filtered.length / targetLimit) || 1);
       }
-      return list;
+    } catch (e) {
+      console.warn('Failed to load paginated sales for invoices:', e);
+    } finally {
+      setIsLoadingData(false);
     }
-    return fallbackInvoices.filter((item) => !dismissedInvoiceIds.includes(item.id));
-  }, [dbSales, fallbackInvoices, dismissedInvoiceIds]);
+  }, [dismissedInvoiceIds, fallbackInvoices]);
 
-  const filteredData = useMemo(() => {
-    if (!searchQuery.trim()) return allInvoices;
-    const q = searchQuery.toLowerCase().trim();
-    return allInvoices.filter((item) =>
-      item.invoiceNumber?.toLowerCase().includes(q) ||
-      item.customerName?.toLowerCase().includes(q) ||
-      item.paymentStatus?.toLowerCase().includes(q)
-    );
-  }, [allInvoices, searchQuery]);
+  useEffect(() => {
+    loadData(page, rowsPerPage, searchQuery);
+  }, [loadData, page, rowsPerPage, searchQuery]);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      loadData(page, rowsPerPage, searchQuery);
+    }
+  }, [loadData, lastSyncedAt, page, rowsPerPage, searchQuery]);
 
   const handleDelete = (item: any) => {
     setDeleteError(null);
@@ -138,7 +159,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       await deleteSaleMutation.mutateAsync(targetId);
       setDismissedInvoiceIds((prev) => [...prev, String(deleteTarget.id)]);
       setDeleteTarget(null);
-      refetch();
+      await loadData(page, rowsPerPage, searchQuery);
     } catch (err: any) {
       console.error('Failed to delete sale bill:', err);
       setDeleteError(err?.message || 'Server failed to delete invoice');
@@ -237,11 +258,11 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       invoiceNumber: invoice.invoiceNumber,
       reference: invoice.reference,
       date: invoice.date,
-      customerName: invoice.customerName || 'Walk-in Customer',
-      customerPhone: invoice.customerPhone || '',
-      customerAddress: invoice.customerAddress || '',
-      customerGstin: invoice.customerGstin || '',
-      customerType: (invoice.customerGstin && invoice.customerGstin.length > 3) ? 'wholesale' : 'retail',
+      customerName: invoice.customer?.name || invoice.customerName || 'Walk-in Customer',
+      customerPhone: (invoice as any).customer?.phone || invoice.customerPhone || '',
+      customerAddress: (invoice as any).customer?.address || invoice.customerAddress || '',
+      customerGstin: (invoice as any).customer?.taxNumber || (invoice as any).customer?.taxId || (invoice as any).customer?.gstin || invoice.customerGstin || '',
+      customerType: ((invoice as any).customer?.taxNumber || (invoice as any).customer?.gstin || invoice.customerGstin) ? 'wholesale' : 'retail',
       biller: invoice.biller || 'Cashier',
       subtotal: Number(invoice.subtotal || invoice.total || 0),
       discount: Number(invoice.discount || 0),
@@ -403,7 +424,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
           </Pressable>
           <Pressable 
             style={[styles.iconButton, { borderColor: theme.colors.border }]}
-            onPress={() => refetch()}
+            onPress={() => loadData(page, rowsPerPage, searchQuery)}
           >
             <RefreshCw size={16} color={theme.colors.textSecondary} />
           </Pressable>
@@ -413,12 +434,26 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       {/* Advanced Table */}
       <View style={styles.tableCard}>
         <AdvancedTable
-          data={filteredData}
+          data={tableInvoices}
           columns={columns}
-          onSearch={setSearchQuery}
+          searchValue={searchQuery}
+          onSearch={(text) => {
+            setSearchQuery(text);
+            setPage(1);
+          }}
+          debounceSearchMs={400}
           searchPlaceholder="Search invoice no, customer, payment status..."
-          isLoading={isLoading}
+          isLoading={isLoadingData}
           hasCheckbox={false}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          totalItems={totalItems}
+          totalPages={totalPages}
+          onPageChange={(newPage) => setPage(newPage)}
+          onRowsPerPageChange={(newRows) => {
+            setRowsPerPage(newRows);
+            setPage(1);
+          }}
         />
       </View>
 
@@ -615,7 +650,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
         onClose={() => {
           setShowAddModal(false);
           setEditSaleId(null);
-          refetch();
+          loadData(page, rowsPerPage, searchQuery);
         }}
       />
 

@@ -12,6 +12,17 @@ export interface ReportFilters {
   status?: string;
   paymentStatus?: string;
   category?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PaginatedReportResult<T = any> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  summary?: any;
 }
 
 export class ReportsService {
@@ -27,6 +38,80 @@ export class ReportsService {
     return condition;
   }
 
+  static parsePaginatedApiResponse<T = any>(
+    apiRes: any,
+    filters: ReportFilters,
+    mapper?: (item: any, index: number) => T
+  ): PaginatedReportResult<T> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
+    if (!apiRes) {
+      return { data: [], total: 0, page, limit, totalPages: 1 };
+    }
+
+    const body = apiRes.data !== undefined ? apiRes.data : apiRes;
+    const inner =
+      body?.data !== undefined && typeof body.data === 'object' && !Array.isArray(body.data)
+        ? body.data
+        : body;
+
+    let rawList: any[] = [];
+    if (Array.isArray(inner?.data)) {
+      rawList = inner.data;
+    } else if (Array.isArray(inner)) {
+      rawList = inner;
+    } else if (Array.isArray(body?.data)) {
+      rawList = body.data;
+    } else if (Array.isArray(body?.items)) {
+      rawList = body.items;
+    } else if (Array.isArray(body?.rows)) {
+      rawList = body.rows;
+    }
+
+    const pagination = inner?.pagination || body?.pagination;
+    const total = Number(
+      pagination?.totalRecords ?? pagination?.total ?? inner?.total ?? body?.total ?? rawList.length
+    );
+    const totalPages = Number(
+      pagination?.totalPages ?? inner?.totalPages ?? body?.totalPages ?? Math.max(1, Math.ceil(total / limit))
+    );
+    const summary = inner?.summary || body?.summary;
+
+    const data = mapper ? rawList.map(mapper) : rawList;
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      summary,
+    };
+  }
+
+  static formatDbResult<T = any>(
+    rows: any[],
+    filters: ReportFilters,
+    mapper?: (item: any, index: number) => T,
+    customSummary?: any
+  ): PaginatedReportResult<T> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const offset = (page - 1) * limit;
+    const paged = rows.slice(offset, offset + limit);
+    const data = mapper ? paged.map(mapper) : paged;
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      summary: customSummary,
+    };
+  }
 
   static unpackApiArray(res: any): any[] {
     if (!res) return [];
@@ -60,34 +145,47 @@ export class ReportsService {
   }
 
   // 1. Sales Report
-  static async getSalesReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getSalesReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/sales', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const grandTotal = item.grandTotal !== undefined ? item.grandTotal : item.total || 0;
-          const paid = item.paidAmount !== undefined ? item.paidAmount : item.paid || 0;
-          const due = item.dueAmount !== undefined ? item.dueAmount : Math.max(0, grandTotal - paid);
-          const custName = (item.customerName && String(item.customerName).trim()) ||
-            item.customer?.name ||
-            item.partyName ||
-            (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+      const apiRes = await apiClient.get('/reports/sales', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          customerId: filters.customerId,
+          branchId: filters.branchId,
+          status: filters.status,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const grandTotal = item.grandTotal !== undefined ? item.grandTotal : item.total || 0;
+        const paid = item.paidAmount !== undefined ? item.paidAmount : item.paid || 0;
+        const due = item.dueAmount !== undefined ? item.dueAmount : Math.max(0, grandTotal - paid);
+        const custName = (item.customerName && String(item.customerName).trim()) ||
+          item.customer?.name ||
+          item.partyName ||
+          (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
 
-          return {
-            ...item,
-            customerName: custName,
-            date: item.saleDate ? String(item.saleDate).slice(0, 10) : item.date,
-            subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
-            tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
-            discount: item.discountTotal !== undefined ? item.discountTotal : item.discount || 0,
-            total: grandTotal,
-            paid,
-            due,
-            paymentStatus: item.paymentStatus || (Number(due) <= 0 ? 'Paid' : Number(paid) > 0 ? 'Partial' : 'Unpaid'),
-            paymentMethod: item.paymentMethod || 'UPI',
-          };
-        });
+        return {
+          ...item,
+          customerName: custName,
+          date: item.saleDate ? String(item.saleDate).slice(0, 10) : item.date,
+          subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
+          tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
+          discount: item.discountTotal !== undefined ? item.discountTotal : item.discount || 0,
+          total: grandTotal,
+          paid,
+          due,
+          paymentStatus: item.paymentStatus || (Number(due) <= 0 ? 'Paid' : Number(paid) > 0 ? 'Partial' : 'Unpaid'),
+          paymentMethod: item.paymentMethod || 'UPI',
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -121,46 +219,67 @@ export class ReportsService {
         query += ` AND s.customerId = '${filters.customerId}'`;
       }
       if (filters.search) {
-        query += ` AND (s.invoiceNumber LIKE '%${filters.search}%' OR s.customerName LIKE '%${filters.search}%' OR c.name LIKE '%${filters.search}%')`;
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (s.invoiceNumber LIKE '%${safeSearch}%' OR s.customerName LIKE '%${safeSearch}%' OR c.name LIKE '%${safeSearch}%')`;
       }
       query += ' ORDER BY s.id DESC';
 
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalSalesCount: rows.length,
+        totalGrandTotal: rows.reduce((acc, r) => acc + Number(r.total || 0), 0),
+        totalPaid: rows.reduce((acc, r) => acc + Number(r.paid || 0), 0),
+        totalDue: rows.reduce((acc, r) => acc + Number(r.due || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 2. Purchase Report
-  static async getPurchasesReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getPurchasesReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/purchases', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const grandTotal = item.grandTotal !== undefined ? item.grandTotal : item.total || 0;
-          const paid = item.paidAmount !== undefined ? item.paidAmount : item.paid || 0;
-          const due = item.dueAmount !== undefined ? item.dueAmount : Math.max(0, grandTotal - paid);
-          const suppName = (item.supplierName && String(item.supplierName).trim()) ||
-            item.supplier?.name ||
-            item.partyName ||
-            (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+      const apiRes = await apiClient.get('/reports/purchases', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          supplierId: filters.supplierId,
+          branchId: filters.branchId,
+          status: filters.status,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const grandTotal = item.grandTotal !== undefined ? item.grandTotal : item.total || 0;
+        const paid = item.paidAmount !== undefined ? item.paidAmount : item.paid || 0;
+        const due = item.dueAmount !== undefined ? item.dueAmount : Math.max(0, grandTotal - paid);
+        const suppName = (item.supplierName && String(item.supplierName).trim()) ||
+          item.supplier?.name ||
+          item.partyName ||
+          (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
 
-          return {
-            ...item,
-            supplierName: suppName,
-            date: item.purchaseDate ? String(item.purchaseDate).slice(0, 10) : (item.date || ''),
-            itemsCount: item.itemCount !== undefined ? item.itemCount : item.itemsCount || 1,
-            subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
-            tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
-            total: grandTotal,
-            paid,
-            due,
-            paymentStatus: item.paymentStatus || (Number(due) <= 0 ? 'Paid' : Number(paid) > 0 ? 'Partial' : 'Unpaid'),
-            status: item.status || 'Received',
-          };
-        });
+        return {
+          ...item,
+          supplierName: suppName,
+          date: item.purchaseDate ? String(item.purchaseDate).slice(0, 10) : (item.date || ''),
+          itemsCount: item.itemCount !== undefined ? item.itemCount : item.itemsCount || 1,
+          subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
+          tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
+          total: grandTotal,
+          paid,
+          due,
+          paymentStatus: item.paymentStatus || (Number(due) <= 0 ? 'Paid' : Number(paid) > 0 ? 'Partial' : 'Unpaid'),
+          status: item.status || 'Received',
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -193,42 +312,60 @@ export class ReportsService {
         query += ` AND p.supplierId = '${filters.supplierId}'`;
       }
       if (filters.search) {
-        query += ` AND (p.invoiceNumber LIKE '%${filters.search}%' OR p.supplierName LIKE '%${filters.search}%' OR s.name LIKE '%${filters.search}%')`;
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (p.invoiceNumber LIKE '%${safeSearch}%' OR p.supplierName LIKE '%${safeSearch}%' OR s.name LIKE '%${safeSearch}%')`;
       }
       query += ' ORDER BY p.id DESC';
 
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalPurchasesCount: rows.length,
+        totalGrandTotal: rows.reduce((acc, r) => acc + Number(r.total || 0), 0),
+        totalPaid: rows.reduce((acc, r) => acc + Number(r.paid || 0), 0),
+        totalDue: rows.reduce((acc, r) => acc + Number(r.due || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 3. Inventory Report
-  static async getInventoryReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getInventoryReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/stock', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const cat = (item.category && String(item.category).trim()) ||
-            (item.categoryName && String(item.categoryName).trim()) ||
-            (typeof item.category === 'object' ? item.category?.name : '') ||
-            'General';
+      const apiRes = await apiClient.get('/reports/stock', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          productId: filters.productId,
+          categoryId: filters.category,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const cat = (item.category && String(item.category).trim()) ||
+          (item.categoryName && String(item.categoryName).trim()) ||
+          (typeof item.category === 'object' ? item.category?.name : '') ||
+          'General';
 
-          return {
-            ...item,
-            sku: item.sku || item.productCode || `SKU-${item.productId || item.id}`,
-            name: item.productName || item.name || 'Product',
-            category: cat,
-            stockQuantity: item.quantity !== undefined ? item.quantity : item.stockQuantity || 0,
-            stockWithUnits: item.formattedStock || `${item.quantity || 0} ${item.unit || 'Units'}`,
-            cost: item.unitCost !== undefined ? item.unitCost : item.cost || 0,
-            price: item.price !== undefined ? item.price : item.unitCost || 0,
-            stockValuation: item.stockValue !== undefined ? item.stockValue : Number(((item.quantity || 0) * (item.unitCost || 0)).toFixed(2)),
-            status: Number(item.quantity || item.stockQuantity || 0) <= 0 ? 'OUT_OF_STOCK' : Number(item.quantity || item.stockQuantity || 0) <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
-          };
-        });
+        return {
+          ...item,
+          sku: item.sku || item.productCode || `SKU-${item.productId || item.id}`,
+          name: item.productName || item.name || 'Product',
+          category: cat,
+          stockQuantity: item.quantity !== undefined ? item.quantity : item.stockQuantity || 0,
+          stockWithUnits: item.formattedStock || `${item.quantity || 0} ${item.unit || 'Units'}`,
+          cost: item.unitCost !== undefined ? item.unitCost : item.cost || 0,
+          price: item.price !== undefined ? item.price : item.unitCost || 0,
+          stockValuation: item.stockValue !== undefined ? item.stockValue : Number(((item.quantity || 0) * (item.unitCost || 0)).toFixed(2)),
+          status: Number(item.quantity || item.stockQuantity || 0) <= 0 ? 'OUT_OF_STOCK' : Number(item.quantity || item.stockQuantity || 0) <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -271,40 +408,61 @@ export class ReportsService {
       if (filters.productId) {
         query += ` AND p.id = '${filters.productId}'`;
       }
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (p.name LIKE '%${safeSearch}%' OR p.sku LIKE '%${safeSearch}%' OR c.name LIKE '%${safeSearch}%')`;
+      }
       query += ' ORDER BY p.name ASC';
 
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalRecords: rows.length,
+        totalQuantity: rows.reduce((acc, r) => acc + Number(r.stockQuantity || 0), 0),
+        estimatedStockValue: rows.reduce((acc, r) => acc + Number(r.stockValuation || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 4. Customer Report
-  static async getCustomerReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getCustomerReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/customer-outstanding', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const cName = (item.customerName && String(item.customerName).trim()) ||
-            (item.name && String(item.name).trim()) ||
-            item.customer?.name ||
-            'Customer';
+      const apiRes = await apiClient.get('/reports/customer-outstanding', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          customerId: filters.customerId,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const cName = (item.customerName && String(item.customerName).trim()) ||
+          (item.name && String(item.name).trim()) ||
+          item.customer?.name ||
+          'Customer';
 
-          return {
-            ...item,
-            id: item.id || item.customerId,
-            customerCode: item.customerCode || `CU-${String(item.customerId || item.id).padStart(3, '0')}`,
-            customerName: cName,
-            phone: item.phone || 'N/A',
-            totalSalesCount: item.totalSalesCount || 0,
-            totalBilled: item.totalBilled || 0,
-            totalPaid: item.totalPaid || 0,
-            outstandingBalance: item.outstandingBalance || 0,
-            status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Overdue' : 'Clear'),
-          };
-        });
+        return {
+          ...item,
+          id: item.id || item.customerId,
+          customerCode: item.customerCode || `CU-${String(item.customerId || item.id).padStart(3, '0')}`,
+          customerName: cName,
+          phone: item.phone || 'N/A',
+          totalSalesCount: item.totalSalesCount || 0,
+          totalBilled: item.totalBilled || 0,
+          totalPaid: item.totalPaid || 0,
+          outstandingBalance: item.outstandingBalance || 0,
+          status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Overdue' : 'Clear'),
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -323,7 +481,7 @@ export class ReportsService {
         whereClause += ` AND (c.id = '${filters.customerId}' OR c.backendId = '${filters.customerId}')`;
       }
       if (filters.search && filters.search.trim()) {
-        const s = filters.search.trim();
+        const s = filters.search.trim().replace(/'/g, "''");
         whereClause += ` AND (c.name LIKE '%${s}%' OR c.phone LIKE '%${s}%' OR c.taxId LIKE '%${s}%')`;
       }
 
@@ -351,41 +509,59 @@ export class ReportsService {
         ORDER BY outstandingBalance DESC, totalBilled DESC
       `;
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalCustomers: rows.length,
+        totalBilled: rows.reduce((acc, r) => acc + Number(r.totalBilled || 0), 0),
+        totalPaid: rows.reduce((acc, r) => acc + Number(r.totalPaid || 0), 0),
+        totalOutstanding: rows.reduce((acc, r) => acc + Number(r.outstandingBalance || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  static async getCustomerOutstandingReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getCustomerOutstandingReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
     return this.getCustomerReport(filters);
   }
 
   // 5. Supplier Report
-  static async getSupplierReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getSupplierReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/supplier-outstanding', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const sName = (item.supplierName && String(item.supplierName).trim()) ||
-            (item.name && String(item.name).trim()) ||
-            item.supplier?.name ||
-            'Supplier';
+      const apiRes = await apiClient.get('/reports/supplier-outstanding', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          supplierId: filters.supplierId,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const sName = (item.supplierName && String(item.supplierName).trim()) ||
+          (item.name && String(item.name).trim()) ||
+          item.supplier?.name ||
+          'Supplier';
 
-          return {
-            ...item,
-            id: item.id || item.supplierId,
-            supplierCode: item.supplierCode || `SU-${String(item.supplierId || item.id).padStart(3, '0')}`,
-            supplierName: sName,
-            phone: item.phone || 'N/A',
-            totalPurchasesCount: item.totalPurchasesCount || 0,
-            totalPurchased: item.totalPurchased || 0,
-            totalPaid: item.totalPaid || 0,
-            outstandingBalance: item.outstandingBalance || 0,
-            status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Pending' : 'Clear'),
-          };
-        });
+        return {
+          ...item,
+          id: item.id || item.supplierId,
+          supplierCode: item.supplierCode || `SU-${String(item.supplierId || item.id).padStart(3, '0')}`,
+          supplierName: sName,
+          phone: item.phone || 'N/A',
+          totalPurchasesCount: item.totalPurchasesCount || 0,
+          totalPurchased: item.totalPurchased || 0,
+          totalPaid: item.totalPaid || 0,
+          outstandingBalance: item.outstandingBalance || 0,
+          status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Pending' : 'Clear'),
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -404,7 +580,7 @@ export class ReportsService {
         whereClause += ` AND (s.id = '${filters.supplierId}' OR s.backendId = '${filters.supplierId}')`;
       }
       if (filters.search && filters.search.trim()) {
-        const s = filters.search.trim();
+        const s = filters.search.trim().replace(/'/g, "''");
         whereClause += ` AND (s.name LIKE '%${s}%' OR s.phone LIKE '%${s}%' OR s.contactName LIKE '%${s}%')`;
       }
 
@@ -432,45 +608,68 @@ export class ReportsService {
         ORDER BY outstandingBalance DESC, totalPurchased DESC
       `;
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalSuppliers: rows.length,
+        totalPurchased: rows.reduce((acc, r) => acc + Number(r.totalPurchased || 0), 0),
+        totalPaid: rows.reduce((acc, r) => acc + Number(r.totalPaid || 0), 0),
+        totalOutstanding: rows.reduce((acc, r) => acc + Number(r.outstandingBalance || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  static async getSupplierOutstandingReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getSupplierOutstandingReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
     return this.getSupplierReport(filters);
   }
 
   // 6. Product Report
-  static async getProductReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getProductReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/products', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const cat = (item.category && String(item.category).trim()) ||
-            (item.categoryName && String(item.categoryName).trim()) ||
-            (typeof item.category === 'object' ? item.category?.name : '') ||
-            'General';
+      const apiRes = await apiClient.get('/reports/products', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const cat = (item.category && String(item.category).trim()) ||
+          (item.categoryName && String(item.categoryName).trim()) ||
+          (typeof item.category === 'object' ? item.category?.name : '') ||
+          'General';
 
-          return {
-            ...item,
-            sku: item.sku || `SKU-${item.id}`,
-            name: item.name || item.productName || 'Product',
-            category: cat,
-            unitsSold: item.unitsSold || 0,
-            revenue: item.revenue || 0,
-            cost: item.cost || 0,
-            profit: item.profit || 0,
-            margin: item.margin || 0,
-            currentStock: item.currentStock || 0,
-          };
-        });
+        return {
+          ...item,
+          sku: item.sku || `SKU-${item.id}`,
+          name: item.name || item.productName || 'Product',
+          category: cat,
+          unitsSold: item.unitsSold || 0,
+          revenue: item.revenue || 0,
+          cost: item.cost || 0,
+          profit: item.profit || 0,
+          margin: item.margin || 0,
+          currentStock: item.currentStock || 0,
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
     try {
+      let whereClause = '1=1';
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        whereClause += ` AND (p.name LIKE '%${safeSearch}%' OR p.sku LIKE '%${safeSearch}%')`;
+      }
+
       const query = `
         SELECT 
           p.id,
@@ -493,40 +692,58 @@ export class ReportsService {
         FROM products p
         LEFT JOIN categories c ON (p.categoryId = c.id OR (c.backendId IS NOT NULL AND p.categoryId = c.backendId))
         LEFT JOIN sale_items si ON si.productId = p.id
+        WHERE ${whereClause}
         GROUP BY p.id
         ORDER BY revenue DESC
       `;
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalSKUs: rows.length,
+        totalQuantitySold: rows.reduce((acc, r) => acc + Number(r.unitsSold || 0), 0),
+        totalRevenue: rows.reduce((acc, r) => acc + Number(r.revenue || 0), 0),
+        totalProfit: rows.reduce((acc, r) => acc + Number(r.profit || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 7. Invoice Report
-  static async getInvoiceReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getInvoiceReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/invoices', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const custName = (item.customerName && String(item.customerName).trim()) ||
-            item.customer?.name ||
-            item.partyName ||
-            (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+      const apiRes = await apiClient.get('/reports/invoices', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const custName = (item.customerName && String(item.customerName).trim()) ||
+          item.customer?.name ||
+          item.partyName ||
+          (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
 
-          return {
-            ...item,
-            invoiceNumber: item.invoiceNumber,
-            date: item.date || (item.saleDate ? String(item.saleDate).slice(0, 16).replace('T', ' ') : ''),
-            customerName: custName,
-            taxableAmount: item.taxableAmount !== undefined ? item.taxableAmount : item.subTotal || 0,
-            taxAmount: item.taxAmount !== undefined ? item.taxAmount : item.taxTotal || 0,
-            grandTotal: item.grandTotal !== undefined ? item.grandTotal : item.total || 0,
-            paymentMethod: item.paymentMethod || 'UPI',
-            paymentStatus: item.paymentStatus || 'Paid',
-          };
-        });
+        return {
+          ...item,
+          invoiceNumber: item.invoiceNumber,
+          date: item.date || (item.saleDate ? String(item.saleDate).slice(0, 16).replace('T', ' ') : ''),
+          customerName: custName,
+          taxableAmount: item.taxableAmount !== undefined ? item.taxableAmount : item.subTotal || 0,
+          taxAmount: item.taxAmount !== undefined ? item.taxAmount : item.taxTotal || 0,
+          grandTotal: item.grandTotal !== undefined ? item.grandTotal : item.total || 0,
+          paymentMethod: item.paymentMethod || 'UPI',
+          paymentStatus: item.paymentStatus || 'Paid',
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
@@ -550,48 +767,71 @@ export class ReportsService {
         FROM sales s
         LEFT JOIN customers c ON (s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId))
         WHERE ${this.buildDateCondition('s.createdAt', filters)}
-        ORDER BY s.id DESC
       `;
+
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (s.invoiceNumber LIKE '%${safeSearch}%' OR s.customerName LIKE '%${safeSearch}%' OR c.name LIKE '%${safeSearch}%')`;
+      }
+      query += ' ORDER BY s.id DESC';
+
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalInvoices: rows.length,
+        totalTaxable: rows.reduce((acc, r) => acc + Number(r.taxableAmount || 0), 0),
+        totalTax: rows.reduce((acc, r) => acc + Number(r.taxAmount || 0), 0),
+        grandTotal: rows.reduce((acc, r) => acc + Number(r.grandTotal || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 8. Payment Report
-  static async getPaymentReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getPaymentReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/payments', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => {
-          const isReceived = String(item.type).toUpperCase() === 'RECEIVED' || String(item.type).toLowerCase() === 'receive';
-          const pName = (item.partyName && String(item.partyName).trim()) ||
-            (item.customerName && String(item.customerName).trim()) ||
-            (item.supplierName && String(item.supplierName).trim()) ||
-            item.party?.name ||
-            item.customer?.name ||
-            item.supplier?.name ||
-            (isReceived ? 'Customer' : 'Supplier');
+      const apiRes = await apiClient.get('/reports/payments', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => {
+        const isReceived = String(item.type).toUpperCase() === 'RECEIVED' || String(item.type).toLowerCase() === 'receive';
+        const pName = (item.partyName && String(item.partyName).trim()) ||
+          (item.customerName && String(item.customerName).trim()) ||
+          (item.supplierName && String(item.supplierName).trim()) ||
+          item.party?.name ||
+          item.customer?.name ||
+          item.supplier?.name ||
+          (isReceived ? 'Customer' : 'Supplier');
 
-          return {
-            ...item,
-            voucherNo: item.voucherNo || (item.referenceNumber ? `PAY-${item.referenceNumber}` : `PAY-${String(item.id).padStart(3, '0')}`),
-            date: item.paymentDate ? String(item.paymentDate).slice(0, 10) : (item.date || ''),
-            type: isReceived ? 'Receipt' : 'Payment',
-            partyName: pName,
-            paymentMethod: item.paymentMethod || item.method || 'Cash',
-            reference: item.referenceNumber || item.reference || '-',
-            inflow: isReceived ? (Number(item.amount) || 0) : 0,
-            outflow: !isReceived ? (Number(item.amount) || 0) : 0,
-          };
-        });
+        return {
+          ...item,
+          voucherNo: item.voucherNo || (item.referenceNumber ? `PAY-${item.referenceNumber}` : `PAY-${String(item.id).padStart(3, '0')}`),
+          date: item.paymentDate ? String(item.paymentDate).slice(0, 10) : (item.date || ''),
+          type: isReceived ? 'Receipt' : 'Payment',
+          partyName: pName,
+          paymentMethod: item.paymentMethod || item.method || 'Cash',
+          reference: item.referenceNumber || item.reference || '-',
+          inflow: isReceived ? (Number(item.amount) || 0) : 0,
+          outflow: !isReceived ? (Number(item.amount) || 0) : 0,
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
     try {
-      const query = `
+      let query = `
         SELECT 
           p.id, 
           'PAY-' || SUBSTR('000' || p.id, -3) as voucherNo, 
@@ -611,35 +851,58 @@ export class ReportsService {
         LEFT JOIN customers c ON (p.customerId = c.id OR (c.backendId IS NOT NULL AND p.customerId = c.backendId)) 
         LEFT JOIN suppliers s ON (p.supplierId = s.id OR (s.backendId IS NOT NULL AND p.supplierId = s.backendId)) 
         WHERE ${this.buildDateCondition('p.createdAt', filters)} 
-        ORDER BY p.id DESC
       `;
+
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (p.reference LIKE '%${safeSearch}%' OR c.name LIKE '%${safeSearch}%' OR s.name LIKE '%${safeSearch}%')`;
+      }
+      query += ' ORDER BY p.id DESC';
+
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalTransactions: rows.length,
+        totalInflow: rows.reduce((acc, r) => acc + Number(r.inflow || 0), 0),
+        totalOutflow: rows.reduce((acc, r) => acc + Number(r.outflow || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 9. Expense Report
-  static async getExpenseReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getExpenseReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/expenses', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any) => ({
-          ...item,
-          voucherNo: item.voucherNo || `EXP-${String(item.id).padStart(3, '0')}`,
-          date: item.expenseDate ? String(item.expenseDate).slice(0, 10) : (item.date || ''),
-          category: (item.category && String(item.category).trim()) || (item.categoryName && String(item.categoryName).trim()) || (typeof item.category === 'object' ? item.category?.name : '') || 'General Expense',
-          description: item.description || '',
-          vendor: item.vendor || item.userName || item.branchName || 'Vendor',
-          paymentMethod: item.paymentMethod || item.method || 'Bank / Cash',
-          amount: Number(item.amount) || 0,
-        }));
+      const apiRes = await apiClient.get('/reports/expenses', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => ({
+        ...item,
+        voucherNo: item.voucherNo || `EXP-${String(item.id).padStart(3, '0')}`,
+        date: item.expenseDate ? String(item.expenseDate).slice(0, 10) : (item.date || ''),
+        category: (item.category && String(item.category).trim()) || (item.categoryName && String(item.categoryName).trim()) || (typeof item.category === 'object' ? item.category?.name : '') || 'General Expense',
+        description: item.description || '',
+        vendor: item.vendor || item.userName || item.branchName || 'Vendor',
+        paymentMethod: item.paymentMethod || item.method || 'Bank / Cash',
+        amount: Number(item.amount) || 0,
+      }));
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
+
     try {
-      const query = `
+      let query = `
         SELECT 
           id, 
           'EXP-' || SUBSTR('000' || id, -3) as voucherNo, 
@@ -654,58 +917,79 @@ export class ReportsService {
           amount 
         FROM expenses 
         WHERE ${this.buildDateCondition('date', filters)} 
-        ORDER BY date DESC
       `;
+
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (category LIKE '%${safeSearch}%' OR description LIKE '%${safeSearch}%')`;
+      }
+      query += ' ORDER BY date DESC';
+
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalExpensesCount: rows.length,
+        totalAmount: rows.reduce((acc, r) => acc + Number(r.amount || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  static async getExpensesReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getExpensesReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
     return this.getExpenseReport(filters);
   }
 
   // 10. Income Report
-  static async getIncomeReport(filters: ReportFilters = {}): Promise<any[]> {
-    return [];
+  static async getIncomeReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    return { data: [], total: 0, page: filters.page || 1, limit: filters.limit || 10, totalPages: 1 };
   }
 
   // 11. Tax (GST) Report
-  static async getTaxReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getTaxReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
     try {
-      const apiRes = await apiClient.get('/reports/gst-summary', { params: { limit: 500, ...filters } });
-      const rawList = this.unpackApiArray(apiRes);
-      if (rawList.length > 0) {
-        return rawList.map((item: any, idx: number) => {
-          const partyName = (item.partyName && String(item.partyName).trim()) ||
-            (item.customerName && String(item.customerName).trim()) ||
-            (item.supplierName && String(item.supplierName).trim()) ||
-            item.customer?.name ||
-            item.supplier?.name ||
-            (item.type === 'PURCHASE' ? 'Supplier' : 'Customer');
+      const apiRes = await apiClient.get('/reports/gst-summary', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any, idx: number) => {
+        const partyName = (item.partyName && String(item.partyName).trim()) ||
+          (item.customerName && String(item.customerName).trim()) ||
+          (item.supplierName && String(item.supplierName).trim()) ||
+          item.customer?.name ||
+          item.supplier?.name ||
+          (item.type === 'PURCHASE' ? 'Supplier' : 'Customer');
 
-          return {
-            ...item,
-            id: item.id || idx + 1,
-            invoiceNumber: item.invoiceNumber || `INV-${idx + 1}`,
-            date: item.date ? String(item.date).slice(0, 10) : item.saleDate ? String(item.saleDate).slice(0, 10) : 'N/A',
-            partyName,
-            gstin: item.gstin || item.taxId || 'Unregistered',
-            type: item.type || 'SALE',
-            taxableValue: Number(item.taxableValue ?? item.subtotal ?? item.taxableAmount ?? 0),
-            cgst: Number(item.cgst ?? 0),
-            sgst: Number(item.sgst ?? 0),
-            igst: Number(item.igst ?? 0),
-            totalGst: Number(item.totalGst ?? item.totalTax ?? (Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0))),
-          };
-        });
+        return {
+          ...item,
+          id: item.id || idx + 1,
+          invoiceNumber: item.invoiceNumber || `INV-${idx + 1}`,
+          date: item.date ? String(item.date).slice(0, 10) : item.saleDate ? String(item.saleDate).slice(0, 10) : 'N/A',
+          partyName,
+          gstin: item.gstin || item.taxId || 'Unregistered',
+          type: item.type || 'SALE',
+          taxableValue: Number(item.taxableValue ?? item.subtotal ?? item.taxableAmount ?? 0),
+          cgst: Number(item.cgst ?? 0),
+          sgst: Number(item.sgst ?? 0),
+          igst: Number(item.igst ?? 0),
+          totalGst: Number(item.totalGst ?? item.totalTax ?? (Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0))),
+        };
+      });
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
       }
     } catch {}
 
     try {
-      const query = `
+      let query = `
         SELECT 
           s.invoiceNumber, 
           COALESCE(s.date, SUBSTR(s.createdAt, 1, 10)) as date, 
@@ -748,14 +1032,28 @@ export class ReportsService {
         WHERE ${this.buildDateCondition('p.createdAt', filters)} 
         ORDER BY date DESC
       `;
+
       const res = await db.execute(query);
-      return this.extractDbRows(res);
+      let rows = this.extractDbRows(res);
+      if (filters.search) {
+        const s = filters.search.toLowerCase();
+        rows = rows.filter((r: any) =>
+          (r.invoiceNumber && r.invoiceNumber.toLowerCase().includes(s)) ||
+          (r.partyName && r.partyName.toLowerCase().includes(s)) ||
+          (r.gstin && r.gstin.toLowerCase().includes(s))
+        );
+      }
+      const summary = {
+        totalRecords: rows.length,
+        totalTax: rows.reduce((acc, r) => acc + Number(r.totalGst || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
     } catch {}
 
-    return [];
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
-  static async getGSTReport(filters: ReportFilters = {}): Promise<any[]> {
+  static async getGSTReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
     return this.getTaxReport(filters);
   }
 

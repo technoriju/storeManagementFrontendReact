@@ -61,6 +61,11 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
 
   // Overview data for "All Suppliers"
   const [allSuppliersData, setAllSuppliersData] = useState<any[]>([]);
+  const [overviewPage, setOverviewPage] = useState(1);
+  const [overviewRowsPerPage, setOverviewRowsPerPage] = useState(10);
+  const [overviewTotalItems, setOverviewTotalItems] = useState(0);
+  const [overviewTotalPages, setOverviewTotalPages] = useState(1);
+  const [overviewSummary, setOverviewSummary] = useState<any>(null);
 
   // Sync prop changes
   useEffect(() => {
@@ -79,15 +84,23 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
   }, []);
 
   // Fetch data depending on whether a supplier is selected or all
-  const loadData = async () => {
+  const loadData = async (targetPage = overviewPage, targetLimit = overviewRowsPerPage, targetSearch = supplierSearchQuery) => {
     setIsLoading(true);
     try {
       if (selectedSupplierId) {
         const stmt = await ReportsService.getSupplierWiseStatement(selectedSupplierId, filters);
         setStatementData(stmt);
       } else {
-        const res = await ReportsService.getSupplierReport(filters);
-        setAllSuppliersData(res);
+        const res = await ReportsService.getSupplierReport({
+          ...filters,
+          page: targetPage,
+          limit: targetLimit,
+          search: targetSearch.trim() || undefined,
+        });
+        setAllSuppliersData(res.data);
+        setOverviewTotalItems(res.total);
+        setOverviewTotalPages(res.totalPages);
+        setOverviewSummary(res.summary);
       }
     } catch (err) {
       console.error('Error loading supplier-wise report', err);
@@ -97,13 +110,14 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
   };
 
   useEffect(() => {
-    loadData();
-  }, [selectedSupplierId, filters.startDate, filters.endDate]);
+    loadData(overviewPage, overviewRowsPerPage, supplierSearchQuery);
+  }, [selectedSupplierId, filters.startDate, filters.endDate, overviewPage, overviewRowsPerPage, supplierSearchQuery]);
 
   const handleChooseSupplier = (id: number | string | null) => {
     setSelectedSupplierId(id);
     setIsSupplierDropdownOpen(false);
     setTransactionSearchQuery('');
+    setOverviewPage(1);
     if (onSelectSupplier) {
       onSelectSupplier(id);
     }
@@ -375,6 +389,9 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
               { key: 'paymentStatus', title: 'Status', width: 110, render: (val: string) => renderStatusBadge(val) },
             ]}
             data={filteredBills}
+            searchValue={transactionSearchQuery}
+            onSearch={setTransactionSearchQuery}
+            debounceSearchMs={400}
             hasCheckbox={false}
             isLoading={isLoading}
           />
@@ -390,6 +407,9 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
               { key: 'amount', title: 'Amount Paid (₹)', width: 140, render: (val: number) => <Text style={{ fontWeight: '700', color: '#EF4444' }}>-₹{Number(val || 0).toLocaleString()}</Text> },
             ]}
             data={filteredPayments}
+            searchValue={transactionSearchQuery}
+            onSearch={setTransactionSearchQuery}
+            debounceSearchMs={400}
             hasCheckbox={false}
             isLoading={isLoading}
           />
@@ -399,9 +419,10 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
   }
 
   // "All Suppliers Overview" View
-  const totalAllPurchased = filteredAllSuppliers.reduce((sum, s) => sum + Number(s.totalPurchased || 0), 0);
-  const totalAllPaid = filteredAllSuppliers.reduce((sum, s) => sum + Number(s.totalPaid || 0), 0);
-  const totalAllDue = filteredAllSuppliers.reduce((sum, s) => sum + Number(s.outstandingBalance || 0), 0);
+  const totalAllPurchased = overviewSummary?.totalPurchased ?? filteredAllSuppliers.reduce((sum, s) => sum + Number(s.totalPurchased || 0), 0);
+  const totalAllPaid = overviewSummary?.totalPaid ?? filteredAllSuppliers.reduce((sum, s) => sum + Number(s.totalPaid || 0), 0);
+  const totalAllDue = overviewSummary?.totalOutstanding ?? filteredAllSuppliers.reduce((sum, s) => sum + Number(s.outstandingBalance || 0), 0);
+  const totalAllCount = overviewTotalItems || filteredAllSuppliers.length;
 
   return (
     <View style={styles.container}>
@@ -473,7 +494,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
           </View>
           <View>
             <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Suppliers</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{filteredAllSuppliers.length}</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{totalAllCount}</Text>
             <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Active vendors</Text>
           </View>
         </View>
@@ -541,6 +562,21 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
           },
         ]}
         data={filteredAllSuppliers}
+        searchValue={supplierSearchQuery}
+        onSearch={(text) => {
+          setSupplierSearchQuery(text);
+          setOverviewPage(1);
+        }}
+        debounceSearchMs={400}
+        page={overviewPage}
+        rowsPerPage={overviewRowsPerPage}
+        totalItems={overviewTotalItems}
+        totalPages={overviewTotalPages}
+        onPageChange={(newPage) => setOverviewPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setOverviewRowsPerPage(newRows);
+          setOverviewPage(1);
+        }}
         hasCheckbox={false}
         isLoading={isLoading}
       />

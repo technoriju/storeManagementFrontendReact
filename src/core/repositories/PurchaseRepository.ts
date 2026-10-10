@@ -1142,6 +1142,72 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     }
   }
 
+  public async getPaginated(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: Purchase[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.max(1, params.limit || 10);
+    const offset = (page - 1) * limit;
+    const search = (params.search || '').trim();
+
+    try {
+      let whereClause = '';
+      const queryParams: any[] = [];
+      if (search) {
+        whereClause = `WHERE (invoiceNumber LIKE ? OR reference LIKE ? OR supplierName LIKE ? OR status LIKE ? OR paymentStatus LIKE ? OR notes LIKE ?)`;
+        const pattern = `%${search}%`;
+        queryParams.push(pattern, pattern, pattern, pattern, pattern, pattern);
+      }
+
+      const countRes = await db.execute(`SELECT COUNT(*) as totalCount FROM ${this.tableName} ${whereClause}`, queryParams);
+      let total = 0;
+      const countRows = this.extractRows(countRes);
+      if (countRows.length > 0) {
+        total = Number(countRows[0].totalCount || 0);
+      }
+
+      const dataRes = await db.execute(
+        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        [...queryParams, limit, offset]
+      );
+      const rows = this.extractRows(dataRes);
+      const items = rows.map((r) => this.fromRow(r));
+
+      return {
+        data: items,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    } catch (e) {
+      console.warn('Local SQLite getPaginated purchases failed:', e);
+      const all = await this.getAll();
+      let filtered = all;
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = all.filter(
+          (p) =>
+            (p.invoiceNumber && p.invoiceNumber.toLowerCase().includes(s)) ||
+            (p.reference && p.reference.toLowerCase().includes(s)) ||
+            (p.supplierName && p.supplierName.toLowerCase().includes(s)) ||
+            (p.status && p.status.toLowerCase().includes(s)) ||
+            (p.paymentStatus && p.paymentStatus.toLowerCase().includes(s))
+        );
+      }
+      const total = filtered.length;
+      return {
+        data: filtered.slice(offset, offset + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    }
+  }
+
   private extractRows(results: any): any[] {
     let rawRows: any[] = [];
     if (!results) return rawRows;

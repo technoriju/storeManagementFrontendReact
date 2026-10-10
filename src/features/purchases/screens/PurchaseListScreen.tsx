@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
@@ -7,7 +7,7 @@ import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { ImportPurchaseModal } from '../components/ImportPurchaseModal';
-import { usePurchases, useDeletePurchase } from '../api/usePurchases';
+import { useDeletePurchase, fetchPaginatedPurchases } from '../api/usePurchases';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 import { 
   FileText, 
@@ -15,11 +15,11 @@ import {
   RefreshCw, 
   ChevronUp, 
   PlusCircle, 
-  Download,
-  Eye,
-  Edit,
-  Trash2,
-  ChevronDown
+  Download, 
+  Eye, 
+  Edit, 
+  Trash2, 
+  ChevronDown 
 } from 'lucide-react-native';
 
 interface Props {
@@ -28,7 +28,13 @@ interface Props {
 
 export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [tablePurchases, setTablePurchases] = useState<any[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editPurchaseId, setEditPurchaseId] = useState<number | string | null>(null);
   const [dismissedPurchaseIds, setDismissedPurchaseIds] = useState<string[]>([]);
@@ -37,55 +43,50 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  const { data: dbPurchases = [], isLoading, refetch } = usePurchases();
   const deletePurchaseMutation = useDeletePurchase();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
-  useEffect(() => {
-    refetch();
-  }, [lastSyncedAt, refetch]);
-
-  // Initial seed demo purchases shown if database is fresh
-  const fallbackPurchases = useMemo(() => [
-    { id: '1', supplierName: 'Electro Mart', reference: 'PT001', date: '2024-12-24', status: 'Received', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
-    { id: '2', supplierName: 'Quantum Gadgets', reference: 'PT002', date: '2024-12-10', status: 'Pending', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
-    { id: '3', supplierName: 'Prime Bazaar', reference: 'PT003', date: '2024-11-27', status: 'Received', total: 1500, paid: 1800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
-    { id: '4', supplierName: 'Gadget World', reference: 'PT004', date: '2024-11-18', status: 'Ordered', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', syncStatus: 'synced' },
-    { id: '5', supplierName: 'Volt Vault', reference: 'PT005', date: '2024-11-06', status: 'Received', total: 800, paid: 800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
-  ], []);
-
-  // Display DB purchases if any exist, otherwise fallback
-  const allPurchases = useMemo(() => {
-    if (dbPurchases && dbPurchases.length > 0) {
-      return dbPurchases
+  const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
+    setIsLoadingData(true);
+    try {
+      const res = await fetchPaginatedPurchases({
+        page: targetPage,
+        limit: targetLimit,
+        search: targetSearch,
+      });
+      const mapped = res.data
         .filter((p) => !dismissedPurchaseIds.includes(String(p.id)))
         .map((p) => ({
           id: String(p.id),
-          supplierName: p.supplierName || 'Unknown Supplier',
+          supplierName: p.supplierName || (p as any).supplier?.name || 'Unknown Supplier',
           reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
-          date: p.date || p.createdAt?.split('T')[0] || '',
+          date: p.date || (p as any).purchaseDate?.split('T')[0] || p.createdAt?.split('T')[0] || '',
           status: p.status || 'Received',
-          total: Number(p.total || 0),
+          total: Number((p as any).grandTotal ?? p.total ?? 0),
           paid: Number(p.paid || 0),
           due: Number(p.due || 0),
           paymentStatus: p.paymentStatus || 'Unpaid',
           syncStatus: p.syncStatus || 'synced',
         }));
+      setTablePurchases(mapped);
+      setTotalItems(res.total);
+      setTotalPages(res.totalPages);
+    } catch (e) {
+      console.warn('Failed to load paginated purchases:', e);
+    } finally {
+      setIsLoadingData(false);
     }
-    return fallbackPurchases.filter((p) => !dismissedPurchaseIds.includes(String(p.id)));
-  }, [dbPurchases, fallbackPurchases, dismissedPurchaseIds]);
+  }, [dismissedPurchaseIds]);
 
-  // Filtered by search query
-  const filteredData = useMemo(() => {
-    if (!searchQuery.trim()) return allPurchases;
-    const q = searchQuery.toLowerCase().trim();
-    return allPurchases.filter((item) =>
-      item.supplierName?.toLowerCase().includes(q) ||
-      item.reference?.toLowerCase().includes(q) ||
-      item.status?.toLowerCase().includes(q) ||
-      item.paymentStatus?.toLowerCase().includes(q)
-    );
-  }, [allPurchases, searchQuery]);
+  useEffect(() => {
+    loadData(page, rowsPerPage, searchQuery);
+  }, [loadData, page, rowsPerPage, searchQuery]);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      loadData(page, rowsPerPage, searchQuery);
+    }
+  }, [loadData, lastSyncedAt, page, rowsPerPage, searchQuery]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -120,7 +121,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       await deletePurchaseMutation.mutateAsync(targetId);
       setDismissedPurchaseIds((prev) => [...prev, String(deleteTarget.id)]);
       setDeleteTarget(null);
-      refetch();
+      await loadData(page, rowsPerPage, searchQuery);
     } catch (err: any) {
       console.error('Failed to delete purchase:', err);
       setDeleteError(err?.message || 'Server failed to delete purchase');
@@ -206,7 +207,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
 
   const headerActions = (
     <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
+      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => loadData(page, rowsPerPage, searchQuery)}>
         <RefreshCw size={16} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
@@ -255,6 +256,11 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
     </>
   );
 
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    setPage(1);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <AdvancedTable
@@ -262,11 +268,22 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         subtitle="Manage your purchases and supplier invoices"
         headerActions={headerActions}
         columns={columns}
-        data={filteredData}
-        onSearch={setSearchQuery}
+        data={tablePurchases}
+        searchValue={searchQuery}
+        onSearch={handleSearch}
+        debounceSearchMs={400}
         filters={filters}
         renderRowActions={renderRowActions}
-        isLoading={isLoading}
+        isLoading={isLoadingData}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setRowsPerPage(newRows);
+          setPage(1);
+        }}
       />
       <AddPurchaseModal
         visible={showAddModal}
@@ -274,7 +291,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         onClose={() => {
           setShowAddModal(false);
           setEditPurchaseId(null);
-          refetch();
+          loadData(page, rowsPerPage, searchQuery);
         }}
       />
       <ImportPurchaseModal visible={showImportModal} onClose={() => setShowImportModal(false)} />

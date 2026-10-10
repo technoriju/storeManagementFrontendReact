@@ -257,6 +257,13 @@ export class ProductRepository extends BaseRepository<Product> {
       );
     }
 
+    normalizedProducts.sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
+
     return normalizedProducts;
   }
 
@@ -311,6 +318,125 @@ export class ProductRepository extends BaseRepository<Product> {
     } catch (error) {
       console.error('Failed to fetch products from API:', error);
       return [];
+    }
+  }
+
+  public override async getAll(): Promise<Product[]> {
+    const res = await db.execute(
+      `SELECT * FROM ${this.tableName} ORDER BY COALESCE(updatedAt, createdAt, '') DESC, id DESC`
+    );
+    let rawRows: any[] = [];
+    if (res.rows && Array.isArray(res.rows)) {
+      rawRows = res.rows;
+    } else if (res.rows && typeof res.rows === 'object') {
+      if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+        rawRows = (res.rows as any)._array;
+      } else if ('item' in res.rows && typeof (res.rows as any).length === 'number') {
+        const len = (res.rows as any).length;
+        for (let i = 0; i < len; i++) {
+          rawRows.push((res.rows as any).item(i));
+        }
+      }
+    }
+    return rawRows.map((r) => this.fromRow(r));
+  }
+
+  public override async insert(entity: Product, shouldSync = true): Promise<void> {
+    const now = new Date().toISOString();
+    if (!entity.createdAt) entity.createdAt = now;
+    entity.updatedAt = now;
+    return super.insert(entity, shouldSync);
+  }
+
+  public override async update(entity: Product, shouldSync = true): Promise<void> {
+    entity.updatedAt = new Date().toISOString();
+    return super.update(entity, shouldSync);
+  }
+
+  public async getPaginated(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<{ data: Product[]; total: number; page: number; limit: number; totalPages: number }> {
+    const page = Math.max(1, params.page || 1);
+    const limit = Math.max(1, params.limit || 10);
+    const offset = (page - 1) * limit;
+    const search = (params.search || '').trim();
+
+    try {
+      let whereClause = '';
+      const queryParams: any[] = [];
+      if (search) {
+        whereClause = `WHERE (name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR categoryName LIKE ? OR brandName LIKE ?)`;
+        const pattern = `%${search}%`;
+        queryParams.push(pattern, pattern, pattern, pattern, pattern);
+      }
+
+      const countRes = await db.execute(`SELECT COUNT(*) as totalCount FROM ${this.tableName} ${whereClause}`, queryParams);
+      let total = 0;
+      if (countRes?.rows && Array.isArray(countRes.rows) && countRes.rows.length > 0) {
+        total = Number(countRes.rows[0].totalCount || 0);
+      } else if (countRes?.rows && typeof countRes.rows === 'object') {
+        const item = ('_array' in countRes.rows && countRes.rows._array?.[0]) || (typeof (countRes.rows as any).item === 'function' ? (countRes.rows as any).item(0) : countRes.rows[0]);
+        total = Number(item?.totalCount || 0);
+      }
+
+      const dataRes = await db.execute(
+        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY COALESCE(updatedAt, createdAt, '') DESC, id DESC LIMIT ? OFFSET ?`,
+        [...queryParams, limit, offset]
+      );
+      
+      let rawRows: any[] = [];
+      if (dataRes?.rows && Array.isArray(dataRes.rows)) {
+        rawRows = dataRes.rows;
+      } else if (dataRes?.rows && typeof dataRes.rows === 'object') {
+        if ('_array' in dataRes.rows && Array.isArray((dataRes.rows as any)._array)) {
+          rawRows = (dataRes.rows as any)._array;
+        } else if ('item' in dataRes.rows && typeof (dataRes.rows as any).length === 'number') {
+          const len = (dataRes.rows as any).length;
+          for (let i = 0; i < len; i++) {
+            rawRows.push((dataRes.rows as any).item(i));
+          }
+        }
+      }
+
+      const items = rawRows.map((r) => this.fromRow(r));
+      return {
+        data: items,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
+    } catch (e) {
+      console.warn('Local SQLite getPaginated failed, falling back to in-memory filter:', e);
+      const all = await this.getAll();
+      let filtered = all;
+      if (search) {
+        const s = search.toLowerCase();
+        filtered = all.filter(
+          (p) =>
+            (p.name && p.name.toLowerCase().includes(s)) ||
+            (p.sku && p.sku.toLowerCase().includes(s)) ||
+            (p.barcode && p.barcode.toLowerCase().includes(s)) ||
+            (p.categoryName && p.categoryName.toLowerCase().includes(s)) ||
+            (p.brandName && p.brandName.toLowerCase().includes(s))
+        );
+      }
+      filtered.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+      const total = filtered.length;
+      return {
+        data: filtered.slice(offset, offset + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      };
     }
   }
 }

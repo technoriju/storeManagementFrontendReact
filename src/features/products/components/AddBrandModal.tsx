@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable } from 'react-native';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { X } from 'lucide-react-native';
@@ -29,51 +29,49 @@ export const AddBrandModal: React.FC<AddBrandModalProps> = ({ visible, onClose, 
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.modalContainer}>
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={styles.title}>Add Brand</Text>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <X size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Body */}
-              <View style={styles.body}>
-                <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-                  <Text style={{ color: '#333', fontSize: 14 }}>Brand Name </Text>
-                  <Text style={{ color: 'red', fontSize: 14 }}>*</Text>
-                </View>
-                <AppInput 
-                  value={brandName}
-                  onChangeText={setBrandName}
-                  placeholder="Enter brand name"
-                  containerStyle={{ marginBottom: 0 }}
-                />
-              </View>
-
-              {/* Footer */}
-              <View style={styles.footer}>
-                <AppButton 
-                  title="Cancel" 
-                  onPress={onClose} 
-                  style={styles.cancelBtn} 
-                  textStyle={{ color: '#FFF' }}
-                />
-                <AppButton 
-                  title="Submit" 
-                  onPress={handleSubmit} 
-                  isLoading={isSubmitting}
-                  style={styles.submitBtn} 
-                />
-              </View>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Add Brand</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <X size={14} color="#FFF" />
+              </TouchableOpacity>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+
+            {/* Body */}
+            <View style={styles.body}>
+              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
+                <Text style={{ color: '#333', fontSize: 14 }}>Brand Name </Text>
+                <Text style={{ color: 'red', fontSize: 14 }}>*</Text>
+              </View>
+              <AppInput 
+                value={brandName}
+                onChangeText={setBrandName}
+                placeholder="Enter brand name"
+                containerStyle={{ marginBottom: 0 }}
+              />
+            </View>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+              <AppButton 
+                title="Cancel" 
+                onPress={onClose} 
+                style={styles.cancelBtn} 
+                textStyle={{ color: '#FFF' }}
+              />
+              <AppButton 
+                title="Submit" 
+                onPress={handleSubmit} 
+                isLoading={isSubmitting}
+                style={styles.submitBtn} 
+              />
+            </View>
+          </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

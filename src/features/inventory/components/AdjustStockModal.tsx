@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TouchableWithoutFeedback,
+  Pressable,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
@@ -131,10 +131,9 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -350,9 +349,8 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
                 />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

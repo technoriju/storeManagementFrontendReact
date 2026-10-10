@@ -303,10 +303,10 @@ export function generateReceiptHtml({
   const isWholesale = customerType === 'wholesale';
   const invNumber = data.invoiceNumber || 'INV-0000';
   const invDate = data.date || new Date().toISOString().split('T')[0];
-  const custName = data.customerName || 'Walk-in Customer';
-  const custPhone = data.customerPhone || '';
-  const custAddress = data.customerAddress || '';
-  const custGstin = data.customerGstin || '';
+  const custName = data.customerName || (data as any).customer?.name || 'Walk-in Customer';
+  const custPhone = data.customerPhone || (data as any).customer?.phone || '';
+  const custAddress = data.customerAddress || (data as any).customer?.address || '';
+  const custGstin = data.customerGstin || (data as any).customer?.taxNumber || (data as any).customer?.taxId || (data as any).customer?.gstin || '';
   const subtotal = Number(data.subtotal || 0);
   const discount = Number(data.discount || 0);
   const gst = Number(data.gst || data.orderTax || 0);
@@ -1383,10 +1383,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   // Normalized values
   const invNumber = data.invoiceNumber || 'INV-0000';
   const invDate = data.date || new Date().toISOString().split('T')[0];
-  const custName = data.customerName || 'Walk-in Customer';
-  const custPhone = data.customerPhone || '';
-  const custAddress = data.customerAddress || '';
-  const custGstin = data.customerGstin || '';
+  const custName = data.customerName || (data as any).customer?.name || 'Walk-in Customer';
+  const custPhone = data.customerPhone || (data as any).customer?.phone || '';
+  const custAddress = data.customerAddress || (data as any).customer?.address || '';
+  const custGstin = data.customerGstin || (data as any).customer?.taxNumber || (data as any).customer?.taxId || (data as any).customer?.gstin || '';
   const subtotal = Number(data.subtotal || 0);
   const discount = Number(data.discount || 0);
   const gst = Number(data.gst || data.orderTax || 0);

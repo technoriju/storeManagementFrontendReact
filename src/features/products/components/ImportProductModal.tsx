@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TouchableWithoutFeedback, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, Alert, Platform } from 'react-native';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { X, CloudUpload, FileSpreadsheet, CheckCircle2 } from 'lucide-react-native';
@@ -71,10 +71,9 @@ export const ImportProductModal: React.FC<ImportProductModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View style={styles.modalContainer}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+          <View style={styles.modalContainer}>
               {/* Header */}
               <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -127,9 +126,8 @@ export const ImportProductModal: React.FC<ImportProductModalProps> = ({
                 />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };

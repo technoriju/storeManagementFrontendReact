@@ -20,10 +20,18 @@ export interface AdvancedTableProps<T> {
   data: T[];
   searchPlaceholder?: string;
   onSearch?: (text: string) => void;
+  searchValue?: string;
+  debounceSearchMs?: number;
   filters?: React.ReactNode;
   renderRowActions?: (item: T) => React.ReactNode;
   hasCheckbox?: boolean;
   isLoading?: boolean;
+  page?: number;
+  rowsPerPage?: number;
+  totalItems?: number;
+  totalPages?: number;
+  onPageChange?: (newPage: number) => void;
+  onRowsPerPageChange?: (newRowsPerPage: number) => void;
 }
 
 export const AdvancedTable = <T extends Record<string, any>>({
@@ -34,32 +42,97 @@ export const AdvancedTable = <T extends Record<string, any>>({
   data,
   searchPlaceholder = 'Search',
   onSearch,
+  searchValue,
+  debounceSearchMs,
   filters,
   renderRowActions,
   hasCheckbox = true,
   isLoading = false,
+  page: controlledPage,
+  rowsPerPage: controlledRowsPerPage,
+  totalItems: controlledTotalItems,
+  totalPages: controlledTotalPages,
+  onPageChange,
+  onRowsPerPageChange,
 }: AdvancedTableProps<T>) => {
   const theme = useTheme();
-  const [page, setPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const isServerSide = controlledTotalItems !== undefined;
+
+  const [internalPage, setInternalPage] = useState(1);
+  const [internalRowsPerPage, setInternalRowsPerPage] = useState(10);
   const [showDropdown, setShowDropdown] = useState(false);
+
+  const page = isServerSide && controlledPage !== undefined ? controlledPage : internalPage;
+  const rowsPerPage = isServerSide && controlledRowsPerPage !== undefined ? controlledRowsPerPage : internalRowsPerPage;
+
   const tableData = Array.isArray(data) ? data : [];
-  const totalItems = tableData.length;
-  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  const totalItems = isServerSide && controlledTotalItems !== undefined ? controlledTotalItems : tableData.length;
+  const totalPages = isServerSide && controlledTotalPages !== undefined 
+    ? Math.max(1, controlledTotalPages) 
+    : Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
-  // Keep page valid when data changes, such as after search, delete, or refresh.
+  // Server-side: backend already sliced data. Client-side: slice locally.
+  const currentData = isServerSide ? tableData : tableData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  // Keep page valid when data changes in client-side mode
   useEffect(() => {
-    const nextPage = Math.max(1, Math.ceil(totalItems / rowsPerPage));
-    setPage(currentPage => Math.min(currentPage, nextPage));
-  }, [totalItems, rowsPerPage]);
+    if (!isServerSide) {
+      const nextPage = Math.max(1, Math.ceil(totalItems / rowsPerPage));
+      setInternalPage(currentPage => Math.min(currentPage, nextPage));
+    }
+  }, [isServerSide, totalItems, rowsPerPage]);
 
-  const currentData = tableData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
-  const pageOptions = Array.from(new Set([10, 20, 50, 100].filter(value => value > 0 && value <= totalItems).concat(totalItems <= 100 ? [totalItems] : []))).sort((a, b) => a - b);
-  // Ensure we always have at least 10 in options even if totalItems is small
-  if (pageOptions.length === 0 || !pageOptions.includes(10)) {
-    pageOptions.unshift(10);
+  const handlePageChange = (newPage: number) => {
+    if (onPageChange) {
+      onPageChange(newPage);
+    }
+    if (!isServerSide || controlledPage === undefined) {
+      setInternalPage(newPage);
+    }
+  };
+
+  const handleRowsPerPageChange = (newRows: number) => {
+    if (onRowsPerPageChange) {
+      onRowsPerPageChange(newRows);
+    }
+    if (!isServerSide || controlledRowsPerPage === undefined) {
+      setInternalRowsPerPage(newRows);
+      setInternalPage(1);
+    }
+  };
+
+  // Search state and debouncing
+  const [localSearch, setLocalSearch] = useState(searchValue ?? '');
+
+  useEffect(() => {
+    if (searchValue !== undefined && searchValue !== localSearch) {
+      setLocalSearch(searchValue);
+    }
+  }, [searchValue]);
+
+  useEffect(() => {
+    if (debounceSearchMs && debounceSearchMs > 0) {
+      const handler = setTimeout(() => {
+        onSearch?.(localSearch);
+      }, debounceSearchMs);
+      return () => clearTimeout(handler);
+    }
+  }, [localSearch, debounceSearchMs]);
+
+  const handleSearchChange = (text: string) => {
+    setLocalSearch(text);
+    if (!debounceSearchMs || debounceSearchMs <= 0) {
+      onSearch?.(text);
+    }
+  };
+
+  const baseOptions = [10, 20, 50, 100];
+  const uniquePageOptions = isServerSide
+    ? baseOptions
+    : Array.from(new Set(baseOptions.filter(value => value > 0 && value <= totalItems).concat(totalItems <= 100 ? [totalItems] : [10]))).sort((a, b) => a - b);
+  if (uniquePageOptions.length === 0 || !uniquePageOptions.includes(10)) {
+    uniquePageOptions.unshift(10);
   }
-  const uniquePageOptions = Array.from(new Set(pageOptions)).sort((a, b) => a - b);
 
   return (
     <View style={styles.container}>
@@ -87,7 +160,8 @@ export const AdvancedTable = <T extends Record<string, any>>({
               style={[styles.searchInput, { color: theme.colors.text }]}
               placeholder={searchPlaceholder}
               placeholderTextColor={theme.colors.textSecondary}
-              onChangeText={onSearch}
+              value={localSearch}
+              onChangeText={handleSearchChange}
             />
           </View>
           <View style={styles.filtersContainer}>
@@ -188,8 +262,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
                       key={val} 
                       style={styles.dropdownItem}
                       onPress={() => {
-                        setRowsPerPage(val);
-                        setPage(1);
+                        handleRowsPerPageChange(val);
                         setShowDropdown(false);
                       }}
                     >
@@ -207,7 +280,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
           <View style={styles.pagination}>
             <Pressable 
               style={[styles.pageButton, { backgroundColor: theme.colors.background }]}
-              onPress={() => setPage(Math.max(1, page - 1))}
+              onPress={() => handlePageChange(Math.max(1, page - 1))}
               disabled={page === 1}
             >
               <ChevronLeft size={16} color={page === 1 ? theme.colors.textDisabled : theme.colors.textSecondary} />
@@ -242,7 +315,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
                       styles.pageButton, 
                       isActive ? { backgroundColor: '#F97316' } : { backgroundColor: theme.colors.background }
                     ]}
-                    onPress={() => setPage(pageNum)}
+                    onPress={() => handlePageChange(pageNum)}
                   >
                     <Text style={[styles.pageText, { color: isActive ? '#FFFFFF' : theme.colors.textSecondary }]}>
                       {pageNum}
@@ -254,7 +327,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
             
             <Pressable 
               style={[styles.pageButton, { backgroundColor: theme.colors.background }]}
-              onPress={() => setPage(Math.min(totalPages, page + 1))}
+              onPress={() => handlePageChange(Math.min(totalPages, page + 1))}
               disabled={page === totalPages || totalPages === 0}
             >
               <ChevronRight size={16} color={page === totalPages || totalPages === 0 ? theme.colors.textDisabled : theme.colors.textSecondary} />

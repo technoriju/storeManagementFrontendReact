@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Modal, FlatList, Dimensions, TextInput, Platform, KeyboardAvoidingView, TouchableWithoutFeedback } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Modal, FlatList, Dimensions, TextInput, Platform, KeyboardAvoidingView, Pressable } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { ChevronDown, Check, X, Search } from 'lucide-react-native';
 
@@ -225,7 +225,7 @@ export const AppSelect = ({
             onPress={closeModal} 
           />
           
-          <TouchableWithoutFeedback>
+          <Pressable onPress={(e) => e?.stopPropagation?.()}>
             <View 
               style={[styles.dropdownContainer, {
                 left: dropdownLayout.left,
@@ -296,7 +296,7 @@ export const AppSelect = ({
               />
             )}
           </View>
-          </TouchableWithoutFeedback>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
     </View>
