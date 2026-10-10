@@ -15,6 +15,20 @@ export interface PaginatedSalesResult {
   totalPages: number;
 }
 
+const normalizePaginatedSale = (s: any): Sale => ({
+  ...s,
+  customerName: s.customer?.name || s.customerName || 'Walk-in Customer',
+  customerPhone: (s as any).customer?.phone || (s as any).customerPhone || '',
+  customerAddress: (s as any).customer?.address || (s as any).customerAddress || '',
+  customerGstin: (s as any).customer?.taxNumber || (s as any).customer?.taxId || (s as any).customer?.gstin || (s as any).customerGstin || '',
+  subtotal: Number(s.subtotal ?? s.subTotal ?? 0),
+  total: Number(s.total ?? s.grandTotal ?? 0),
+  discount: Number(s.discount ?? s.discountTotal ?? 0),
+  gst: Number(s.gst ?? s.taxTotal ?? 0),
+  paid: Number(s.paid ?? s.paymentAmount ?? 0),
+  due: Number(s.due ?? 0),
+});
+
 export const fetchPaginatedSales = async (params: {
   page?: number;
   limit?: number;
@@ -37,7 +51,7 @@ export const fetchPaginatedSales = async (params: {
     if (raw?.data && typeof raw.data === 'object' && Array.isArray(raw.data.data)) {
       const p = raw.data;
       return {
-        data: p.data,
+        data: p.data.map(normalizePaginatedSale),
         total: Number(p.total ?? p.data.length),
         page: Number(p.page ?? page),
         limit: Number(p.limit ?? limit),
@@ -47,7 +61,7 @@ export const fetchPaginatedSales = async (params: {
 
     if (raw && typeof raw === 'object' && Array.isArray(raw.data) && (raw.total !== undefined || raw.totalPages !== undefined)) {
       return {
-        data: raw.data,
+        data: raw.data.map(normalizePaginatedSale),
         total: Number(raw.total ?? raw.data.length),
         page: Number(raw.page ?? page),
         limit: Number(raw.limit ?? limit),
@@ -59,7 +73,7 @@ export const fetchPaginatedSales = async (params: {
     if (Array.isArray(list)) {
       const offset = (page - 1) * limit;
       return {
-        data: list.slice(offset, offset + limit),
+        data: list.slice(offset, offset + limit).map(normalizePaginatedSale),
         total: list.length,
         page,
         limit,

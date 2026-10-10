@@ -52,12 +52,20 @@ export class SaleRepository extends BaseRepository<Sale> {
   }
 
   protected fromRow(row: any): Sale {
+    const rawName = row.customerName ? String(row.customerName).trim() : '';
+    const resolvedName = (rawName && rawName.toLowerCase() !== 'walk-in customer')
+      ? rawName
+      : (row.resolvedCustomerName || rawName || undefined);
+
     return {
       id: Number(row.id),
       invoiceNumber: String(row.invoiceNumber || ''),
       reference: row.reference ? String(row.reference) : undefined,
       customerId: row.customerId ? Number(row.customerId) : undefined,
-      customerName: row.customerName ? String(row.customerName) : undefined,
+      customerName: resolvedName,
+      customerPhone: row.resolvedCustomerPhone || row.customerPhone || undefined,
+      customerAddress: row.resolvedCustomerAddress || row.customerAddress || undefined,
+      customerGstin: row.resolvedCustomerGstin || row.customerGstin || undefined,
       supplierId: row.supplierId ? Number(row.supplierId) : undefined,
       supplierName: row.supplierName ? String(row.supplierName) : undefined,
       date: String(row.date || ''),
@@ -1542,10 +1550,17 @@ export class SaleRepository extends BaseRepository<Sale> {
         total = Number(countRows[0].totalCount || 0);
       }
 
-      const dataRes = await db.execute(
-        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
-        [...queryParams, limit, offset]
-      );
+      const joinClause = `SELECT s.*, 
+              c.name AS resolvedCustomerName,
+              c.phone AS resolvedCustomerPhone,
+              c.address AS resolvedCustomerAddress,
+              COALESCE(c.taxId, c.gstin) AS resolvedCustomerGstin
+       FROM ${this.tableName} s
+       LEFT JOIN customers c ON (s.customerId IS NOT NULL AND s.customerId > 0 AND (s.customerId = c.id OR s.customerId = c.backendId))
+       ${whereClause ? whereClause.replace(/\b(invoiceNumber|reference|customerName|status|paymentStatus|notes)\b/g, 's.$1') : ''}
+       ORDER BY s.id DESC LIMIT ? OFFSET ?`;
+
+      const dataRes = await db.execute(joinClause, [...queryParams, limit, offset]);
       const rows = this.extractRows(dataRes);
       const items = rows.map((r) => this.fromRow(r));
 

@@ -198,7 +198,11 @@ export interface Sale extends BaseEntity {
   invoiceNumber: string;
   reference?: string;
   customerId?: number;
+  customer?: Customer;
   customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  customerGstin?: string;
   supplierId?: number;
   supplierName?: string;
   date: string;
