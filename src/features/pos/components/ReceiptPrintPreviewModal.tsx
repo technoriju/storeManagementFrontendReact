@@ -270,50 +270,158 @@ export function printHtmlViaIframe(htmlContent: string) {
   }, 250);
 }
 
-export function chunkInvoiceItems(
-  items: ReceiptItem[],
-  maxSingle: number,
-  maxNonFinal: number,
-  maxFinal: number
-): ReceiptItem[][] {
-  const total = items.length;
-  if (total === 0) return [[]];
-  if (total <= maxSingle) {
-    return [items];
+export interface InvoicePageLayout {
+  pageIndex: number;
+  items: ReceiptItem[];
+  startIndex: number;
+  hasFooter: boolean;
+}
+
+export function getItemHeightMm(item: ReceiptItem, paperFormat: ReceiptPaperFormat = '140x210mm'): number {
+  let lines = 1;
+  const nameLen = (item.productName || '').length;
+  const charLimit = paperFormat === 'halfA4Landscape' ? 40 : 25;
+  if (nameLen > charLimit) lines += Math.ceil((nameLen - charLimit) / charLimit);
+  const brand = getItemBrand(item);
+  const subUnit = getItemSubUnit(item);
+  const conversionRate = getItemConversionRate(item);
+  if (brand || subUnit || conversionRate) lines += 1;
+
+  if (paperFormat === 'halfA4Landscape') {
+    return 4.8 + (lines - 1) * 3.2;
+  }
+  return 4.3 + (lines - 1) * 3.0;
+}
+
+export function paginateInvoiceItems({
+  items,
+  paperFormat,
+  isWholesale,
+  showBankDetails,
+  isBalanceActive,
+  previousDue = 0,
+  advancePayment = 0,
+}: {
+  items: ReceiptItem[];
+  paperFormat: ReceiptPaperFormat;
+  isWholesale: boolean;
+  showBankDetails: boolean;
+  isBalanceActive: boolean;
+  previousDue?: number;
+  advancePayment?: number;
+}): { pages: InvoicePageLayout[]; totalPages: number } {
+  if (items.length === 0) {
+    return {
+      pages: [{ pageIndex: 0, items: [], startIndex: 0, hasFooter: true }],
+      totalPages: 1,
+    };
   }
 
-  // If 2 pages can accommodate all items comfortably
-  if (total <= maxNonFinal + maxFinal) {
-    const targetFinal = Math.min(maxFinal, Math.max(2, Math.floor(total / 2)));
-    let p1Count = total - targetFinal;
-    if (p1Count > maxNonFinal) {
-      p1Count = maxNonFinal;
-    }
-    return [items.slice(0, p1Count), items.slice(p1Count)];
+  const isLandscape = paperFormat === 'halfA4Landscape';
+  const pageHeight = isLandscape ? 136.5 : 201;
+  const headerHeight = isLandscape ? 44 : 41;
+
+  let footerHeight = isLandscape ? 48 : 52;
+  if (isWholesale && showBankDetails) footerHeight += 11;
+  if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 9;
+
+  const availWithFooter = pageHeight - headerHeight - footerHeight;
+  const availWithoutFooter = pageHeight - headerHeight - 4;
+
+  const totalItemsHeight = items.reduce((s, it) => s + getItemHeightMm(it, paperFormat), 0);
+
+  // 1. If all items AND entire footer fit on Page 1: Single page invoice!
+  if (totalItemsHeight <= availWithFooter) {
+    return {
+      pages: [{ pageIndex: 0, items, startIndex: 0, hasFooter: true }],
+      totalPages: 1,
+    };
   }
 
-  // 3 or more pages:
-  const pages: ReceiptItem[][] = [];
+  // 2. Multi-page: Footer cannot fit on Page 1 without splitting.
+  // Rule: Fill Page 1 as much as possible with items.
+  // If all items fit on Page 1 without footer:
+  // Page 1 gets ALL items, Page 2 gets header + entire footer!
+  if (totalItemsHeight <= availWithoutFooter) {
+    return {
+      pages: [
+        { pageIndex: 0, items, startIndex: 0, hasFooter: false },
+        { pageIndex: 1, items: [], startIndex: items.length, hasFooter: true },
+      ],
+      totalPages: 2,
+    };
+  }
+
+  // 3. Items exceed Page 1 capacity even without footer:
+  // Pack as many items as fit on Page 1, then rest of items and footer go to next page(s).
+  const pages: InvoicePageLayout[] = [];
   let remaining = [...items];
+  let curStart = 0;
 
   while (remaining.length > 0) {
-    if (remaining.length <= maxFinal) {
-      pages.push(remaining);
+    const remHeight = remaining.reduce((s, it) => s + getItemHeightMm(it, paperFormat), 0);
+
+    // Can remaining items AND footer fit on this page?
+    if (remHeight <= availWithFooter) {
+      pages.push({
+        pageIndex: pages.length,
+        items: remaining,
+        startIndex: curStart,
+        hasFooter: true,
+      });
       break;
     }
-    if (remaining.length <= maxNonFinal + maxFinal) {
-      const targetFinal = Math.min(maxFinal, Math.max(2, Math.floor(remaining.length / 2)));
-      let curCount = remaining.length - targetFinal;
-      if (curCount > maxNonFinal) curCount = maxNonFinal;
-      pages.push(remaining.slice(0, curCount));
-      pages.push(remaining.slice(curCount));
+
+    // Can all remaining items fit on this page WITHOUT footer?
+    // Pack all remaining items on this page, and move footer to next page.
+    if (remHeight <= availWithoutFooter) {
+      pages.push({
+        pageIndex: pages.length,
+        items: remaining,
+        startIndex: curStart,
+        hasFooter: false,
+      });
+      curStart += remaining.length;
+      pages.push({
+        pageIndex: pages.length,
+        items: [],
+        startIndex: curStart,
+        hasFooter: true,
+      });
       break;
     }
-    pages.push(remaining.slice(0, maxNonFinal));
-    remaining = remaining.slice(maxNonFinal);
+
+    // Pack as many items as fit on this page without footer:
+    let accHeight = 0;
+    let count = 0;
+    for (const it of remaining) {
+      const h = getItemHeightMm(it, paperFormat);
+      if (accHeight + h > availWithoutFooter && count > 0) break;
+      accHeight += h;
+      count++;
+    }
+
+    pages.push({
+      pageIndex: pages.length,
+      items: remaining.slice(0, count),
+      startIndex: curStart,
+      hasFooter: false,
+    });
+    curStart += count;
+    remaining = remaining.slice(count);
+
+    if (remaining.length === 0) {
+      pages.push({
+        pageIndex: pages.length,
+        items: [],
+        startIndex: curStart,
+        hasFooter: true,
+      });
+      break;
+    }
   }
 
-  return pages;
+  return { pages, totalPages: pages.length };
 }
 
 export function generateReceiptHtml({
@@ -634,11 +742,15 @@ export function generateReceiptHtml({
 
   // 140 mm width * 210 mm height Portrait Invoice
   if (paperFormat === '140x210mm') {
-    const maxSingle = isWholesale ? (showBankDetails ? 8 : 9) : 10;
-    const maxNonFinal = 13;
-    const maxFinal = isWholesale ? (showBankDetails ? 7 : 8) : 9;
-    const itemPages = chunkInvoiceItems(items, maxSingle, maxNonFinal, maxFinal);
-    const totalPages = itemPages.length;
+    const { pages, totalPages } = paginateInvoiceItems({
+      items,
+      paperFormat: '140x210mm',
+      isWholesale,
+      showBankDetails,
+      isBalanceActive,
+      previousDue,
+      advancePayment,
+    });
 
     return `<!DOCTYPE html>
 <html>
@@ -833,10 +945,11 @@ export function generateReceiptHtml({
   </style>
 </head>
 <body>
-${itemPages.map((pageItems, pageIdx) => {
-  const isLastPage = pageIdx === totalPages - 1;
-  const pageStartIndex = itemPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+${pages.map((page, pageIdx) => {
+  const isLastPage = page.hasFooter;
+  const pageStartIndex = page.startIndex;
   const pageTitleNote = totalPages > 1 ? ` (Page ${pageIdx + 1} of ${totalPages})` : '';
+  const hasItemsOnPage = page.items.length > 0;
 
   return `
   <div class="invoice-page">
@@ -888,6 +1001,7 @@ ${itemPages.map((pageItems, pageIdx) => {
       </div>
     </div>
 
+    ${hasItemsOnPage ? `
     <table class="items-table">
       <thead>
         <tr>
@@ -905,7 +1019,7 @@ ${itemPages.map((pageItems, pageIdx) => {
         </tr>
       </thead>
       <tbody>
-        ${pageItems.map((item, idx) => {
+        ${page.items.map((item, idx) => {
           const globalIdx = pageStartIndex + idx + 1;
           const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
           const rawAmt = Number(item.unitPrice || 0) * itemQty;
@@ -952,10 +1066,17 @@ ${itemPages.map((pageItems, pageIdx) => {
         }).join('')}
       </tbody>
     </table>
+    ` : `
+    <div style="font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
+      Bill Summary & Settlement (All ${items.length} products listed on Page 1):
+    </div>
+    `}
 
     ${!isLastPage ? `
       <div class="continuation-note">
-        Continued on Page ${pageIdx + 2} of ${totalPages} &rarr;
+        ${page.items.length === items.length
+          ? `All products listed above. Continued on Page ${pageIdx + 2} of ${totalPages} for Bill Summary & Signatures &rarr;`
+          : `Continued on Page ${pageIdx + 2} of ${totalPages} &rarr;`}
       </div>
     ` : `
       <div class="bottom-grid">
@@ -1084,11 +1205,15 @@ ${itemPages.map((pageItems, pageIdx) => {
   }
 
   // Regular Half A4 Landscape
-  const maxSingleLs = isWholesale ? 4 : 5;
-  const maxNonFinalLs = 9;
-  const maxFinalLs = isWholesale ? 4 : 5;
-  const itemPagesLs = chunkInvoiceItems(items, maxSingleLs, maxNonFinalLs, maxFinalLs);
-  const totalPagesLs = itemPagesLs.length;
+  const { pages: pagesLs, totalPages: totalPagesLs } = paginateInvoiceItems({
+    items,
+    paperFormat: 'halfA4Landscape',
+    isWholesale,
+    showBankDetails,
+    isBalanceActive,
+    previousDue,
+    advancePayment,
+  });
 
   return `<!DOCTYPE html>
 <html>
@@ -1234,10 +1359,11 @@ ${itemPages.map((pageItems, pageIdx) => {
   </style>
 </head>
 <body>
-${itemPagesLs.map((pageItems, pageIdx) => {
-  const isLastPage = pageIdx === totalPagesLs - 1;
-  const pageStartIndex = itemPagesLs.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+${pagesLs.map((page, pageIdx) => {
+  const isLastPage = page.hasFooter;
+  const pageStartIndex = page.startIndex;
   const pageTitleNote = totalPagesLs > 1 ? ` (Page ${pageIdx + 1} of ${totalPagesLs})` : '';
+  const hasItemsOnPage = page.items.length > 0;
 
   return `
   <div class="invoice-page">
@@ -1297,6 +1423,7 @@ ${itemPagesLs.map((pageItems, pageIdx) => {
       </div>
     </div>
 
+    ${hasItemsOnPage ? `
     <table class="items-table">
       <thead>
         <tr>
@@ -1315,7 +1442,7 @@ ${itemPagesLs.map((pageItems, pageIdx) => {
         </tr>
       </thead>
       <tbody>
-        ${pageItems.map((item, idx) => {
+        ${page.items.map((item, idx) => {
           const globalIdx = pageStartIndex + idx + 1;
           const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
           const rawAmt = Number(item.unitPrice || 0) * itemQty;
@@ -1363,10 +1490,17 @@ ${itemPagesLs.map((pageItems, pageIdx) => {
         }).join('')}
       </tbody>
     </table>
+    ` : `
+    <div style="font-size: 8.5px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
+      Bill Summary & Settlement (All ${items.length} products listed on Page 1):
+    </div>
+    `}
 
     ${!isLastPage ? `
       <div class="continuation-note">
-        Continued on Page ${pageIdx + 2} of ${totalPagesLs} &rarr;
+        ${page.items.length === items.length
+          ? `All products listed above. Continued on Page ${pageIdx + 2} of ${totalPagesLs} for Bill Summary & Signatures &rarr;`
+          : `Continued on Page ${pageIdx + 2} of ${totalPagesLs} &rarr;`}
       </div>
     ` : `
       <div class="bottom-grid">
