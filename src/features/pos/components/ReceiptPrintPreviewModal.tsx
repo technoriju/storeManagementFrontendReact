@@ -270,6 +270,52 @@ export function printHtmlViaIframe(htmlContent: string) {
   }, 250);
 }
 
+export function chunkInvoiceItems(
+  items: ReceiptItem[],
+  maxSingle: number,
+  maxNonFinal: number,
+  maxFinal: number
+): ReceiptItem[][] {
+  const total = items.length;
+  if (total === 0) return [[]];
+  if (total <= maxSingle) {
+    return [items];
+  }
+
+  // If 2 pages can accommodate all items comfortably
+  if (total <= maxNonFinal + maxFinal) {
+    const targetFinal = Math.min(maxFinal, Math.max(2, Math.floor(total / 2)));
+    let p1Count = total - targetFinal;
+    if (p1Count > maxNonFinal) {
+      p1Count = maxNonFinal;
+    }
+    return [items.slice(0, p1Count), items.slice(p1Count)];
+  }
+
+  // 3 or more pages:
+  const pages: ReceiptItem[][] = [];
+  let remaining = [...items];
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxFinal) {
+      pages.push(remaining);
+      break;
+    }
+    if (remaining.length <= maxNonFinal + maxFinal) {
+      const targetFinal = Math.min(maxFinal, Math.max(2, Math.floor(remaining.length / 2)));
+      let curCount = remaining.length - targetFinal;
+      if (curCount > maxNonFinal) curCount = maxNonFinal;
+      pages.push(remaining.slice(0, curCount));
+      pages.push(remaining.slice(curCount));
+      break;
+    }
+    pages.push(remaining.slice(0, maxNonFinal));
+    remaining = remaining.slice(maxNonFinal);
+  }
+
+  return pages;
+}
+
 export function generateReceiptHtml({
   data,
   business,
@@ -588,6 +634,12 @@ export function generateReceiptHtml({
 
   // 140 mm width * 210 mm height Portrait Invoice
   if (paperFormat === '140x210mm') {
+    const maxSingle = isWholesale ? (showBankDetails ? 8 : 9) : 10;
+    const maxNonFinal = 13;
+    const maxFinal = isWholesale ? (showBankDetails ? 7 : 8) : 9;
+    const itemPages = chunkInvoiceItems(items, maxSingle, maxNonFinal, maxFinal);
+    const totalPages = itemPages.length;
+
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -599,15 +651,13 @@ export function generateReceiptHtml({
       margin: 3mm 4mm;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       font-size: 8.5px;
       color: #0f172a;
       background: #fff;
-      width: 132mm;
-      max-width: 132mm;
-      margin: 0 auto;
-      padding: 1.5mm 0;
+      margin: 0;
+      padding: 0;
       line-height: 1.25;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -616,7 +666,29 @@ export function generateReceiptHtml({
       filter: grayscale(100%);
       ` : ''}
     }
-    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 4px; }
+    .invoice-page {
+      width: 132mm;
+      max-width: 132mm;
+      margin: 0 auto;
+      padding: 1.5mm 0;
+      box-sizing: border-box;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .invoice-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .header-table {
+      width: 100%;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .store-name { font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
     .store-sub { font-size: 8px; color: #334155; line-height: 1.25; }
     .inv-badge {
@@ -637,6 +709,8 @@ export function generateReceiptHtml({
       padding-bottom: 4px;
       margin-bottom: 4px;
       gap: 10px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .party-col { flex: 1.5; }
     .status-col { flex: 1; text-align: right; }
@@ -646,260 +720,376 @@ export function generateReceiptHtml({
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; border: 1px solid #cbd5e1; }
     .items-table th { background: #f1f5f9; font-size: 8px; font-weight: 700; color: #1e293b; padding: 3px 4px; border: 1px solid #cbd5e1; }
     .items-table td { font-size: 8px; padding: 2.5px 4px; border: 1px solid #e2e8f0; }
+    .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
-    .bottom-grid { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+    .continuation-note {
+      text-align: right;
+      font-size: 8px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 4px;
+      padding: 2.5px 0;
+      border-top: 1px dashed #cbd5e1;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .bottom-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .bottom-left { flex: 1.2; }
     .bottom-right { flex: 1; }
-    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 5px; border-radius: 2px; font-size: 7.5px; margin-bottom: 3px; }
-    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 3px 5px; border-radius: 2px; font-size: 7.5px; margin-bottom: 3px; }
-    .bank-title { font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 8px; margin-bottom: 1px; }
-    .terms-box { font-size: 7px; color: #64748b; line-height: 1.2; margin-top: 3px; }
-    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; }
+    .words-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 3px 5px;
+      border-radius: 2px;
+      font-size: 7.5px;
+      margin-bottom: 3px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .bank-box {
+      background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'};
+      border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'};
+      padding: 3px 5px;
+      border-radius: 2px;
+      font-size: 7.5px;
+      margin-bottom: 3px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .bank-title {
+      font-weight: bold;
+      color: ${colorMode === 'bw' ? '#000000' : '#166534'};
+      font-size: 8px;
+      margin-bottom: 1px;
+    }
+    .terms-box {
+      font-size: 7px;
+      color: #64748b;
+      line-height: 1.2;
+      margin-top: 3px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .totals-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #e2e8f0;
+      background: #fafafa;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .totals-table td { padding: 2px 5px; font-size: 8.5px; border-bottom: 1px solid #f1f5f9; }
-    .grand-total-row { background: ${colorMode === 'bw' ? '#000000' : '#0f172a'}; color: #fff; font-weight: bold; }
-    .grand-total-row td { color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: 900; }
-    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
+    .grand-total-row {
+      background: ${colorMode === 'bw' ? '#000000' : '#0f172a'};
+      color: #fff;
+      font-weight: bold;
+    }
+    .grand-total-row td {
+      color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'};
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .signatures-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 8px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .sign-box { width: 120px; text-align: center; }
     .sign-line { border-bottom: 1px solid #334155; margin-bottom: 2px; height: 14px; }
-    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 3px; border: 1px solid #e2e8f0; border-radius: 2px; }
+    .qr-inline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      background: #f8fafc;
+      padding: 3px;
+      border: 1px solid #e2e8f0;
+      border-radius: 2px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
     .qr-inline .receipt-qr-img { width: 38px; height: 38px; object-fit: contain; }
+    @media print {
+      body { width: 100%; margin: 0; padding: 0; }
+      .invoice-page {
+        page-break-after: always;
+        break-after: page;
+      }
+      .invoice-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
   </style>
 </head>
 <body>
-  <table class="header-table">
-    <tr>
-      <td style="vertical-align: top; width: 62%;">
-        <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
-        ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 8.5px;">${business.tagline}</div>` : ''}
-        <div class="store-sub">${business.address || ''}</div>
-        <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
-        <div class="store-sub" style="font-weight: bold; color: #0f172a;">
-          GSTIN: ${business.gstin || ''} | State: ${business.state || ''} (${business.stateCode || ''})
-        </div>
-      </td>
-      <td style="vertical-align: top; width: 38%; text-align: right;">
-        <div class="inv-badge">
-          ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
-        </div>
-        <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
-        <table style="margin-top: 2px; width: 100%; text-align: right;">
-          <tr>
-            <td style="font-size: 7.5px; color: #64748b;">Invoice No:</td>
-            <td style="font-size: 9px; font-weight: bold; color: #0f172a;">${invNumber}</td>
-          </tr>
-          <tr>
-            <td style="font-size: 7.5px; color: #64748b;">Date:</td>
-            <td style="font-size: 8px; font-weight: 600; color: #0f172a;">${invDate}</td>
-          </tr>
-          <tr>
-            <td style="font-size: 7.5px; color: #64748b;">Mode:</td>
-            <td style="font-size: 8px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+${itemPages.map((pageItems, pageIdx) => {
+  const isLastPage = pageIdx === totalPages - 1;
+  const pageStartIndex = itemPages.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+  const pageTitleNote = totalPages > 1 ? ` (Page ${pageIdx + 1} of ${totalPages})` : '';
 
-  <div class="parties-grid">
-    <div class="party-col">
-      <div class="section-title">${isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}</div>
-      <div class="cust-name">${custName}</div>
-      ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
-      ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
-      ${isWholesale && custGstin ? `<div class="party-sub" style="font-weight: bold;">Buyer GSTIN: ${custGstin}</div>` : ''}
-    </div>
-    <div class="status-col">
-      <div><strong>Status:</strong> <span style="font-weight: bold; color: ${due === 0 ? '#059669' : '#dc2626'};">${due === 0 ? 'FULLY PAID' : 'DUE'}</span></div>
-      <div style="font-size: 7.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
-    </div>
-  </div>
-
-  <table class="items-table">
-    <thead>
+  return `
+  <div class="invoice-page">
+    <table class="header-table">
       <tr>
-        <th style="width: 20px;">#</th>
-        <th style="text-align: left;">ITEM</th>
-        ${isWholesale ? '<th style="width: 40px;">HSN</th>' : ''}
-        <th style="width: 30px; text-align: center;">QTY</th>
-        <th style="width: 45px; text-align: right;">RATE</th>
-        <th style="width: 35px; text-align: right;">DISC</th>
-        ${showTaxBreakdown ? `
-          <th style="width: 45px; text-align: right;">TAXABLE</th>
-          <th style="width: 35px; text-align: center;">GST</th>
-        ` : ''}
-        <th style="width: 55px; text-align: right;">TOTAL</th>
+        <td style="vertical-align: top; width: 62%;">
+          <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
+          ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 8.5px;">${business.tagline}</div>` : ''}
+          <div class="store-sub">${business.address || ''}</div>
+          <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
+          <div class="store-sub" style="font-weight: bold; color: #0f172a;">
+            GSTIN: ${business.gstin || ''} | State: ${business.state || ''} (${business.stateCode || ''})
+          </div>
+        </td>
+        <td style="vertical-align: top; width: 38%; text-align: right;">
+          <div class="inv-badge">
+            ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+          </div>
+          <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
+          <table style="margin-top: 2px; width: 100%; text-align: right;">
+            <tr>
+              <td style="font-size: 7.5px; color: #64748b;">Invoice No:</td>
+              <td style="font-size: 9px; font-weight: bold; color: #0f172a;">${invNumber}${pageTitleNote}</td>
+            </tr>
+            <tr>
+              <td style="font-size: 7.5px; color: #64748b;">Date:</td>
+              <td style="font-size: 8px; font-weight: 600; color: #0f172a;">${invDate}</td>
+            </tr>
+            <tr>
+              <td style="font-size: 7.5px; color: #64748b;">Mode:</td>
+              <td style="font-size: 8px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
+            </tr>
+          </table>
+        </td>
       </tr>
-    </thead>
-    <tbody>
-      ${items.map((item, idx) => {
-        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
-        const rawAmt = Number(item.unitPrice || 0) * itemQty;
-        const discAmt = Number(item.discount || 0);
-        const taxableAmt = Math.max(0, rawAmt - discAmt);
-        const brand = getItemBrand(item);
-        const subUnit = getItemSubUnit(item);
-        const conversionRate = getItemConversionRate(item);
-        const baseUnit = getItemBaseUnit(item);
-        const metaParts: string[] = [];
-        if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
-        if (subUnit) {
-          const convInfo =
-            conversionRate && Number(conversionRate) > 1
-              ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
-              : '';
-          metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
-        } else if (conversionRate && Number(conversionRate) > 1) {
-          metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
-        }
-        const metaLine = metaParts.length > 0 ? `<div style="font-size: 8px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+    </table>
 
-        return `
-          <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
-            <td style="text-align: center;">${idx + 1}</td>
-            <td style="font-weight: 600;">
-              <div>${item.productName || 'Item'}</div>
-              ${metaLine}
-            </td>
-            ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
-            <td style="text-align: center;">
-              ${item.quantity} ${item.unit || ''}
-              ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
-            </td>
-            <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
-            <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
-            ${showTaxBreakdown ? `
-              <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
-              <td style="text-align: center;">${item.gst || 0}%</td>
+    <div class="parties-grid">
+      <div class="party-col">
+        <div class="section-title">${isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}</div>
+        <div class="cust-name">${custName}</div>
+        ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
+        ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
+        ${isWholesale && custGstin ? `<div class="party-sub" style="font-weight: bold;">Buyer GSTIN: ${custGstin}</div>` : ''}
+      </div>
+      <div class="status-col">
+        <div><strong>Status:</strong> <span style="font-weight: bold; color: ${due === 0 ? '#059669' : '#dc2626'};">${due === 0 ? 'FULLY PAID' : 'DUE'}</span></div>
+        <div style="font-size: 7.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 20px;">#</th>
+          <th style="text-align: left;">ITEM</th>
+          ${isWholesale ? '<th style="width: 40px;">HSN</th>' : ''}
+          <th style="width: 30px; text-align: center;">QTY</th>
+          <th style="width: 45px; text-align: right;">RATE</th>
+          <th style="width: 35px; text-align: right;">DISC</th>
+          ${showTaxBreakdown ? `
+            <th style="width: 45px; text-align: right;">TAXABLE</th>
+            <th style="width: 35px; text-align: center;">GST</th>
+          ` : ''}
+          <th style="width: 55px; text-align: right;">TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pageItems.map((item, idx) => {
+          const globalIdx = pageStartIndex + idx + 1;
+          const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+          const rawAmt = Number(item.unitPrice || 0) * itemQty;
+          const discAmt = Number(item.discount || 0);
+          const taxableAmt = Math.max(0, rawAmt - discAmt);
+          const brand = getItemBrand(item);
+          const subUnit = getItemSubUnit(item);
+          const conversionRate = getItemConversionRate(item);
+          const baseUnit = getItemBaseUnit(item);
+          const metaParts: string[] = [];
+          if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
+          if (subUnit) {
+            const convInfo =
+              conversionRate && Number(conversionRate) > 1
+                ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+                : '';
+            metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
+          } else if (conversionRate && Number(conversionRate) > 1) {
+            metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
+          }
+          const metaLine = metaParts.length > 0 ? `<div style="font-size: 8px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
+          return `
+            <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
+              <td style="text-align: center;">${globalIdx}</td>
+              <td style="font-weight: 600;">
+                <div>${item.productName || 'Item'}</div>
+                ${metaLine}
+              </td>
+              ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
+              <td style="text-align: center;">
+                ${item.quantity} ${item.unit || ''}
+                ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
+              </td>
+              <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
+              <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
+              ${showTaxBreakdown ? `
+                <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
+                <td style="text-align: center;">${item.gst || 0}%</td>
+              ` : ''}
+              <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+
+    ${!isLastPage ? `
+      <div class="continuation-note">
+        Continued on Page ${pageIdx + 2} of ${totalPages} &rarr;
+      </div>
+    ` : `
+      <div class="bottom-grid">
+        <div class="bottom-left">
+          <div class="words-box">
+            <strong>Amount in Words:</strong><br/>
+            <em>${words}</em>
+          </div>
+
+          ${isWholesale && showBankDetails ? `
+            <div class="bank-box">
+              <div class="bank-title">BANK DETAILS (NEFT/RTGS):</div>
+              <div>Bank: <strong>${business.bankName || ''}</strong></div>
+              <div>A/C: <strong>${business.accountNumber || ''}</strong> | IFSC: <strong>${business.ifscCode || ''}</strong></div>
+            </div>
+          ` : ''}
+
+          ${showTerms ? `
+            <div class="terms-box">
+              <strong>Terms:</strong> 1. Goods once sold will not be exchanged. 2. Subject to local jurisdiction.
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="bottom-right">
+          <table class="totals-table">
+            <tr>
+              <td style="color: #64748b;">Subtotal:</td>
+              <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            ${discount > 0 ? `
+              <tr>
+                <td style="color: #64748b;">Discount:</td>
+                <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
+              </tr>
             ` : ''}
-            <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
-          </tr>
-        `;
-      }).join('')}
-    </tbody>
-  </table>
+            ${showTaxBreakdown && gst > 0 ? `
+              <tr>
+                <td style="color: #64748b;">CGST + SGST:</td>
+                <td style="text-align: right;">₹${gst.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="grand-total-row">
+              <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'TOTAL:'}</td>
+              <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: bold;">₹${total.toFixed(2)}</td>
+            </tr>
+            ${isBalanceActive && previousDue > 0 ? `
+              <tr>
+                <td style="color: #dc2626; font-weight: bold;">Previous Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#dc2626'};">+₹${previousDue.toFixed(2)}</td>
+              </tr>
+              <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
+                <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'};">TOTAL PAYABLE:</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">₹${totalPayable.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${isBalanceActive && advancePayment > 0 ? `
+              <tr>
+                <td style="color: #16a34a; font-weight: bold;">Advance Adjusted:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#16a34a'};">-₹${adjustedAdvance.toFixed(2)}</td>
+              </tr>
+              <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
+                <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'};">NET PAYABLE:</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">₹${netPayable.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr>
+              <td style="color: #64748b;">Received:</td>
+              <td style="text-align: right; font-weight: bold;">₹${paid.toFixed(2)}</td>
+            </tr>
+            ${isBalanceActive && previousDue > 0 ? `
+              <tr>
+                <td style="color: #64748b; font-weight: bold;">Net Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
+              </tr>
+            ` : isBalanceActive && advancePayment > 0 ? `
+              <tr>
+                <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
+              </tr>
+              ${remainingAdvance > 0 ? `
+              <tr>
+                <td style="color: #2563eb; font-weight: bold;">Remaining Adv:</td>
+                <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
+              </tr>
+              ` : ''}
+            ` : `
+              <tr>
+                <td style="color: #64748b;">Balance Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
+              </tr>
+            `}
+          </table>
 
-  <div class="bottom-grid">
-    <div class="bottom-left">
-      <div class="words-box">
-        <strong>Amount in Words:</strong><br/>
-        <em>${words}</em>
+          ${showQrCode ? `
+            <div class="qr-inline">
+              ${qrImageHtml}
+              <div>
+                <div style="font-weight: bold; font-size: 8px;">Scan to Pay UPI</div>
+                <div style="font-size: 7.5px; color: #64748b;">${business.upiId || ''}</div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
-      ${isWholesale && showBankDetails ? `
-        <div class="bank-box">
-          <div class="bank-title">BANK DETAILS (NEFT/RTGS):</div>
-          <div>Bank: <strong>${business.bankName || ''}</strong></div>
-          <div>A/C: <strong>${business.accountNumber || ''}</strong> | IFSC: <strong>${business.ifscCode || ''}</strong></div>
-        </div>
-      ` : ''}
-
-      ${showTerms ? `
-        <div class="terms-box">
-          <strong>Terms:</strong> 1. Goods once sold will not be exchanged. 2. Subject to local jurisdiction.
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="bottom-right">
-      <table class="totals-table">
-        <tr>
-          <td style="color: #64748b;">Subtotal:</td>
-          <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
-        </tr>
-        ${discount > 0 ? `
-          <tr>
-            <td style="color: #64748b;">Discount:</td>
-            <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        ${showTaxBreakdown && gst > 0 ? `
-          <tr>
-            <td style="color: #64748b;">CGST + SGST:</td>
-            <td style="text-align: right;">₹${gst.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        <tr class="grand-total-row">
-          <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'TOTAL:'}</td>
-          <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: bold;">₹${total.toFixed(2)}</td>
-        </tr>
-        ${isBalanceActive && previousDue > 0 ? `
-          <tr>
-            <td style="color: #dc2626; font-weight: bold;">Previous Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#dc2626'};">+₹${previousDue.toFixed(2)}</td>
-          </tr>
-          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
-            <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'};">TOTAL PAYABLE:</td>
-            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">₹${totalPayable.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        ${isBalanceActive && advancePayment > 0 ? `
-          <tr>
-            <td style="color: #16a34a; font-weight: bold;">Advance Adjusted:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#16a34a'};">-₹${adjustedAdvance.toFixed(2)}</td>
-          </tr>
-          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
-            <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'};">NET PAYABLE:</td>
-            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">₹${netPayable.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        <tr>
-          <td style="color: #64748b;">Received:</td>
-          <td style="text-align: right; font-weight: bold;">₹${paid.toFixed(2)}</td>
-        </tr>
-        ${isBalanceActive && previousDue > 0 ? `
-          <tr>
-            <td style="color: #64748b; font-weight: bold;">Net Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
-          </tr>
-        ` : isBalanceActive && advancePayment > 0 ? `
-          <tr>
-            <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
-          </tr>
-          ${remainingAdvance > 0 ? `
-          <tr>
-            <td style="color: #2563eb; font-weight: bold;">Remaining Adv:</td>
-            <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
-          </tr>
-          ` : ''}
-        ` : `
-          <tr>
-            <td style="color: #64748b;">Balance Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
-          </tr>
-        `}
-      </table>
-
-      ${showQrCode ? `
-        <div class="qr-inline">
-          ${qrImageHtml}
-          <div>
-            <div style="font-weight: bold; font-size: 8px;">Scan to Pay UPI</div>
-            <div style="font-size: 7.5px; color: #64748b;">${business.upiId || ''}</div>
+      ${showSignatures ? `
+        <div class="signatures-row">
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <div style="font-size: 7.5px; color: #64748b;">Customer Signature</div>
+          </div>
+          <div class="sign-box">
+            <div style="font-size: 7.5px; font-weight: bold;">For ${business.businessName || ''}</div>
+            <div class="sign-line"></div>
+            <div style="font-size: 7.5px; color: #64748b;">Authorized Signatory</div>
           </div>
         </div>
       ` : ''}
-    </div>
+    `}
   </div>
-
-  ${showSignatures ? `
-    <div class="signatures-row">
-      <div class="sign-box">
-        <div class="sign-line"></div>
-        <div style="font-size: 7.5px; color: #64748b;">Customer Signature</div>
-      </div>
-      <div class="sign-box">
-        <div style="font-size: 7.5px; font-weight: bold;">For ${business.businessName || ''}</div>
-        <div class="sign-line"></div>
-        <div style="font-size: 7.5px; color: #64748b;">Authorized Signatory</div>
-      </div>
-    </div>
-  ` : ''}
+  `;
+}).join('')}
 </body>
 </html>`;
   }
 
   // Regular Half A4 Landscape
+  const maxSingleLs = isWholesale ? 4 : 5;
+  const maxNonFinalLs = 9;
+  const maxFinalLs = isWholesale ? 4 : 5;
+  const itemPagesLs = chunkInvoiceItems(items, maxSingleLs, maxNonFinalLs, maxFinalLs);
+  const totalPagesLs = itemPagesLs.length;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -911,15 +1101,13 @@ export function generateReceiptHtml({
       margin: 4mm 6mm;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       font-size: 9.5px;
       color: #0f172a;
       background: #fff;
-      width: 198mm;
-      max-width: 198mm;
-      margin: 0 auto;
-      padding: 2mm 0;
+      margin: 0;
+      padding: 0;
       line-height: 1.25;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -956,7 +1144,22 @@ export function generateReceiptHtml({
       color: #000000 !important;
     }
     ` : ''}
-    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 5px; }
+    .invoice-page {
+      width: 198mm;
+      max-width: 198mm;
+      margin: 0 auto;
+      padding: 2mm 0;
+      box-sizing: border-box;
+      page-break-after: always;
+      break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .invoice-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 5px; page-break-inside: avoid; break-inside: avoid; }
     .store-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
     .store-sub { font-size: 9.5px; color: #334155; line-height: 1.3; }
     .inv-badge {
@@ -977,6 +1180,8 @@ export function generateReceiptHtml({
       padding-bottom: 5px;
       margin-bottom: 5px;
       gap: 14px;
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
     .party-col { flex: 1.5; }
     .status-col { flex: 1; text-align: right; }
@@ -986,272 +1191,312 @@ export function generateReceiptHtml({
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 1px solid #cbd5e1; }
     .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 4px 5px; border: 1px solid #cbd5e1; }
     .items-table td { font-size: 9px; padding: 3px 5px; border: 1px solid #e2e8f0; }
+    .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
-    .bottom-grid { display: flex; justify-content: space-between; gap: 14px; margin-top: 5px; }
+    .continuation-note {
+      text-align: right;
+      font-size: 8.5px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 5px;
+      padding: 3px 0;
+      border-top: 1px dashed #cbd5e1;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .bottom-grid { display: flex; justify-content: space-between; gap: 14px; margin-top: 5px; page-break-inside: avoid; break-inside: avoid; }
     .bottom-left { flex: 1.3; }
     .bottom-right { flex: 1; }
-    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 6px; border-radius: 3px; font-size: 8.5px; margin-bottom: 4px; }
-    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 4px 6px; border-radius: 3px; font-size: 8px; margin-bottom: 4px; }
+    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 6px; border-radius: 3px; font-size: 8.5px; margin-bottom: 4px; page-break-inside: avoid; break-inside: avoid; }
+    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 4px 6px; border-radius: 3px; font-size: 8px; margin-bottom: 4px; page-break-inside: avoid; break-inside: avoid; }
     .bank-title { font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 8.5px; margin-bottom: 2px; }
-    .terms-box { font-size: 8px; color: #64748b; line-height: 1.25; margin-top: 4px; }
-    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; }
+    .terms-box { font-size: 8px; color: #64748b; line-height: 1.25; margin-top: 4px; page-break-inside: avoid; break-inside: avoid; }
+    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; page-break-inside: avoid; break-inside: avoid; }
     .totals-table td { padding: 2px 6px; font-size: 9px; border-bottom: 1px solid #f1f5f9; }
     .grand-total-row { background: ${colorMode === 'bw' ? '#000000' : '#0f172a'}; color: #fff; font-weight: bold; }
     .grand-total-row td { color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: 900; }
-    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; }
+    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; page-break-inside: avoid; break-inside: avoid; }
     .sign-box { width: 140px; text-align: center; }
     .sign-line { border-bottom: 1px solid #334155; margin-bottom: 3px; height: 16px; }
-    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; }
+    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; page-break-inside: avoid; break-inside: avoid; }
     .qr-inline .receipt-qr-img { width: 44px; height: 44px; object-fit: contain; }
+    @media print {
+      body { width: 100%; margin: 0; padding: 0; }
+      .invoice-page {
+        page-break-after: always;
+        break-after: page;
+      }
+      .invoice-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
   </style>
 </head>
 <body>
-  <table class="header-table">
-    <tr>
-      <td style="vertical-align: top; width: 60%;">
-        <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
-        ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 10px;">${business.tagline}</div>` : ''}
-        <div class="store-sub">${business.address || ''}</div>
-        <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
-        <div class="store-sub" style="font-weight: bold; color: #0f172a;">
-          GSTIN: ${business.gstin || ''} | PAN: ${business.pan || 'N/A'} | State: ${business.state || ''} (${business.stateCode || ''})
-        </div>
-      </td>
-      <td style="vertical-align: top; width: 40%; text-align: right;">
-        <div class="inv-badge">
-          ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
-        </div>
-        <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
-        <table style="margin-top: 4px; width: 100%; text-align: right;">
-          <tr>
-            <td style="font-size: 8.5px; color: #64748b;">Invoice No:</td>
-            <td style="font-size: 10px; font-weight: bold; color: #0f172a;">${invNumber}</td>
-          </tr>
-          <tr>
-            <td style="font-size: 8.5px; color: #64748b;">Date:</td>
-            <td style="font-size: 9px; font-weight: 600; color: #0f172a;">${invDate}</td>
-          </tr>
-          <tr>
-            <td style="font-size: 8.5px; color: #64748b;">Payment Mode:</td>
-            <td style="font-size: 9px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
-          </tr>
-          <tr>
-            <td style="font-size: 8.5px; color: #64748b;">Biller:</td>
-            <td style="font-size: 9px; color: #0f172a;">${biller}</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+${itemPagesLs.map((pageItems, pageIdx) => {
+  const isLastPage = pageIdx === totalPagesLs - 1;
+  const pageStartIndex = itemPagesLs.slice(0, pageIdx).reduce((acc, p) => acc + p.length, 0);
+  const pageTitleNote = totalPagesLs > 1 ? ` (Page ${pageIdx + 1} of ${totalPagesLs})` : '';
 
-  <div class="parties-grid">
-    <div class="party-col">
-      <div class="section-title">${isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}</div>
-      <div class="cust-name">${custName}</div>
-      ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
-      ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
-      ${isWholesale ? `
-        <div class="party-sub" style="margin-top: 2px;">
-          <strong>Buyer GSTIN:</strong> ${custGstin || 'Unregistered / B2C'} | <strong>State Code:</strong> ${business.stateCode || ''}
-        </div>
-      ` : ''}
-    </div>
-    <div class="status-col">
-      <div><strong>Status:</strong> <span class="${due === 0 ? 'status-paid' : 'status-due'}" style="font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due === 0 ? '#059669' : '#dc2626')};">${due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}</span></div>
-      <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">Place of Supply: ${business.state || ''} (${business.stateCode || ''})</div>
-    </div>
-  </div>
-
-  <table class="items-table">
-    <thead>
+  return `
+  <div class="invoice-page">
+    <table class="header-table">
       <tr>
-        <th style="width: 25px;">#</th>
-        <th style="text-align: left;">ITEM & DESCRIPTION</th>
-        ${isWholesale ? '<th style="width: 50px;">HSN</th>' : ''}
-        <th style="width: 40px; text-align: center;">QTY</th>
-        <th style="width: 40px; text-align: center;">UNIT</th>
-        <th style="width: 60px; text-align: right;">RATE (₹)</th>
-        <th style="width: 50px; text-align: right;">DISC (₹)</th>
-        ${showTaxBreakdown ? `
-          <th style="width: 60px; text-align: right;">TAXABLE</th>
-          <th style="width: 45px; text-align: center;">GST%</th>
-        ` : ''}
-        <th style="width: 70px; text-align: right;">AMOUNT (₹)</th>
+        <td style="vertical-align: top; width: 60%;">
+          <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
+          ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 10px;">${business.tagline}</div>` : ''}
+          <div class="store-sub">${business.address || ''}</div>
+          <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
+          <div class="store-sub" style="font-weight: bold; color: #0f172a;">
+            GSTIN: ${business.gstin || ''} | PAN: ${business.pan || 'N/A'} | State: ${business.state || ''} (${business.stateCode || ''})
+          </div>
+        </td>
+        <td style="vertical-align: top; width: 40%; text-align: right;">
+          <div class="inv-badge">
+            ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
+          </div>
+          <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
+          <table style="margin-top: 4px; width: 100%; text-align: right;">
+            <tr>
+              <td style="font-size: 8.5px; color: #64748b;">Invoice No:</td>
+              <td style="font-size: 10px; font-weight: bold; color: #0f172a;">${invNumber}${pageTitleNote}</td>
+            </tr>
+            <tr>
+              <td style="font-size: 8.5px; color: #64748b;">Date:</td>
+              <td style="font-size: 9px; font-weight: 600; color: #0f172a;">${invDate}</td>
+            </tr>
+            <tr>
+              <td style="font-size: 8.5px; color: #64748b;">Payment Mode:</td>
+              <td style="font-size: 9px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
+            </tr>
+            <tr>
+              <td style="font-size: 8.5px; color: #64748b;">Biller:</td>
+              <td style="font-size: 9px; color: #0f172a;">${biller}</td>
+            </tr>
+          </table>
+        </td>
       </tr>
-    </thead>
-    <tbody>
-      ${items.map((item, idx) => {
-        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
-        const rawAmt = Number(item.unitPrice || 0) * itemQty;
-        const discAmt = Number(item.discount || 0);
-        const taxableAmt = Math.max(0, rawAmt - discAmt);
-        const brand = getItemBrand(item);
-        const subUnit = getItemSubUnit(item);
-        const conversionRate = getItemConversionRate(item);
-        const baseUnit = getItemBaseUnit(item);
-        const metaParts: string[] = [];
-        if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
-        if (subUnit) {
-          const convInfo =
-            conversionRate && Number(conversionRate) > 1
-              ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
-              : '';
-          metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
-        } else if (conversionRate && Number(conversionRate) > 1) {
-          metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
-        }
-        const metaLine = metaParts.length > 0 ? `<div style="font-size: 8.5px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+    </table>
 
-        return `
-          <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
-            <td style="text-align: center;">${idx + 1}</td>
-            <td style="font-weight: 600;">
-              <div>${item.productName || 'Item'}</div>
-              ${metaLine}
-            </td>
-            ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
-            <td style="text-align: center;">${item.quantity}</td>
-            <td style="text-align: center;">
-              ${item.unit || 'Pcs'}
-              ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
-            </td>
-            <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
-            <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
-            ${showTaxBreakdown ? `
-              <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
-              <td style="text-align: center;">${item.gst || 0}%</td>
+    <div class="parties-grid">
+      <div class="party-col">
+        <div class="section-title">${isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}</div>
+        <div class="cust-name">${custName}</div>
+        ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
+        ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
+        ${isWholesale ? `
+          <div class="party-sub" style="margin-top: 2px;">
+            <strong>Buyer GSTIN:</strong> ${custGstin || 'Unregistered / B2C'} | <strong>State Code:</strong> ${business.stateCode || ''}
+          </div>
+        ` : ''}
+      </div>
+      <div class="status-col">
+        <div><strong>Status:</strong> <span class="${due === 0 ? 'status-paid' : 'status-due'}" style="font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due === 0 ? '#059669' : '#dc2626')};">${due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}</span></div>
+        <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">Place of Supply: ${business.state || ''} (${business.stateCode || ''})</div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 25px;">#</th>
+          <th style="text-align: left;">ITEM & DESCRIPTION</th>
+          ${isWholesale ? '<th style="width: 50px;">HSN</th>' : ''}
+          <th style="width: 40px; text-align: center;">QTY</th>
+          <th style="width: 40px; text-align: center;">UNIT</th>
+          <th style="width: 60px; text-align: right;">RATE (₹)</th>
+          <th style="width: 50px; text-align: right;">DISC (₹)</th>
+          ${showTaxBreakdown ? `
+            <th style="width: 60px; text-align: right;">TAXABLE</th>
+            <th style="width: 45px; text-align: center;">GST%</th>
+          ` : ''}
+          <th style="width: 70px; text-align: right;">AMOUNT (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pageItems.map((item, idx) => {
+          const globalIdx = pageStartIndex + idx + 1;
+          const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+          const rawAmt = Number(item.unitPrice || 0) * itemQty;
+          const discAmt = Number(item.discount || 0);
+          const taxableAmt = Math.max(0, rawAmt - discAmt);
+          const brand = getItemBrand(item);
+          const subUnit = getItemSubUnit(item);
+          const conversionRate = getItemConversionRate(item);
+          const baseUnit = getItemBaseUnit(item);
+          const metaParts: string[] = [];
+          if (brand) metaParts.push(`Brand: <strong>${brand}</strong>`);
+          if (subUnit) {
+            const convInfo =
+              conversionRate && Number(conversionRate) > 1
+                ? ` (1 ${baseUnit} = ${conversionRate} ${subUnit})`
+                : '';
+            metaParts.push(`Sub Unit: <strong>${subUnit}${convInfo}</strong>`);
+          } else if (conversionRate && Number(conversionRate) > 1) {
+            metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
+          }
+          const metaLine = metaParts.length > 0 ? `<div style="font-size: 8.5px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+
+          return `
+            <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
+              <td style="text-align: center;">${globalIdx}</td>
+              <td style="font-weight: 600;">
+                <div>${item.productName || 'Item'}</div>
+                ${metaLine}
+              </td>
+              ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
+              <td style="text-align: center;">${item.quantity}</td>
+              <td style="text-align: center;">
+                ${item.unit || 'Pcs'}
+                ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
+              </td>
+              <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
+              <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
+              ${showTaxBreakdown ? `
+                <td style="text-align: right;">${taxableAmt.toFixed(2)}</td>
+                <td style="text-align: center;">${item.gst || 0}%</td>
+              ` : ''}
+              <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+
+    ${!isLastPage ? `
+      <div class="continuation-note">
+        Continued on Page ${pageIdx + 2} of ${totalPagesLs} &rarr;
+      </div>
+    ` : `
+      <div class="bottom-grid">
+        <div class="bottom-left">
+          <div class="words-box">
+            <strong>Invoice Amount in Words:</strong><br/>
+            <em>${words}</em>
+          </div>
+
+          ${isWholesale && showBankDetails ? `
+            <div class="bank-box">
+              <div class="bank-title">BANK DETAILS FOR WIRE TRANSFER / NEFT:</div>
+              <div>Bank: <strong>${business.bankName || ''}</strong> | A/C No: <strong>${business.accountNumber || ''}</strong></div>
+              <div>IFSC: <strong>${business.ifscCode || ''}</strong> | Branch: <strong>${business.branch || ''}</strong></div>
+            </div>
+          ` : ''}
+
+          ${showTerms ? `
+            <div class="terms-box">
+              <strong>Terms & Conditions:</strong><br/>
+              1. Payment due upon receipt of invoice.<br/>
+              2. Goods once sold will not be returned or exchanged without original invoice.<br/>
+              3. All disputes subject to local court jurisdiction.
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="bottom-right">
+          <table class="totals-table">
+            <tr>
+              <td style="color: #64748b;">Subtotal:</td>
+              <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
+            </tr>
+            ${discount > 0 ? `
+              <tr>
+                <td style="color: #64748b;">Discount:</td>
+                <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
+              </tr>
             ` : ''}
-            <td style="text-align: right; font-weight: bold;">${Number(item.total).toFixed(2)}</td>
-          </tr>
-        `;
-      }).join('')}
-    </tbody>
-  </table>
+            ${showTaxBreakdown && gst > 0 ? `
+              <tr>
+                <td style="color: #64748b;">CGST:</td>
+                <td style="text-align: right;">₹${cgstAmount.toFixed(2)}</td>
+              </tr>
+              <tr>
+                <td style="color: #64748b;">SGST:</td>
+                <td style="text-align: right;">₹${sgstAmount.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr class="grand-total-row">
+              <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}</td>
+              <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: bold;">₹${total.toFixed(2)}</td>
+            </tr>
+            ${isBalanceActive && previousDue > 0 ? `
+              <tr>
+                <td style="color: #dc2626; font-weight: bold;">Previous Due Balance:</td>
+                <td style="text-align: right; color: #dc2626; font-weight: bold;">+₹${previousDue.toFixed(2)}</td>
+              </tr>
+              <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
+                <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">TOTAL PAYABLE:</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10.5px;">₹${totalPayable.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            ${isBalanceActive && advancePayment > 0 ? `
+              <tr>
+                <td style="color: #16a34a; font-weight: bold;">Previous Advance Available:</td>
+                <td style="text-align: right; color: #16a34a; font-weight: bold;">-₹${adjustedAdvance.toFixed(2)}</td>
+              </tr>
+              <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
+                <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">NET PAYABLE:</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10.5px;">₹${netPayable.toFixed(2)}</td>
+              </tr>
+            ` : ''}
+            <tr>
+              <td style="color: #64748b;">Amount Received:</td>
+              <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#059669'}; font-weight: bold;">₹${paid.toFixed(2)}</td>
+            </tr>
+            ${isBalanceActive && previousDue > 0 ? `
+              <tr>
+                <td style="color: #64748b; font-weight: bold;">Net Balance Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
+              </tr>
+            ` : isBalanceActive && advancePayment > 0 ? `
+              <tr>
+                <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
+              </tr>
+              ${remainingAdvance > 0 ? `
+              <tr>
+                <td style="color: #2563eb; font-weight: bold;">Remaining Advance:</td>
+                <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
+              </tr>
+              ` : ''}
+            ` : `
+              <tr>
+                <td style="color: #64748b;">Balance Due:</td>
+                <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
+              </tr>
+            `}
+          </table>
 
-  <div class="bottom-grid">
-    <div class="bottom-left">
-      <div class="words-box">
-        <strong>Invoice Amount in Words:</strong><br/>
-        <em>${words}</em>
+          ${showQrCode ? `
+            <div class="qr-inline">
+              ${qrImageHtml}
+              <div>
+                <div style="font-weight: bold; font-size: 8.5px;">Scan to Pay UPI</div>
+                <div style="font-size: 8px; color: #64748b;">${business.upiId || ''}</div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
 
-      ${isWholesale && showBankDetails ? `
-        <div class="bank-box">
-          <div class="bank-title">BANK DETAILS FOR WIRE TRANSFER / NEFT:</div>
-          <div>Bank: <strong>${business.bankName || ''}</strong> | A/C No: <strong>${business.accountNumber || ''}</strong></div>
-          <div>IFSC: <strong>${business.ifscCode || ''}</strong> | Branch: <strong>${business.branch || ''}</strong></div>
-        </div>
-      ` : ''}
-
-      ${showTerms ? `
-        <div class="terms-box">
-          <strong>Terms & Conditions:</strong><br/>
-          1. Payment due upon receipt of invoice.<br/>
-          2. Goods once sold will not be returned or exchanged without original invoice.<br/>
-          3. All disputes subject to local court jurisdiction.
-        </div>
-      ` : ''}
-    </div>
-
-    <div class="bottom-right">
-      <table class="totals-table">
-        <tr>
-          <td style="color: #64748b;">Subtotal:</td>
-          <td style="text-align: right;">₹${subtotal.toFixed(2)}</td>
-        </tr>
-        ${discount > 0 ? `
-          <tr>
-            <td style="color: #64748b;">Discount:</td>
-            <td style="text-align: right; color: #dc2626;">-₹${discount.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        ${showTaxBreakdown && gst > 0 ? `
-          <tr>
-            <td style="color: #64748b;">CGST:</td>
-            <td style="text-align: right;">₹${cgstAmount.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td style="color: #64748b;">SGST:</td>
-            <td style="text-align: right;">₹${sgstAmount.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        <tr class="grand-total-row">
-          <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}</td>
-          <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: bold;">₹${total.toFixed(2)}</td>
-        </tr>
-        ${isBalanceActive && previousDue > 0 ? `
-          <tr>
-            <td style="color: #dc2626; font-weight: bold;">Previous Due Balance:</td>
-            <td style="text-align: right; color: #dc2626; font-weight: bold;">+₹${previousDue.toFixed(2)}</td>
-          </tr>
-          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
-            <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">TOTAL PAYABLE:</td>
-            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10.5px;">₹${totalPayable.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        ${isBalanceActive && advancePayment > 0 ? `
-          <tr>
-            <td style="color: #16a34a; font-weight: bold;">Previous Advance Available:</td>
-            <td style="text-align: right; color: #16a34a; font-weight: bold;">-₹${adjustedAdvance.toFixed(2)}</td>
-          </tr>
-          <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
-            <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">NET PAYABLE:</td>
-            <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10.5px;">₹${netPayable.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-        <tr>
-          <td style="color: #64748b;">Amount Received:</td>
-          <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#059669'}; font-weight: bold;">₹${paid.toFixed(2)}</td>
-        </tr>
-        ${isBalanceActive && previousDue > 0 ? `
-          <tr>
-            <td style="color: #64748b; font-weight: bold;">Net Balance Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#dc2626' : '#64748b')};">₹${netBalanceDue.toFixed(2)}</td>
-          </tr>
-        ` : isBalanceActive && advancePayment > 0 ? `
-          <tr>
-            <td style="color: #64748b; font-weight: bold;">Balance Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#dc2626' : '#64748b')};">₹${netDue.toFixed(2)}</td>
-          </tr>
-          ${remainingAdvance > 0 ? `
-          <tr>
-            <td style="color: #2563eb; font-weight: bold;">Remaining Advance:</td>
-            <td style="text-align: right; font-weight: bold; color: #2563eb;">₹${remainingAdvance.toFixed(2)}</td>
-          </tr>
-          ` : ''}
-        ` : `
-          <tr>
-            <td style="color: #64748b;">Balance Due:</td>
-            <td style="text-align: right; font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : (due > 0 ? '#dc2626' : '#64748b')};">₹${due.toFixed(2)}</td>
-          </tr>
-        `}
-      </table>
-
-      ${showQrCode ? `
-        <div class="qr-inline">
-          ${qrImageHtml}
-          <div>
-            <div style="font-weight: bold; font-size: 8.5px;">Scan to Pay UPI</div>
-            <div style="font-size: 8px; color: #64748b;">${business.upiId || ''}</div>
+      ${showSignatures ? `
+        <div class="signatures-row">
+          <div class="sign-box">
+            <div class="sign-line"></div>
+            <div class="sign-label">Customer's Signature</div>
+          </div>
+          <div class="sign-box">
+            <div style="font-size: 8px; font-weight: bold; margin-bottom: 2px;">For ${business.businessName || ''}</div>
+            <div class="sign-line"></div>
+            <div class="sign-label">Authorized Signatory</div>
           </div>
         </div>
       ` : ''}
-    </div>
+    `}
   </div>
-
-  ${showSignatures ? `
-    <div class="signatures-row">
-      <div class="sign-box">
-        <div class="sign-line"></div>
-        <div class="sign-label">Customer's Signature</div>
-      </div>
-      <div class="sign-box">
-        <div style="font-size: 8px; font-weight: bold; margin-bottom: 2px;">For ${business.businessName || ''}</div>
-        <div class="sign-line"></div>
-        <div class="sign-label">Authorized Signatory</div>
-      </div>
-    </div>
-  ` : ''}
+  `;
+}).join('')}
 </body>
 </html>`;
 }
