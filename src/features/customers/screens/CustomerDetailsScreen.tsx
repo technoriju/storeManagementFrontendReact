@@ -91,21 +91,21 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         </View>
 
         {/* Profile Header Card */}
-        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.headerRow, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[styles.avatar, { backgroundColor: '#EFF6FF' }]}>
-                <User size={24} color="#2563EB" />
+        <View style={[styles.card, isMobile && styles.cardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.headerRow, isMobile && { marginBottom: 10 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.avatar, isMobile && styles.avatarMobile, { backgroundColor: '#EFF6FF' }]}>
+                <User size={isMobile ? 18 : 24} color="#2563EB" />
               </View>
               <View>
-                <Text style={[styles.nameText, { color: theme.colors.text }]}>{customer.name}</Text>
-                <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>
+                <Text style={[styles.nameText, isMobile && styles.nameTextMobile, { color: theme.colors.text }]}>{customer.name}</Text>
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 }}>
                   ID: #{customer.id} • CU{String((String(customer.id).charCodeAt(0) || 0) % 999).padStart(3, '0')}
                 </Text>
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={[styles.statusBadge, { backgroundColor: statusBg, borderColor: statusColor }]}>
                 <View style={[styles.dot, { backgroundColor: statusColor }]} />
                 <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
@@ -117,60 +117,61 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
           {/* Balance Spotlight */}
           <View style={[
             styles.balanceSpotlight,
+            isMobile && styles.balanceSpotlightMobile,
             {
               backgroundColor: balance > 0 ? '#FEF2F2' : balance < 0 ? '#ECFDF5' : '#F8FAFC',
               borderColor: balance > 0 ? '#FCA5A5' : balance < 0 ? '#A7F3D0' : theme.colors.border,
             }
           ]}>
             <View>
-              <Text style={styles.balanceLabel}>
+              <Text style={[styles.balanceLabel, isMobile && { fontSize: 9.5 }]}>
                 {balance > 0 ? 'CURRENT DUE BALANCE' : balance < 0 ? 'ADVANCE CREDIT' : 'BALANCE STATUS'}
               </Text>
-              <Text style={[styles.balanceAmount, { color: balanceColor }]}>
+              <Text style={[styles.balanceAmount, isMobile && styles.balanceAmountMobile, { color: balanceColor }]}>
                 {balance < 0 ? `₹${Math.abs(balance).toFixed(2)} Credit` : `₹${balance.toFixed(2)}`}
               </Text>
             </View>
             <View>
-              <Text style={[styles.balanceSub, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.balanceSub, isMobile && { fontSize: 11 }, { color: theme.colors.textSecondary }]}>
                 {balance > 0 ? 'Payment Overdue' : balance < 0 ? 'Advance Paid' : 'All Accounts Cleared'}
               </Text>
             </View>
           </View>
 
           {/* Contact & Business Info Grid */}
-          <View style={[styles.infoGrid, isMobile && { flexDirection: 'column' }]}>
-            <View style={[styles.infoCol, isMobile ? { width: '100%' } : { width: '48%' }]}>
-              <View style={styles.infoRow}>
-                <Mail size={16} color={theme.colors.textSecondary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoKey}>Email Address</Text>
-                  <Text style={[styles.infoVal, { color: theme.colors.text }]}>{customer.email || 'N/A'}</Text>
+          <View style={[styles.infoGrid, isMobile && { flexDirection: 'column', gap: 8 }]}>
+            <View style={[styles.infoCol, isMobile ? { width: '100%', gap: 8 } : { width: '48%' }]}>
+              <View style={[styles.infoRow, isMobile && { gap: 6 }]}>
+                <Mail size={14} color={theme.colors.textSecondary} />
+                <View style={{ flex: 1, flexDirection: isMobile ? 'row' : 'column', justifyContent: 'space-between', alignItems: isMobile ? 'center' : 'flex-start' }}>
+                  <Text style={styles.infoKey}>Email</Text>
+                  <Text style={[styles.infoVal, isMobile && { fontSize: 12 }, { color: theme.colors.text }]}>{customer.email || 'N/A'}</Text>
                 </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <Phone size={16} color={theme.colors.textSecondary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoKey}>Phone Number</Text>
-                  <Text style={[styles.infoVal, { color: theme.colors.text }]}>{customer.phone || 'N/A'}</Text>
+              <View style={[styles.infoRow, isMobile && { gap: 6 }]}>
+                <Phone size={14} color={theme.colors.textSecondary} />
+                <View style={{ flex: 1, flexDirection: isMobile ? 'row' : 'column', justifyContent: 'space-between', alignItems: isMobile ? 'center' : 'flex-start' }}>
+                  <Text style={styles.infoKey}>Phone</Text>
+                  <Text style={[styles.infoVal, isMobile && { fontSize: 12 }, { color: theme.colors.text }]}>{customer.phone || 'N/A'}</Text>
                 </View>
               </View>
             </View>
 
-            <View style={[styles.infoCol, isMobile ? { width: '100%' } : { width: '48%' }]}>
-              <View style={styles.infoRow}>
-                <MapPin size={16} color={theme.colors.textSecondary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoKey}>Billing Address</Text>
-                  <Text style={[styles.infoVal, { color: theme.colors.text }]}>{customer.address || 'N/A'}</Text>
+            <View style={[styles.infoCol, isMobile ? { width: '100%', gap: 8 } : { width: '48%' }]}>
+              <View style={[styles.infoRow, isMobile && { gap: 6 }]}>
+                <MapPin size={14} color={theme.colors.textSecondary} />
+                <View style={{ flex: 1, flexDirection: isMobile ? 'row' : 'column', justifyContent: 'space-between', alignItems: isMobile ? 'center' : 'flex-start' }}>
+                  <Text style={styles.infoKey}>Address</Text>
+                  <Text style={[styles.infoVal, isMobile && { fontSize: 12 }, { color: theme.colors.text }]} numberOfLines={1}>{customer.address || 'N/A'}</Text>
                 </View>
               </View>
 
-              <View style={styles.infoRow}>
-                <FileText size={16} color={theme.colors.textSecondary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.infoKey}>GSTIN / Tax ID</Text>
-                  <Text style={[styles.infoVal, { color: theme.colors.text }]}>{customer.gstin || 'N/A'}</Text>
+              <View style={[styles.infoRow, isMobile && { gap: 6 }]}>
+                <FileText size={14} color={theme.colors.textSecondary} />
+                <View style={{ flex: 1, flexDirection: isMobile ? 'row' : 'column', justifyContent: 'space-between', alignItems: isMobile ? 'center' : 'flex-start' }}>
+                  <Text style={styles.infoKey}>GSTIN</Text>
+                  <Text style={[styles.infoVal, isMobile && { fontSize: 12 }, { color: theme.colors.text }]}>{customer.gstin || 'N/A'}</Text>
                 </View>
               </View>
             </View>
@@ -178,29 +179,29 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         </View>
 
         {/* Action Buttons Toolbar */}
-        <View style={[styles.actionsBar, isMobile && { flexDirection: 'column' }]}>
+        <View style={[styles.actionsBar, isMobile && { flexDirection: 'row', gap: 8 }]}>
           <TouchableOpacity 
-            style={[styles.actionBtn, { backgroundColor: '#F97316' }, isMobile && { width: '100%' }]} 
+            style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#F97316' }]} 
             onPress={() => onNavigate ? onNavigate('form', customer.id) : navigation?.navigate('CustomerForm', { id: customer.id })}
           >
-            <Edit size={16} color="white" />
-            <Text style={styles.actionBtnText}>Edit Customer</Text>
+            <Edit size={14} color="white" />
+            <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>Edit</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.actionBtn, { backgroundColor: '#10B981' }, isMobile && { width: '100%' }]} 
+            style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#10B981' }]} 
             onPress={() => onNavigate ? onNavigate('payment_form', customer.id, { entityType: 'customer', paymentType: 'receive' }) : navigation?.navigate('PaymentForm', { customerId: customer.id })}
           >
-            <CreditCard size={16} color="white" />
-            <Text style={styles.actionBtnText}>Receive Payment</Text>
+            <CreditCard size={14} color="white" />
+            <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>Receive</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.actionBtn, { backgroundColor: '#2563EB' }, isMobile && { width: '100%' }]} 
+            style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#2563EB' }]} 
             onPress={() => onNavigate ? onNavigate('payment_history', customer.id) : navigation?.navigate('PaymentHistory', { customerId: customer.id })}
           >
-            <History size={16} color="white" />
-            <Text style={styles.actionBtnText}>Payment History</Text>
+            <History size={14} color="white" />
+            <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>History</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -340,6 +341,34 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 13,
+  },
+  cardMobile: {
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 8,
+  },
+  avatarMobile: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  nameTextMobile: {
+    fontSize: 15,
+  },
+  balanceSpotlightMobile: {
+    padding: 10,
+    marginBottom: 12,
+  },
+  balanceAmountMobile: {
+    fontSize: 16,
+  },
+  actionBtnMobile: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minWidth: 80,
+  },
+  actionBtnTextMobile: {
+    fontSize: 12,
   },
 });
 

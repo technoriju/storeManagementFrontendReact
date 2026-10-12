@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { ReportsService, ReportFilters } from '../services/reports.service';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { ProfitLossView } from '../components/ProfitLossView';
@@ -84,6 +85,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 }) => {
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  const { isMobile, windowWidth } = useResponsive();
 
   // Normalize initial report ID
   const normalizedInitial = useMemo(() => {
@@ -773,38 +775,320 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
   }, [activeReportId, theme]);
 
+  const renderReportCard = (item: any) => {
+    switch (activeReportId) {
+      case 'sales_report':
+      case 'invoice_report': {
+        const invNum = item.invoiceNumber || `INV-${item.id || ''}`;
+        const total = Number(item.total ?? item.grandTotal ?? 0);
+        const paid = Number(item.paid ?? item.paidAmount ?? 0);
+        const due = Number(item.due ?? item.dueAmount ?? 0);
+        const customerName = item.customerName || item.customer?.name || (item.customerId ? `Customer #${item.customerId}` : 'Walk-in Customer');
+        const mode = item.paymentMethod || 'Cash';
+        const date = item.date || '';
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{invNum}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>{customerName}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.cardAmount, { color: theme.colors.text }]}>₹{total.toLocaleString()}</Text>
+                {renderStatusBadge(item.paymentStatus || (due > 0 ? 'PARTIAL' : 'PAID'))}
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{date} • {mode}</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '600' }}>Paid: ₹{paid.toLocaleString()}</Text>
+                {due > 0 ? (
+                  <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>Due: ₹{due.toLocaleString()}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        );
+      }
+
+      case 'purchase_report': {
+        const billNum = item.invoiceNumber || `PO-${item.id || ''}`;
+        const total = Number(item.total || 0);
+        const paid = Number(item.paid || 0);
+        const due = Number(item.due || 0);
+        const supplierName = item.supplierName || item.supplier?.name || (item.supplierId ? `Supplier #${item.supplierId}` : 'Supplier');
+        const date = item.date || '';
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{billNum}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>{supplierName}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.cardAmount, { color: theme.colors.text }]}>₹{total.toLocaleString()}</Text>
+                {renderStatusBadge(item.paymentStatus || (due > 0 ? 'PENDING' : 'PAID'))}
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{date} • {item.itemsCount || 1} items</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '600' }}>Paid: ₹{paid.toLocaleString()}</Text>
+                {due > 0 ? (
+                  <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>Due: ₹{due.toLocaleString()}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        );
+      }
+
+      case 'inventory_report': {
+        const sku = item.sku || 'N/A';
+        const name = item.name || 'Product';
+        const stock = item.stockWithUnits || `${item.stockQuantity || 0} Units`;
+        const valuation = Number(item.stockValuation || 0);
+        const category = item.category || item.categoryName || 'General';
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>SKU: {sku} • {category}</Text>
+              </View>
+              {renderStatusBadge(item.status || 'IN_STOCK')}
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.text }}>Stock: {stock}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.primary }}>Val: ₹{valuation.toLocaleString()}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      case 'customer_report': {
+        const name = item.customerName || item.name || 'Customer';
+        const code = item.customerCode || (item.id ? `CU-${item.id}` : '');
+        const billed = Number(item.totalBilled || 0);
+        const due = Number(item.outstandingBalance || 0);
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>{code} {item.phone ? `• ${item.phone}` : ''}</Text>
+              </View>
+              <Pressable
+                style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, paddingVertical: 3, paddingHorizontal: 6 }]}
+                onPress={() => {
+                  if (item.id) setSelectedCustomerId(item.id);
+                  handleSelectTab('customer_wise');
+                }}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 10.5, fontWeight: '700' }}>Statement</Text>
+                <ChevronRight size={11} color={theme.colors.primary} />
+              </Pressable>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Billed: ₹{billed.toLocaleString()}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: due > 0 ? '#EF4444' : '#10B981' }}>
+                Due: ₹{due.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+
+      case 'supplier_report': {
+        const name = item.supplierName || item.name || 'Supplier';
+        const code = item.supplierCode || (item.id ? `SU-${item.id}` : '');
+        const purchased = Number(item.totalPurchased || 0);
+        const due = Number(item.outstandingBalance || 0);
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>{code} {item.phone ? `• ${item.phone}` : ''}</Text>
+              </View>
+              <Pressable
+                style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, paddingVertical: 3, paddingHorizontal: 6 }]}
+                onPress={() => {
+                  if (item.id) setSelectedSupplierId(item.id);
+                  handleSelectTab('supplier_wise');
+                }}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 10.5, fontWeight: '700' }}>Statement</Text>
+                <ChevronRight size={11} color={theme.colors.primary} />
+              </Pressable>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Purchased: ₹{purchased.toLocaleString()}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: due > 0 ? '#EF4444' : '#10B981' }}>
+                Due: ₹{due.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+        );
+      }
+
+      case 'product_report': {
+        const name = item.name || 'Product';
+        const sku = item.sku || 'N/A';
+        const revenue = Number(item.revenue || 0);
+        const profit = Number(item.profit || 0);
+        const margin = item.margin || 0;
+        const sold = item.unitsSold || 0;
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>SKU: {sku} • Sold: {sold}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>+₹{profit.toLocaleString()}</Text>
+                <Text style={{ fontSize: 10, color: '#10B981', fontWeight: '600' }}>{margin}% margin</Text>
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Revenue: ₹{revenue.toLocaleString()}</Text>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Stock: {item.currentStock || 0}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      case 'payment_report': {
+        const voucher = item.voucherNo || `PAY-${item.id || ''}`;
+        const date = item.date || '';
+        const party = item.partyName || (item.type === 'Receipt' ? 'Customer' : 'Supplier');
+        const inflow = Number(item.inflow || 0);
+        const outflow = Number(item.outflow || 0);
+        const mode = item.paymentMethod || 'Cash';
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{voucher}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>{party} • {mode}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: inflow > 0 ? '#10B981' : '#EF4444' }}>
+                  {inflow > 0 ? `+₹${inflow.toLocaleString()}` : `-₹${outflow.toLocaleString()}`}
+                </Text>
+                {renderStatusBadge(item.type || (inflow > 0 ? 'Receipt' : 'Payment'))}
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{date}</Text>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Ref: {item.reference || '-'}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      case 'expense_report':
+      case 'income_report': {
+        const voucher = item.voucherNo || `VOUCH-${item.id || ''}`;
+        const date = item.date || '';
+        const cat = item.category || 'General';
+        const party = item.vendor || item.receivedFrom || '';
+        const amount = Number(item.amount || 0);
+        const isIncome = activeReportId === 'income_report';
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{cat}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>{voucher} {party ? `• ${party}` : ''}</Text>
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isIncome ? '#10B981' : '#EF4444' }}>
+                {isIncome ? `+₹${amount.toLocaleString()}` : `₹${amount.toLocaleString()}`}
+              </Text>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{date} • {item.paymentMethod || 'Cash'}</Text>
+              {item.description ? (
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary, maxWidth: 140 }} numberOfLines={1}>{item.description}</Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      }
+
+      case 'tax_report': {
+        const invNum = item.invoiceNumber || `INV-${item.id || ''}`;
+        const date = item.date || '';
+        const party = item.partyName || 'Party';
+        const totalGst = Number(item.totalGst || 0);
+        const taxable = Number(item.taxableValue || 0);
+
+        return (
+          <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{invNum}</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>{party} • {item.type || 'SALE'}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#7C3AED' }}>GST: ₹{totalGst.toLocaleString()}</Text>
+                {renderStatusBadge(item.type || 'SALE')}
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{date}</Text>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Taxable: ₹{taxable.toLocaleString()}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      default:
+        return null;
+    }
+  };
+
   // Header action buttons
   const headerActions = (
-    <View style={styles.actionButtonsRow}>
+    <View style={[styles.actionButtonsRow, isMobile && styles.actionButtonsRowMobile]}>
       <Pressable
-        style={[styles.iconButton, { borderColor: theme.colors.border }]}
+        style={[styles.iconButton, isMobile && styles.iconButtonMobile, { borderColor: theme.colors.border }]}
         onPress={() => loadReportData()}
       >
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+        <RefreshCw size={isMobile ? 14 : 16} color={theme.colors.textSecondary} />
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
         onPress={() => setIsExportModalVisible(true)}
       >
-        <FileText size={15} color="#EF4444" />
-        <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
+        <FileText size={isMobile ? 13 : 15} color="#EF4444" />
+        <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>PDF</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
         onPress={() => setIsExportModalVisible(true)}
       >
-        <FileSpreadsheet size={15} color="#10B981" />
-        <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
+        <FileSpreadsheet size={isMobile ? 13 : 15} color="#10B981" />
+        <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>Excel</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+        style={[styles.primaryActionBtn, isMobile && styles.primaryActionBtnMobile, { backgroundColor: '#2563EB' }]}
         onPress={() => setIsExportModalVisible(true)}
       >
-        <Printer size={15} color="#FFF" />
-        <Text style={styles.primaryActionText}>Print</Text>
+        <Printer size={isMobile ? 13 : 15} color="#FFF" />
+        <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>Print</Text>
       </Pressable>
     </View>
   );
@@ -825,7 +1109,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       
       {/* 1. Top Report Category / Tabs Scrollbar */}
       <View style={[styles.topTabsBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topTabsContent}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.topTabsContent, isMobile && styles.topTabsContentMobile]}>
           {REPORT_TABS.map((tab) => {
             const isSelected = activeReportId === tab.id;
             const TabIcon = tab.icon;
@@ -835,6 +1119,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 key={tab.id}
                 style={[
                   styles.tabChip,
+                  isMobile && styles.tabChipMobile,
                   isSelected && {
                     backgroundColor: '#FFF4EC',
                     borderColor: '#F89344',
@@ -843,12 +1128,13 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 onPress={() => handleSelectTab(tab.id)}
               >
                 <TabIcon
-                  size={16}
+                  size={isMobile ? 14 : 16}
                   color={isSelected ? '#F89344' : theme.colors.textSecondary}
                 />
                 <Text
                   style={[
                     styles.tabChipText,
+                    isMobile && styles.tabChipTextMobile,
                     { color: isSelected ? '#F89344' : theme.colors.textSecondary },
                     isSelected && styles.tabChipTextActive,
                   ]}
@@ -862,7 +1148,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       </View>
 
       {/* Main Content Area */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]} showsVerticalScrollIndicator={false}>
         
         {/* 2. Contextual KPI Cards Bar */}
         {reportKPIs.length > 0 &&
@@ -870,7 +1156,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           activeReportId !== 'annual_report' &&
           activeReportId !== 'customer_wise' &&
           activeReportId !== 'supplier_wise' && (
-          <View style={styles.kpiGrid}>
+          <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
             {reportKPIs.map((kpi, idx) => {
               const IconComp = kpi.icon;
               return (
@@ -878,16 +1164,17 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   key={idx}
                   style={[
                     styles.kpiCard,
+                    isMobile && styles.kpiCardMobile,
                     { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
                   ]}
                 >
-                  <View style={[styles.kpiIconBox, { backgroundColor: kpi.bg }]}>
-                    <IconComp size={20} color={kpi.color} />
+                  <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: kpi.bg }]}>
+                    <IconComp size={isMobile ? 16 : 20} color={kpi.color} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>{kpi.title}</Text>
-                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpi.value}</Text>
-                    <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>{kpi.sub}</Text>
+                    <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>{kpi.title}</Text>
+                    <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{kpi.value}</Text>
+                    <Text style={[styles.kpiSub, isMobile && styles.kpiSubMobile, { color: theme.colors.textSecondary }]}>{kpi.sub}</Text>
                   </View>
                 </View>
               );
@@ -941,6 +1228,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               filters={dateFilters}
               isLoading={isLoading}
               hasCheckbox={false}
+              renderMobileCard={renderReportCard}
               page={page}
               rowsPerPage={rowsPerPage}
               totalItems={totalItems}
@@ -982,6 +1270,11 @@ const styles = StyleSheet.create({
     gap: 8,
     flexDirection: 'row',
   },
+  topTabsContentMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
   tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -992,9 +1285,18 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     gap: 8,
   },
+  tabChipMobile: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 5,
+  },
   tabChipText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  tabChipTextMobile: {
+    fontSize: 11.5,
   },
   tabChipTextActive: {
     fontWeight: '700',
@@ -1003,10 +1305,17 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
+  scrollContentMobile: {
+    padding: 8,
+    gap: 10,
+  },
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+  kpiGridMobile: {
+    gap: 8,
   },
   kpiCard: {
     flex: 1,
@@ -1018,6 +1327,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  kpiCardMobile: {
+    minWidth: '47%',
+    padding: 9,
+    borderRadius: 8,
+    gap: 8,
+  },
   kpiIconBox: {
     width: 44,
     height: 44,
@@ -1025,18 +1340,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  kpiIconBoxMobile: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
   kpiLabel: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  kpiLabelMobile: {
+    fontSize: 10.5,
   },
   kpiValue: {
     fontSize: 18,
     fontWeight: '700',
     marginTop: 2,
   },
+  kpiValueMobile: {
+    fontSize: 14.5,
+    marginTop: 1,
+  },
   kpiSub: {
     fontSize: 11,
     marginTop: 2,
+  },
+  kpiSubMobile: {
+    fontSize: 9.5,
+    marginTop: 1,
   },
   tableWrapper: {
     flex: 1,
@@ -1046,12 +1377,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  actionButtonsRowMobile: {
+    gap: 6,
+    flexWrap: 'wrap',
+  },
   iconButton: {
     padding: 8,
     borderRadius: 8,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconButtonMobile: {
+    padding: 6,
+    borderRadius: 6,
   },
   outlineActionBtn: {
     flexDirection: 'row',
@@ -1062,9 +1401,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 6,
   },
+  outlineActionBtnMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
   outlineActionText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  outlineActionTextMobile: {
+    fontSize: 11.5,
   },
   primaryActionBtn: {
     flexDirection: 'row',
@@ -1074,10 +1422,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
   },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
   primaryActionText: {
     color: '#FFF',
     fontSize: 13,
     fontWeight: '600',
+  },
+  primaryActionTextMobile: {
+    fontSize: 11.5,
   },
   dateChipsRow: {
     flexDirection: 'row',
@@ -1117,5 +1474,35 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 9,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  cardTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  cardAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 6,
+    marginTop: 6,
   },
 });

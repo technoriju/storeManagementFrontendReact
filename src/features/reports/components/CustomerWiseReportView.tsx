@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { ReportsService, ReportFilters } from '../services/reports.service';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import {
@@ -45,6 +46,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   onOpenExport,
 }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
 
   // Internal customer selection state
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | string | null>(
@@ -240,20 +242,25 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         </View>
 
         {/* Customer Profile Banner */}
-        <View style={[styles.customerBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.customerBanner, isMobile && styles.customerBannerMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.bannerLeft}>
-            <View style={[styles.avatarBox, { backgroundColor: '#EFF6FF' }]}>
-              <Users size={24} color="#2563EB" />
+            <View style={[styles.avatarBox, isMobile && styles.avatarBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+              <Users size={isMobile ? 18 : 24} color="#2563EB" />
             </View>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={[styles.customerName, { color: theme.colors.text }]}>{cust.name}</Text>
+            <View style={{ flexShrink: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={[styles.customerName, isMobile && styles.customerNameMobile, { color: theme.colors.text }]}>{cust.name}</Text>
                 {renderStatusBadge(summ.outstandingBalance > 0 ? 'Overdue' : 'Clear')}
               </View>
               <Text style={[styles.customerSub, { color: theme.colors.textSecondary }]}>
-                ID: {cust.customerCode || 'CU-' + cust.id} • Phone: {cust.phone || 'N/A'} • GSTIN: {cust.gstin || 'Unregistered'}
+                ID: {cust.customerCode || 'CU-' + cust.id} • {cust.phone || 'N/A'}
               </Text>
-              {cust.address ? (
+              {!isMobile && cust.gstin ? (
+                <Text style={[styles.customerSub, { color: theme.colors.textSecondary }]}>
+                  GSTIN: {cust.gstin}
+                </Text>
+              ) : null}
+              {!isMobile && cust.address ? (
                 <Text style={[styles.customerSub, { color: theme.colors.textSecondary, marginTop: 2 }]}>
                   Address: {cust.address}
                 </Text>
@@ -263,50 +270,50 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         </View>
 
         {/* 4 Metric Cards */}
-        <View style={styles.kpiGrid}>
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <FileText size={18} color="#2563EB" />
+        <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+              <FileText size={isMobile ? 15 : 18} color="#2563EB" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Invoices</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{summ.totalOrders}</Text>
-              <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>{dateRangeLabel}</Text>
-            </View>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <TrendingUp size={18} color="#10B981" />
-            </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Billed</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>₹{Number(summ.totalBilled || 0).toLocaleString()}</Text>
-              <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Invoiced sales</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Invoices</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{summ.totalOrders}</Text>
+              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>{dateRangeLabel}</Text>}
             </View>
           </View>
 
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#F0FDF4' }]}>
-              <CheckCircle size={18} color="#10B981" />
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
+              <TrendingUp size={isMobile ? 15 : 18} color="#10B981" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Collections Paid</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>₹{Number(summ.totalPaid || 0).toLocaleString()}</Text>
-              <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Settled payments</Text>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Billed</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{Number(summ.totalBilled || 0).toLocaleString()}</Text>
+              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Invoiced sales</Text>}
             </View>
           </View>
 
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <AlertTriangle size={18} color="#EF4444" />
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F0FDF4' }]}>
+              <CheckCircle size={isMobile ? 15 : 18} color="#10B981" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Balance Due</Text>
-              <Text style={[styles.kpiValue, { color: Number(summ.outstandingBalance || 0) > 0 ? '#EF4444' : theme.colors.text }]}>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Paid</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{Number(summ.totalPaid || 0).toLocaleString()}</Text>
+              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Settled payments</Text>}
+            </View>
+          </View>
+
+          <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
+              <AlertTriangle size={isMobile ? 15 : 18} color="#EF4444" />
+            </View>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Due</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: Number(summ.outstandingBalance || 0) > 0 ? '#EF4444' : theme.colors.text }]}>
                 ₹{Number(summ.outstandingBalance || 0).toLocaleString()}
               </Text>
-              <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Receivables pending</Text>
+              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Receivables pending</Text>}
             </View>
           </View>
         </View>
@@ -394,6 +401,29 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             onSearch={setTransactionSearchQuery}
             debounceSearchMs={400}
             hasCheckbox={false}
+            renderMobileCard={(item) => (
+              <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <View style={styles.cardTopRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{item.invoiceNumber}</Text>
+                    <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>{item.date}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.cardAmount, { color: theme.colors.text }]}>₹{Number(item.total || 0).toLocaleString()}</Text>
+                    {renderStatusBadge(item.paymentStatus)}
+                  </View>
+                </View>
+                <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>GST: ₹{Number(item.tax || 0).toLocaleString()}</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '600' }}>Paid: ₹{Number(item.paid || 0).toLocaleString()}</Text>
+                    {Number(item.due || 0) > 0 ? (
+                      <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>Due: ₹{Number(item.due || 0).toLocaleString()}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            )}
             isLoading={isLoading}
           />
         ) : (
@@ -412,6 +442,22 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             onSearch={setTransactionSearchQuery}
             debounceSearchMs={400}
             hasCheckbox={false}
+            renderMobileCard={(item) => (
+              <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <View style={styles.cardTopRow}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>{item.voucherNo}</Text>
+                    <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>{item.date} • {item.paymentMethod || 'Cash'}</Text>
+                  </View>
+                  <Text style={[styles.cardAmount, { color: '#10B981' }]}>+₹{Number(item.amount || 0).toLocaleString()}</Text>
+                </View>
+                {item.reference ? (
+                  <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+                    <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Ref: {item.reference}</Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
             isLoading={isLoading}
           />
         )}
@@ -488,48 +534,48 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
       )}
 
       {/* Overview Metric Cards */}
-      <View style={styles.kpiGrid}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
-            <Users size={18} color="#2563EB" />
+      <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+            <Users size={isMobile ? 15 : 18} color="#2563EB" />
           </View>
-          <View>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Customers</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{totalAllCount}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Accounts in record</Text>
-          </View>
-        </View>
-
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-            <TrendingUp size={18} color="#10B981" />
-          </View>
-          <View>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Billed</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>₹{totalAllBilled.toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Sales turnover</Text>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Customers</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{totalAllCount}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Accounts in record</Text>}
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#F0FDF4' }]}>
-            <CheckCircle size={18} color="#10B981" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
+            <TrendingUp size={isMobile ? 15 : 18} color="#10B981" />
           </View>
-          <View>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Collections</Text>
-            <Text style={[styles.kpiValue, { color: '#10B981' }]}>₹{totalAllPaid.toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Total received</Text>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Total Billed</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{totalAllBilled.toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Sales turnover</Text>}
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
-            <AlertTriangle size={18} color="#EF4444" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F0FDF4' }]}>
+            <CheckCircle size={isMobile ? 15 : 18} color="#10B981" />
           </View>
-          <View>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Receivables Due</Text>
-            <Text style={[styles.kpiValue, { color: '#EF4444' }]}>₹{totalAllDue.toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Outstanding balance</Text>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Collections</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{totalAllPaid.toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Total received</Text>}
+          </View>
+        </View>
+
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
+            <AlertTriangle size={isMobile ? 15 : 18} color="#EF4444" />
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Receivables Due</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#EF4444' }]}>₹{totalAllDue.toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Outstanding balance</Text>}
           </View>
         </View>
       </View>
@@ -579,6 +625,38 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           setOverviewPage(1);
         }}
         hasCheckbox={false}
+        renderMobileCard={(item) => (
+          <Pressable
+            style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+            onPress={() => handleChooseCustomer(item.id)}
+          >
+            <View style={styles.cardTopRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  {(item.customerName && String(item.customerName).trim()) || (item.name && String(item.name).trim()) || 'Customer'}
+                </Text>
+                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                  {item.customerCode || 'CU-' + item.id} • {item.phone || 'No phone'}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.cardAmount, { color: Number(item.outstandingBalance) > 0 ? '#EF4444' : theme.colors.text }]}>
+                  ₹{Number(item.outstandingBalance || 0).toLocaleString()}
+                </Text>
+                <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Bal Due</Text>
+              </View>
+            </View>
+            <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                Billed: ₹{Number(item.totalBilled || 0).toLocaleString()} • Paid: ₹{Number(item.totalPaid || 0).toLocaleString()}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {renderStatusBadge(item.status)}
+                <ChevronRight size={14} color={theme.colors.primary} />
+              </View>
+            </View>
+          </Pressable>
+        )}
         isLoading={isLoading}
       />
     </View>
@@ -830,5 +908,68 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  kpiGridMobile: {
+    gap: 8,
+  },
+  kpiCardMobile: {
+    minWidth: '47%',
+    padding: 8,
+    gap: 8,
+    borderRadius: 8,
+  },
+  kpiIconBoxMobile: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+  },
+  kpiLabelMobile: {
+    fontSize: 10,
+  },
+  kpiValueMobile: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  customerBannerMobile: {
+    padding: 10,
+    borderRadius: 8,
+  },
+  avatarBoxMobile: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  customerNameMobile: {
+    fontSize: 15,
+  },
+  mobileCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 9,
+    gap: 6,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  cardAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 6,
+    borderTopWidth: 1,
   },
 });

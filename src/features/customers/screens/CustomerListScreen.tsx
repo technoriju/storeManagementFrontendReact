@@ -268,44 +268,43 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
       <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         <View style={styles.cardHeader}>
           <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
-              {displayName}
-            </Text>
-            <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-              {code}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text, flexShrink: 1 }]} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                {code}
+              </Text>
+            </View>
+            <View style={[styles.cardMetaRow, { marginTop: 4, marginBottom: 0 }]}>
+              <View style={[styles.statusBadge, { backgroundColor: statusBg, borderColor: statusColor }]}>
+                <View style={[styles.dot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
+              </View>
+              {item.phone ? (
+                <View style={styles.contactItem}>
+                  <Phone size={11} color={theme.colors.textSecondary} />
+                  <Text style={[styles.contactText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                    {item.phone}
+                  </Text>
+                </View>
+              ) : null}
+              {item.email ? (
+                <View style={styles.contactItem}>
+                  <Mail size={11} color={theme.colors.textSecondary} />
+                  <Text style={[styles.contactText, { color: theme.colors.textSecondary, maxWidth: 120 }]} numberOfLines={1}>
+                    {item.email}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
           <SyncBadge status={item.syncStatus} />
         </View>
 
-        <View style={styles.cardMetaRow}>
-          <View style={[styles.statusBadge, { backgroundColor: statusBg, borderColor: statusColor }]}>
-            <View style={[styles.dot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
-
-          {item.phone ? (
-            <View style={styles.contactItem}>
-              <Phone size={12} color={theme.colors.textSecondary} />
-              <Text style={[styles.contactText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                {item.phone}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {item.email ? (
-          <View style={[styles.contactItem, { marginBottom: 8 }]}>
-            <Mail size={12} color={theme.colors.textSecondary} />
-            <Text style={[styles.contactText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-              {item.email}
-            </Text>
-          </View>
-        ) : null}
-
         <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
           <View>
-            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Due Balance</Text>
+            <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Due Balance</Text>
             <Text style={[styles.cardBalance, { color: balColor }]}>
               ₹{bal.toFixed(2)}
             </Text>
@@ -316,19 +315,19 @@ export const CustomerListScreen: React.FC<Props> = ({ onNavigate }) => {
               style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => onNavigate('details', item.id)}
             >
-              <Eye size={15} color={theme.colors.textSecondary} />
+              <Eye size={14} color={theme.colors.textSecondary} />
             </Pressable>
             <Pressable
               style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => onNavigate('form', item.id)}
             >
-              <Edit size={15} color="#F59E0B" />
+              <Edit size={14} color="#F59E0B" />
             </Pressable>
             <Pressable
               style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => handleDelete(item)}
             >
-              <Trash2 size={15} color="#EF4444" />
+              <Trash2 size={14} color="#EF4444" />
             </Pressable>
           </View>
         </View>
@@ -436,14 +435,13 @@ const styles = StyleSheet.create({
   mobileCard: {
     borderRadius: 8,
     borderWidth: 1,
-    padding: 12,
-    marginBottom: 10,
+    padding: 9,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   cardTitle: {
     fontSize: 14,
