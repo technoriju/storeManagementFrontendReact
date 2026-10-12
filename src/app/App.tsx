@@ -52,7 +52,7 @@ const AuthenticatedApp = () => {
 
   const renderContent = () => {
     if (activeTab === 'dashboard') {
-      return <DashboardModule />;
+      return <DashboardModule onNavigateTab={setActiveTab} />;
     }
     if (
       activeTab === 'reports' ||

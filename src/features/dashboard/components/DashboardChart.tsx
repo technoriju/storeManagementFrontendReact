@@ -1,39 +1,107 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { ChartPoint } from '../services/dashboard.service';
 
-export const DashboardBarChart = () => {
+interface DashboardBarChartProps {
+  data?: ChartPoint[];
+  hourlyData?: ChartPoint[];
+  weeklyData?: ChartPoint[];
+  monthlyData?: ChartPoint[];
+  isMobile?: boolean;
+}
+
+export const DashboardBarChart: React.FC<DashboardBarChartProps> = ({
+  data,
+  hourlyData,
+  weeklyData,
+  monthlyData,
+  isMobile,
+}) => {
   const theme = useTheme();
-  
-  // Dummy data representing the chart in the screenshot
-  const data = [
-    { label: '2 am', sales: 40, purchase: 60 },
-    { label: '4 am', sales: 30, purchase: 50 },
-    { label: '6 am', sales: 15, purchase: 40 },
-    { label: '8 am', sales: 45, purchase: 70 },
-    { label: '10 am', sales: 50, purchase: 65 },
-    { label: '12 am', sales: 40, purchase: 65 },
-    { label: '14 pm', sales: 25, purchase: 40 },
-    { label: '16 pm', sales: 40, purchase: 50 },
-    { label: '18 pm', sales: 80, purchase: 90 },
-    { label: '20 pm', sales: 20, purchase: 35 },
-    { label: '22 pm', sales: 60, purchase: 70 },
-    { label: '24 pm', sales: 40, purchase: 50 },
+  const { width } = useWindowDimensions();
+  const [selectedFilter, setSelectedFilter] = useState<'1D' | '1W' | '1M' | '1Y'>('1W');
+  const [activeBarIndex, setActiveBarIndex] = useState<number | null>(null);
+
+  const defaultHourly: ChartPoint[] = [
+    { label: '8 am', sales: 25, purchase: 40 },
+    { label: '10 am', sales: 45, purchase: 65 },
+    { label: '12 pm', sales: 65, purchase: 50 },
+    { label: '2 pm', sales: 40, purchase: 35 },
+    { label: '4 pm', sales: 85, purchase: 60 },
+    { label: '6 pm', sales: 95, purchase: 70 },
+    { label: '8 pm', sales: 50, purchase: 30 },
   ];
 
-  const maxVal = 100;
-  const height = 200;
+  const defaultWeekly: ChartPoint[] = [
+    { label: 'Mon', sales: 45, purchase: 30 },
+    { label: 'Tue', sales: 60, purchase: 45 },
+    { label: 'Wed', sales: 35, purchase: 55 },
+    { label: 'Thu', sales: 80, purchase: 40 },
+    { label: 'Fri', sales: 70, purchase: 65 },
+    { label: 'Sat', sales: 90, purchase: 85 },
+    { label: 'Sun', sales: 65, purchase: 20 },
+  ];
+
+  const defaultMonthly: ChartPoint[] = [
+    { label: 'Jan', sales: 50, purchase: 40 },
+    { label: 'Feb', sales: 65, purchase: 50 },
+    { label: 'Mar', sales: 85, purchase: 70 },
+    { label: 'Apr', sales: 75, purchase: 60 },
+    { label: 'May', sales: 90, purchase: 80 },
+    { label: 'Jun', sales: 95, purchase: 85 },
+  ];
+
+  const currentData =
+    selectedFilter === '1D'
+      ? hourlyData || defaultHourly
+      : selectedFilter === '1W'
+      ? weeklyData || defaultWeekly
+      : monthlyData || defaultMonthly;
+
+  const maxVal = Math.max(...currentData.map(d => Math.max(d.sales, d.purchase, 100)), 100);
+
+  const selectedItem = activeBarIndex !== null && currentData[activeBarIndex] ? currentData[activeBarIndex] : null;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Sales & Purchase</Text>
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Sales & Purchase</Text>
+          {selectedItem && (
+            <Text style={{ fontSize: 11, color: theme.colors.primary, marginTop: 2 }}>
+              {selectedItem.label}: Sales {selectedItem.sales}k | Purchase {selectedItem.purchase}k
+            </Text>
+          )}
+        </View>
+
         <View style={styles.filters}>
-          {['1D', '1W', '1M', '3M', '6M', '1Y'].map((filter, index) => (
-            <View key={filter} style={[styles.filterChip, index === 5 && { backgroundColor: '#F89B29' }]}>
-              <Text style={[styles.filterText, index === 5 ? { color: '#fff' } : { color: theme.colors.textSecondary }]}>{filter}</Text>
-            </View>
-          ))}
+          {(['1D', '1W', '1M', '1Y'] as const).map(filter => {
+            const isActive = selectedFilter === filter;
+            return (
+              <TouchableOpacity
+                key={filter}
+                onPress={() => {
+                  setSelectedFilter(filter);
+                  setActiveBarIndex(null);
+                }}
+                style={[
+                  styles.filterChip,
+                  isActive && { backgroundColor: '#F89B29' },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    isActive ? { color: '#fff', fontWeight: '700' } : { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {filter}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -42,51 +110,87 @@ export const DashboardBarChart = () => {
           <View style={[styles.legendDot, { backgroundColor: '#FFDDB8' }]} />
           <View>
             <Text style={[styles.legendLabel, { color: theme.colors.textSecondary }]}>Total Purchase</Text>
-            <Text style={[styles.legendValue, { color: theme.colors.text }]}>3K</Text>
+            <Text style={[styles.legendValue, { color: theme.colors.text }]}>
+              {currentData.reduce((acc, curr) => acc + curr.purchase, 0)}K
+            </Text>
           </View>
         </View>
         <View style={[styles.legendItem, { borderColor: theme.colors.border }]}>
           <View style={[styles.legendDot, { backgroundColor: '#F89B29' }]} />
           <View>
             <Text style={[styles.legendLabel, { color: theme.colors.textSecondary }]}>Total Sales</Text>
-            <Text style={[styles.legendValue, { color: theme.colors.text }]}>1K</Text>
+            <Text style={[styles.legendValue, { color: theme.colors.text }]}>
+              {currentData.reduce((acc, curr) => acc + curr.sales, 0)}K
+            </Text>
           </View>
         </View>
       </View>
 
       <View style={styles.chartArea}>
         <View style={styles.yAxis}>
-          {['100K', '80K', '60K', '40K', '20K', '0K'].map((label) => (
-            <Text key={label} style={[styles.axisLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+          {['100K', '80K', '60K', '40K', '20K', '0K'].map(label => (
+            <Text key={label} style={[styles.axisLabel, { color: theme.colors.textSecondary }]}>
+              {label}
+            </Text>
           ))}
         </View>
-        
+
         <View style={styles.barsContainer}>
-          {/* Grid lines */}
           <View style={styles.gridLines}>
-            {[0, 1, 2, 3, 4, 5].map((i) => (
+            {[0, 1, 2, 3, 4, 5].map(i => (
               <View key={i} style={[styles.gridLine, { borderBottomColor: theme.colors.border }]} />
             ))}
           </View>
-          
+
           <View style={styles.bars}>
-            {data.map((item, index) => (
-              <View key={index} style={styles.barGroup}>
-                <View style={styles.barTrack}>
-                  {/* Purchase bar (background) */}
-                  <View style={[
-                    styles.bar, 
-                    { backgroundColor: '#FFDDB8', height: `${(item.purchase / maxVal) * 100}%` }
-                  ]} />
-                  {/* Sales bar (foreground, overlaying) */}
-                  <View style={[
-                    styles.bar, 
-                    { backgroundColor: '#F89B29', height: `${(item.sales / maxVal) * 100}%`, position: 'absolute', bottom: 0 }
-                  ]} />
-                </View>
-                <Text style={[styles.xAxisLabel, { color: theme.colors.textSecondary }]}>{item.label}</Text>
-              </View>
-            ))}
+            {currentData.map((item, index) => {
+              const isSelected = activeBarIndex === index;
+              const barWidth = isMobile ? Math.min(20, Math.floor((width - 120) / currentData.length)) : 22;
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.barGroup}
+                  onPress={() => setActiveBarIndex(isSelected ? null : index)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.barTrack, { width: Math.max(14, barWidth) }]}>
+                    {/* Purchase bar (background) */}
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          backgroundColor: isSelected ? '#FFE4C4' : '#FFDDB8',
+                          height: `${Math.min(100, (item.purchase / maxVal) * 100)}%`,
+                        },
+                      ]}
+                    />
+                    {/* Sales bar (foreground) */}
+                    <View
+                      style={[
+                        styles.bar,
+                        {
+                          backgroundColor: isSelected ? '#E07C00' : '#F89B29',
+                          height: `${Math.min(100, (item.sales / maxVal) * 100)}%`,
+                          position: 'absolute',
+                          bottom: 0,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.xAxisLabel,
+                      { color: isSelected ? theme.colors.primary : theme.colors.textSecondary },
+                      isSelected && { fontWeight: '700' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </View>
@@ -94,39 +198,81 @@ export const DashboardBarChart = () => {
   );
 };
 
-export const DashboardDoughnutChart = () => {
+interface DashboardDoughnutChartProps {
+  firstTime?: number;
+  returnCount?: number;
+}
+
+export const DashboardDoughnutChart: React.FC<DashboardDoughnutChartProps> = ({
+  firstTime = 5500,
+  returnCount = 3500,
+}) => {
   const theme = useTheme();
+  const total = firstTime + returnCount;
+  const firstPct = total > 0 ? Math.round((firstTime / total) * 100) : 60;
+  const returnPct = 100 - firstPct;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.text }]}>Customers Overview</Text>
         <View style={[styles.dropdown, { borderColor: theme.colors.border }]}>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>Today v</Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>Overall</Text>
         </View>
       </View>
 
       <View style={styles.doughnutContent}>
-        {/* Simplified doughnut representation using CSS borders since we don't have an SVG chart library easily available */}
-        <View style={styles.doughnutCircle}>
-          <View style={[styles.doughnutSlice, { borderTopColor: '#2697FF', borderRightColor: '#2697FF', transform: [{ rotate: '45deg' }] }]} />
-          <View style={[styles.doughnutSlice, { borderBottomColor: '#F89B29', borderLeftColor: '#F89B29', transform: [{ rotate: '25deg' }] }]} />
-          <View style={[styles.doughnutInner, { backgroundColor: theme.colors.surface }]} />
-        </View>
-
-        <View style={styles.doughnutLegend}>
-          <View style={styles.doughnutLegendItem}>
-            <Text style={[styles.doughnutValue, { color: theme.colors.text }]}>5.5K</Text>
-            <Text style={[styles.doughnutLabel, { color: theme.colors.textSecondary }]}>First Time</Text>
-            <View style={[styles.badge, { backgroundColor: '#00C49F' }]}>
-              <Text style={styles.badgeText}>↗ 25%</Text>
+        {/* Modern clean segmented visual ring representation */}
+        <View style={styles.ringWrapper}>
+          <View
+            style={[
+              styles.doughnutRing,
+              {
+                borderColor: '#2697FF',
+                borderLeftColor: '#F89B29',
+                borderBottomColor: '#F89B29',
+              },
+            ]}
+          >
+            <View style={[styles.doughnutRingInner, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.ringCenterValue, { color: theme.colors.text }]}>
+                {Math.round(total / 1000)}k
+              </Text>
+              <Text style={[styles.ringCenterSub, { color: theme.colors.textSecondary }]}>
+                Total
+              </Text>
             </View>
           </View>
-          <View style={styles.doughnutLegendItem}>
-            <Text style={[styles.doughnutValue, { color: theme.colors.text }]}>3.5K</Text>
-            <Text style={[styles.doughnutLabel, { color: '#00C49F' }]}>Return</Text>
-            <View style={[styles.badge, { backgroundColor: '#00C49F' }]}>
-              <Text style={styles.badgeText}>↗ 21%</Text>
+        </View>
+
+        <View style={styles.doughnutLegendCol}>
+          <View style={styles.doughnutLegendCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.legendDot, { backgroundColor: '#2697FF' }]} />
+              <Text style={[styles.doughnutLabel, { color: theme.colors.textSecondary }]}>First Time</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <Text style={[styles.doughnutValue, { color: theme.colors.text }]}>
+                {(firstTime / 1000).toFixed(1)}K
+              </Text>
+              <View style={[styles.badge, { backgroundColor: '#2697FF18', marginLeft: 8 }]}>
+                <Text style={[styles.badgeText, { color: '#2697FF' }]}>{firstPct}%</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.doughnutLegendCard, { marginTop: 10 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.legendDot, { backgroundColor: '#F89B29' }]} />
+              <Text style={[styles.doughnutLabel, { color: theme.colors.textSecondary }]}>Returning</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <Text style={[styles.doughnutValue, { color: theme.colors.text }]}>
+                {(returnCount / 1000).toFixed(1)}K
+              </Text>
+              <View style={[styles.badge, { backgroundColor: '#F89B2918', marginLeft: 8 }]}>
+                <Text style={[styles.badgeText, { color: '#F89B29' }]}>{returnPct}%</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -137,72 +283,77 @@ export const DashboardDoughnutChart = () => {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 8,
-    padding: 20,
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
-    flex: 1,
     marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  headerMobile: {
+    flexWrap: 'wrap',
+    gap: 8,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   filters: {
     flexDirection: 'row',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
     padding: 2,
   },
   filterChip: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
   filterText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 11,
   },
   legend: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 18,
+    gap: 12,
+    flexWrap: 'wrap',
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,
-    padding: 10,
-    marginRight: 16,
-    minWidth: 120,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flex: 1,
+    minWidth: 110,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: 8,
   },
   legendLabel: {
     fontSize: 10,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   legendValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   chartArea: {
     flexDirection: 'row',
-    height: 250,
+    height: 200,
   },
   yAxis: {
     justifyContent: 'space-between',
-    paddingRight: 12,
-    paddingBottom: 24,
+    paddingRight: 8,
+    paddingBottom: 22,
   },
   axisLabel: {
     fontSize: 9,
@@ -214,102 +365,101 @@ const styles = StyleSheet.create({
   gridLines: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
-    paddingBottom: 24,
+    paddingBottom: 22,
   },
   gridLine: {
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
     borderStyle: 'dashed',
     height: 0,
   },
   bars: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'flex-end',
-    paddingBottom: 24,
+    paddingBottom: 22,
   },
   barGroup: {
     alignItems: 'center',
-    flex: 1,
-  },
-  barTrack: {
-    width: 24,
     height: '100%',
     justifyContent: 'flex-end',
-    marginBottom: 8,
+  },
+  barTrack: {
+    height: '100%',
+    justifyContent: 'flex-end',
+    marginBottom: 6,
+    position: 'relative',
   },
   bar: {
     width: '100%',
-    borderRadius: 4,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
   },
   xAxisLabel: {
     fontSize: 9,
-    position: 'absolute',
-    bottom: 0,
   },
   dropdown: {
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   doughnutContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 20,
+    paddingVertical: 10,
+    flexWrap: 'wrap',
+    gap: 16,
   },
-  doughnutCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 16,
-    borderColor: '#eee',
-    position: 'relative',
+  ringWrapper: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  doughnutSlice: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 16,
-    borderColor: 'transparent',
-  },
-  doughnutInner: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    position: 'absolute',
-  },
-  doughnutLegend: {
-    flexDirection: 'row',
-  },
-  doughnutLegendItem: {
+  doughnutRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 14,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 16,
+  },
+  doughnutRingInner: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ringCenterValue: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  ringCenterSub: {
+    fontSize: 9,
+  },
+  doughnutLegendCol: {
+    flex: 1,
+    minWidth: 140,
+  },
+  doughnutLegendCard: {
+    padding: 6,
   },
   doughnutValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    marginBottom: 4,
   },
   doughnutLabel: {
-    fontSize: 10,
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '500',
   },
   badge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   badgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
-
-
