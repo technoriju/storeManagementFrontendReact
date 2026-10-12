@@ -67,9 +67,9 @@ export const AppButton: React.FC<ButtonProps> = ({
   };
 
   const getHeight = () => {
-    if (size === 'small') return moderateScale(20);
-    if (size === 'large') return moderateScale(25);
-    return moderateScale(15); // medium
+    if (size === 'small') return moderateScale(32);
+    if (size === 'large') return moderateScale(48);
+    return moderateScale(40); // medium
   };
 
   // onHoverIn and onHoverOut are supported by react-native-web and react-native-windows

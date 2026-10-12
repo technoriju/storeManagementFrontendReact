@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Switch, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { useUnits, useAddUnit, useUpdateUnit, useDeleteUnit, Unit } from '../api/useUnit';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
@@ -14,9 +15,9 @@ import {
   RefreshCw, 
   ChevronUp, 
   PlusCircle, 
-  Edit,
-  Trash2,
-  ChevronDown
+  Edit, 
+  Trash2, 
+  ChevronDown 
 } from 'lucide-react-native';
 
 const formatDate = (value?: string) => {
@@ -31,6 +32,8 @@ const formatDate = (value?: string) => {
 
 export const UnitListScreen = () => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
+
   const { data: units = [], isLoading: isLoadingUnits, refetch } = useUnits();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
@@ -43,11 +46,16 @@ export const UnitListScreen = () => {
   const updateMutation = useUpdateUnit();
   const deleteMutation = useDeleteUnit();
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newUnitName, setNewUnitName] = useState('');
   const [newShortName, setNewShortName] = useState('');
   const [newUnitStatus, setNewUnitStatus] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = isSmallMobile ? 'Add' : (isMobile && windowWidth < 460 ? 'Add' : 'Add Unit');
 
   const columns = [
     { 
@@ -96,21 +104,40 @@ export const UnitListScreen = () => {
   ];
 
   const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => refetch()}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <ChevronUp size={16} color={theme.colors.textSecondary} />
-      </Pressable>
+    <View style={[styles.headerActionsWrapper, isMobile && styles.headerActionsWrapperMobile]}>
+      {!isMobile && (
+        <>
+          <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+            <FileText size={16} color="#E11D48" />
+          </Pressable>
+          <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+            <FileSpreadsheet size={16} color="#10B981" />
+          </Pressable>
+        </>
+      )}
       <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile,
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]} 
+        onPress={() => refetch()}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
+      </Pressable>
+      {!isMobile && (
+        <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
+          <ChevronUp size={16} color={theme.colors.textSecondary} />
+        </Pressable>
+      )}
+      <Pressable 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#F97316' },
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
         onPress={() => {
           setEditingId(null);
           setNewUnitName('');
@@ -119,23 +146,31 @@ export const UnitListScreen = () => {
           setIsAddModalVisible(true);
         }}
       >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Unit</Text>
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText,
+          isMobile && styles.primaryActionTextMobile,
+        ]}>
+          {addBtnLabel}
+        </Text>
       </Pressable>
-    </>
+    </View>
   );
 
   const filters = (
-    <>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border, marginRight: 8 }]}>
-        <Text style={{ color: theme.colors.text }}>Status</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Sort By : Latest</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-    </>
+    <View style={[styles.filtersWrapper, isMobile && styles.filtersWrapperMobile]}>
+      <Pressable 
+        style={[styles.filterDropdown, { borderColor: theme.colors.border }]}
+        onPress={() => {
+          setStatusFilter(prev => prev === 'All' ? 'Active' : prev === 'Active' ? 'Inactive' : 'All');
+        }}
+      >
+        <Text style={{ color: theme.colors.text, fontSize: 13 }}>
+          Status: {statusFilter}
+        </Text>
+        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 6 }} />
+      </Pressable>
+    </View>
   );
 
   const handleDelete = (item: any) => {
@@ -151,7 +186,7 @@ export const UnitListScreen = () => {
   };
 
   const renderRowActions = (item: any) => (
-    <>
+    <View style={styles.actionButtonsRow}>
       <Pressable
         onPress={() => {
           setEditingId(item.id);
@@ -170,8 +205,45 @@ export const UnitListScreen = () => {
       >
         <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
-    </>
+    </View>
   );
+
+  const renderUnitCard = (item: any) => {
+    const isActive = String(item.status || '').toLowerCase() === 'active';
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardTopRow}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={styles.unitBadgeRow}>
+              <View style={[styles.shortNameBadge, { backgroundColor: theme.colors.background }]}>
+                <Text style={[styles.shortNameText, { color: theme.colors.textSecondary }]}>
+                  {item.shortName || '-'}
+                </Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: isActive ? '#10B981' : theme.colors.error }]}>
+                <Text style={styles.statusBadgeText}>
+                  {isActive ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <SyncBadge status={item.syncStatus} />
+        </View>
+
+        <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+          <Text style={[styles.cardMeta, { color: theme.colors.textSecondary }]}>
+            {formatDate(item.createdAt)}
+          </Text>
+          <View style={styles.cardActionsRow}>
+            {renderRowActions(item)}
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   const handleSave = () => {
     if (!newUnitName || !newShortName) return;
@@ -206,13 +278,15 @@ export const UnitListScreen = () => {
     }
   };
 
-  const filteredUnits = units.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (u.shortName || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUnits = units.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (u.shortName || '').toLowerCase().includes(searchQuery.toLowerCase());
+    if (statusFilter === 'All') return matchesSearch;
+    return matchesSearch && (u.status?.toLowerCase() === statusFilter.toLowerCase());
+  });
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       <AdvancedTable
         title="Units"
         subtitle="Manage your units"
@@ -222,6 +296,7 @@ export const UnitListScreen = () => {
         onSearch={setSearchQuery}
         filters={filters}
         renderRowActions={renderRowActions}
+        renderMobileCard={renderUnitCard}
         isLoading={isLoadingUnits}
       />
 
@@ -235,13 +310,14 @@ export const UnitListScreen = () => {
               title="Cancel" 
               variant="secondary" 
               onPress={() => setIsAddModalVisible(false)} 
-              style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
+              style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton 
               title={editingId ? "Save" : "Add Unit"} 
               onPress={handleSave} 
-              style={{ backgroundColor: '#F97316', minWidth: 120 }}
+              style={[styles.dialogBtn, { backgroundColor: '#F97316' }]}
               disabled={addMutation.isPending || updateMutation.isPending}
+              isLoading={addMutation.isPending || updateMutation.isPending}
             />
           </>
         }
@@ -255,6 +331,7 @@ export const UnitListScreen = () => {
             }
             value={newUnitName}
             onChangeText={setNewUnitName}
+            placeholder="e.g. Kilogram"
           />
           <AppInput
             label={
@@ -264,6 +341,7 @@ export const UnitListScreen = () => {
             }
             value={newShortName}
             onChangeText={setNewShortName}
+            placeholder="e.g. Kg"
           />
           <View style={styles.statusRow}>
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -283,7 +361,15 @@ export const UnitListScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1 },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -293,6 +379,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
+  iconButtonMobile: {
+    width: 32,
+    height: 32,
+  },
+  iconButtonSmall: {
+    width: 28,
+    height: 28,
+  },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -301,10 +395,30 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 8,
   },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 10,
+    height: 32,
+    gap: 4,
+  },
+  primaryActionBtnSmall: {
+    paddingHorizontal: 8,
+    height: 28,
+  },
   primaryActionText: {
     color: 'white',
     fontWeight: '500',
     fontSize: 14,
+  },
+  primaryActionTextMobile: {
+    fontSize: 12,
+  },
+  filtersWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filtersWrapperMobile: {
+    width: '100%',
   },
   filterDropdown: {
     flexDirection: 'row',
@@ -312,8 +426,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 12,
-    height: 40,
+    height: 38,
     backgroundColor: 'white',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   rowActionBtn: {
     width: 32,
@@ -329,6 +448,69 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
+  },
+  dialogBtn: {
+    minWidth: 110,
+    height: 40,
+    borderRadius: 6,
+  },
+  // Mobile Card styles
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  unitBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  shortNameBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  shortNameText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  statusBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 8,
+  },
+  cardMeta: {
+    fontSize: 12,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });
 

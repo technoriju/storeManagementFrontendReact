@@ -4,6 +4,7 @@ import DocumentPicker, { types } from 'react-native-document-picker';
 import RNFS from 'react-native-fs';
 import * as XLSX from 'xlsx';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { ProductScreenType } from '../ProductsModule';
 import { useProductStore } from '../store/productStore';
@@ -77,6 +78,7 @@ const parseStr = (val: any): string | undefined => {
 
 export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const { products, addProduct, addCategory, addBrand, addUnit, fetchProducts } = useProductStore();
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [parsedRows, setParsedRows] = useState<ParsedProductRow[]>([]);
@@ -398,16 +400,16 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <View>
+        <View style={{ flex: 1, paddingRight: 8 }}>
           <Text style={[styles.title, { color: theme.colors.text }]}>Import Product</Text>
           <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
             Upload CSV/Excel file to bulk create products
           </Text>
         </View>
-        <AppButton title="Back to List" onPress={() => onNavigate('list')} variant="outline" size="small" />
+        <AppButton title={isMobile ? "Back" : "Back to List"} onPress={() => onNavigate('list')} variant="outline" size="small" />
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { padding: isMobile ? 8 : 16 }]}>
         {!selectedFile ? (
           <View style={styles.center}>
             <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -416,15 +418,23 @@ export const ProductImportScreen: React.FC<Props> = ({ onNavigate }) => {
                 Only CSV or Excel file is needed. Product Name is required. All blank numeric fields default to 0. Blank text fields set to NULL. Missing Categories, Brands, and Units are automatically created.
               </Text>
 
-              <View style={styles.buttonRow}>
-                <AppButton title="Select CSV / Excel File" onPress={handlePickFile} />
+              <View style={[styles.buttonRow, isMobile && { width: '100%' }]}>
+                <AppButton 
+                  title="Select CSV / Excel File" 
+                  onPress={handlePickFile} 
+                  style={isMobile ? { width: '100%' } : undefined}
+                />
               </View>
             </View>
           </View>
         ) : (
           <View style={styles.previewContainer}>
             {/* File info bar */}
-            <View style={[styles.fileInfo, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[
+              styles.fileInfo, 
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+              isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 8 }
+            ]}>
               <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 14 }}>
                 File: {selectedFile.name}
               </Text>

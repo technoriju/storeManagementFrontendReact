@@ -103,9 +103,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <Text style={[styles.greetingText, { color: theme.colors.text }]}>Welcome, Admin</Text>
               <View style={[styles.activeDot, { backgroundColor: '#00C49F' }]} />
             </View>
-            <Text style={[styles.mobileSubtitle, { color: theme.colors.textSecondary }]}>
+            {/* <Text style={[styles.mobileSubtitle, { color: theme.colors.textSecondary }]}>
               You have <Text style={{ color: '#F89B29', fontWeight: '700' }}>{todayOrders}+ Orders</Text> today
-            </Text>
+            </Text> */}
           </View>
 
           <View style={[styles.dateChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
