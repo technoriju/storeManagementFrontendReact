@@ -63,7 +63,7 @@ export const AdvancedTable = <T extends Record<string, any>>({
   onViewModeChange,
 }: AdvancedTableProps<T>) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowWidth } = useResponsive();
   const isServerSide = controlledTotalItems !== undefined;
 
   const [internalPage, setInternalPage] = useState(1);
@@ -159,28 +159,23 @@ export const AdvancedTable = <T extends Record<string, any>>({
       {/* Page Header */}
       {(title || headerActions) && (
         <View style={[styles.pageHeader, isMobile ? styles.pageHeaderMobile : styles.pageHeaderDesktop]}>
-          <View style={styles.titleWrapper}>
-            <View style={styles.titleRow}>
-              {title && (
-                <Text style={[styles.pageTitle, !isMobile && styles.pageTitleDesktop, { color: theme.colors.text }]}>
-                  {title}
-                </Text>
-              )}
-              {totalItems !== undefined && totalItems > 0 && (
-                <View style={[styles.countBadge, { backgroundColor: theme.colors.background }]}>
-                  <Text style={[styles.countBadgeText, { color: theme.colors.primary || '#2563EB' }]}>
-                    {totalItems}
-                  </Text>
-                </View>
-              )}
-            </View>
-            {subtitle ? (
-              <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
-                {subtitle}
+          <View style={[styles.titleWrapper, isMobile && styles.titleWrapperMobile]}>
+            {title && (
+              <Text 
+                style={[
+                  styles.pageTitle, 
+                  !isMobile && styles.pageTitleDesktop,
+                  isMobile && styles.pageTitleMobile,
+                  isMobile && windowWidth < 360 && { fontSize: 14 },
+                  { color: theme.colors.text }
+                ]}
+                numberOfLines={1}
+              >
+                {title}
               </Text>
-            ) : null}
+            )}
           </View>
-          <View style={styles.pageActions}>
+          <View style={[styles.pageActions, isMobile && styles.pageActionsMobile]}>
             {headerActions}
           </View>
         </View>
@@ -460,21 +455,27 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   pageHeaderMobile: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    gap: 6,
+    marginBottom: 10,
   },
   titleWrapper: {
     flexDirection: 'column',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  titleWrapperMobile: {
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
+  },
+  pageTitleMobile: {
+    fontSize: 15,
   },
   pageTitleDesktop: {
     fontSize: 22,
@@ -501,6 +502,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+  },
+  pageActionsMobile: {
+    flexShrink: 0,
+    flexWrap: 'nowrap',
+    gap: 6,
   },
   card: {
     borderRadius: 8,

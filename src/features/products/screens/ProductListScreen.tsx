@@ -34,7 +34,7 @@ interface Props {
 
 export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowWidth } = useResponsive();
   const { deleteProduct, fetchPaginatedProducts } = useProductStore();
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -301,8 +301,17 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     setPage(1);
   };
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = !isMobile ? 'Add Product' : (windowWidth >= 480 ? 'Add Product' : 'Add');
+  const importBtnLabel = !isMobile ? 'Import Product' : (windowWidth >= 480 ? 'Import Product' : 'Import');
+
   const headerActions = (
-    <View style={styles.headerActionsWrapper}>
+    <View style={[
+      styles.headerActionsWrapper,
+      isMobile && styles.headerActionsWrapperMobile,
+      isSmallMobile && styles.headerActionsWrapperSmall,
+    ]}>
       {!isMobile && (
         <>
           <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
@@ -314,24 +323,51 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         </>
       )}
       <Pressable 
-        style={[styles.iconButton, { borderColor: theme.colors.border }]}
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile, 
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]}
         onPress={() => loadData(page, rowsPerPage, searchQuery, selectedCategory, selectedBrand)}
       >
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }, isMobile && styles.primaryActionBtnMobile]} 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#F97316' }, 
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
         onPress={() => onNavigate('form')}
       >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>{isMobile ? 'Add' : 'Add Product'}</Text>
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText, 
+          isMobile && styles.primaryActionTextMobile,
+          isSmallMobile && styles.primaryActionTextSmall,
+        ]}>
+          {addBtnLabel}
+        </Text>
       </Pressable>
       <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#1E3A8A' }, isMobile && styles.primaryActionBtnMobile]} 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#1E3A8A' }, 
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
         onPress={() => onNavigate('import')}
       >
-        <Download size={16} color="white" />
-        <Text style={styles.primaryActionText}>{isMobile ? 'Import' : 'Import Product'}</Text>
+        <Download size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText, 
+          isMobile && styles.primaryActionTextMobile,
+          isSmallMobile && styles.primaryActionTextSmall,
+        ]}>
+          {importBtnLabel}
+        </Text>
       </Pressable>
     </View>
   );
@@ -503,7 +539,6 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
     <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       <AdvancedTable
         title="Product List"
-        subtitle="Manage your products"
         headerActions={headerActions}
         columns={columns}
         data={tableProducts}
@@ -544,7 +579,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
+  headerActionsWrapperSmall: {
+    gap: 4,
   },
   iconButton: {
     width: 36,
@@ -555,6 +596,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
+  iconButtonMobile: {
+    width: 32,
+    height: 32,
+  },
+  iconButtonSmall: {
+    width: 30,
+    height: 30,
+  },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -564,13 +613,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryActionBtnMobile: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
+    height: 32,
+    gap: 5,
+  },
+  primaryActionBtnSmall: {
+    paddingHorizontal: 7,
+    height: 30,
     gap: 4,
   },
   primaryActionText: {
     color: 'white',
     fontWeight: '500',
     fontSize: 14,
+  },
+  primaryActionTextMobile: {
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  primaryActionTextSmall: {
+    fontSize: 11.5,
+    fontWeight: '600',
   },
   filtersWrapper: {
     flexDirection: 'row',
