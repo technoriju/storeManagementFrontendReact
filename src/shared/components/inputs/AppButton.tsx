@@ -7,7 +7,8 @@ import {
   PressableProps,
   ViewStyle,
   TextStyle,
-  Platform
+  Platform,
+  StyleProp
 } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { moderateScale } from '../../utils/responsive';
@@ -18,8 +19,8 @@ interface ButtonProps extends PressableProps {
   variant?: 'primary' | 'secondary' | 'outline' | 'text';
   size?: 'small' | 'medium' | 'large';
   isLoading?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export const AppButton: React.FC<ButtonProps> = ({

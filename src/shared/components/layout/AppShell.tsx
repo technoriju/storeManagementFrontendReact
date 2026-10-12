@@ -233,9 +233,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 2,
     minHeight: '100%',
+    flexGrow: 1,
   },
   bottomNavTab: {
     minWidth: 64,
+    flexShrink: 0,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
