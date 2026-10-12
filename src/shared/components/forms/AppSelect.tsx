@@ -198,9 +198,13 @@ export const AppSelect = ({
         onPress={openModal}
         activeOpacity={0.7}
       >
-        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
           {!isMulti || !hasValue ? (
-            <Text style={{ color: hasValue ? theme.colors.text : theme.colors.textSecondary }}>
+            <Text 
+              style={{ color: hasValue ? theme.colors.text : theme.colors.textSecondary, fontSize: 13 }} 
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {displayValue}
             </Text>
           ) : (
@@ -338,10 +342,10 @@ export const AppSelect = ({
 };
 
 const styles = StyleSheet.create({
-  container: { width: '100%' },
+  container: { alignSelf: 'stretch' },
   input: { 
     borderWidth: 1, 
-    paddingHorizontal: 16, 
+    paddingHorizontal: 10, 
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'

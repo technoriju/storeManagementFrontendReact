@@ -337,7 +337,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const filters = (
-    <View style={styles.filtersWrapper}>
+    <View style={[styles.filtersWrapper, isMobile && { width: '100%' }]}>
       <AppSelect
         placeholder="All Categories"
         value={selectedCategory}
@@ -345,7 +345,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         onSelect={handleCategoryChange}
         clearable
         searchable
-        containerStyle={[styles.filterSelect, { minWidth: isMobile ? 130 : 150 }]}
+        containerStyle={[
+          styles.filterSelect,
+          isMobile ? { flex: 1, minWidth: 0 } : { width: 140 }
+        ]}
       />
       <AppSelect
         placeholder="All Brands"
@@ -354,7 +357,10 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         onSelect={handleBrandChange}
         clearable
         searchable
-        containerStyle={[styles.filterSelect, { minWidth: isMobile ? 120 : 140 }]}
+        containerStyle={[
+          styles.filterSelect,
+          isMobile ? { flex: 1, minWidth: 0 } : { width: 130 }
+        ]}
       />
       {(!!selectedCategory || !!selectedBrand) && (
         <Pressable
@@ -570,7 +576,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   filterSelect: {
     marginBottom: 0,

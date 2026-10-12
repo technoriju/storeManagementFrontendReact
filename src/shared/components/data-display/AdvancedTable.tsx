@@ -158,10 +158,27 @@ export const AdvancedTable = <T extends Record<string, any>>({
     <View style={styles.container}>
       {/* Page Header */}
       {(title || headerActions) && (
-        <View style={styles.pageHeader}>
-          <View>
-            {title && <Text style={[styles.pageTitle, { color: theme.colors.text }]}>{title}</Text>}
-            {/* {subtitle && <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>} */}
+        <View style={[styles.pageHeader, isMobile ? styles.pageHeaderMobile : styles.pageHeaderDesktop]}>
+          <View style={styles.titleWrapper}>
+            <View style={styles.titleRow}>
+              {title && (
+                <Text style={[styles.pageTitle, !isMobile && styles.pageTitleDesktop, { color: theme.colors.text }]}>
+                  {title}
+                </Text>
+              )}
+              {totalItems !== undefined && totalItems > 0 && (
+                <View style={[styles.countBadge, { backgroundColor: theme.colors.background }]}>
+                  <Text style={[styles.countBadgeText, { color: theme.colors.primary || '#2563EB' }]}>
+                    {totalItems}
+                  </Text>
+                </View>
+              )}
+            </View>
+            {subtitle ? (
+              <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
+                {subtitle}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.pageActions}>
             {headerActions}
@@ -172,34 +189,72 @@ export const AdvancedTable = <T extends Record<string, any>>({
       {/* Table Card */}
       <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         
-        {/* Table Toolbar (Search & Filters) */}
-        <View style={[styles.toolbar, { borderBottomColor: theme.colors.divider }]}>
-          <View style={[styles.searchContainer, { borderColor: theme.colors.border }]}>
-            <Search size={18} color={theme.colors.textSecondary} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.colors.text }]}
-              placeholder={searchPlaceholder}
-              placeholderTextColor={theme.colors.textSecondary}
-              value={localSearch}
-              onChangeText={handleSearchChange}
-            />
-          </View>
-          <View style={styles.filtersContainer}>
-            {filters}
-          </View>
-          {renderMobileCard && (
-            <Pressable
-              style={[styles.viewToggleBtn, { borderColor: theme.colors.border }]}
-              onPress={toggleViewMode}
-            >
-              {currentViewMode === 'card' ? (
-                <TableIcon size={18} color={theme.colors.textSecondary} />
-              ) : (
-                <LayoutGrid size={18} color={theme.colors.textSecondary} />
+        {/* Table Toolbar (Search & Filters & Switcher) */}
+        {!isMobile ? (
+          // MD to Extra Large: STRICTLY SINGLE LINE
+          <View style={[styles.toolbarDesktop, { borderBottomColor: theme.colors.divider }]}>
+            <View style={[styles.searchContainerDesktop, { borderColor: theme.colors.border }]}>
+              <Search size={18} color={theme.colors.textSecondary} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.colors.text }]}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={theme.colors.textSecondary}
+                value={localSearch}
+                onChangeText={handleSearchChange}
+              />
+            </View>
+
+            <View style={styles.toolbarRightDesktop}>
+              {filters}
+              {renderMobileCard && (
+                <Pressable
+                  style={[styles.viewToggleBtn, { borderColor: theme.colors.border }]}
+                  onPress={toggleViewMode}
+                >
+                  {currentViewMode === 'card' ? (
+                    <TableIcon size={18} color={theme.colors.textSecondary} />
+                  ) : (
+                    <LayoutGrid size={18} color={theme.colors.textSecondary} />
+                  )}
+                </Pressable>
               )}
-            </Pressable>
-          )}
-        </View>
+            </View>
+          </View>
+        ) : (
+          // Mobile: STRICTLY TWO LINES
+          <View style={[styles.toolbarMobile, { borderBottomColor: theme.colors.divider }]}>
+            <View style={styles.toolbarMobileRow1}>
+              <View style={[styles.searchContainerMobile, { borderColor: theme.colors.border }]}>
+                <Search size={18} color={theme.colors.textSecondary} />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.colors.text }]}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={localSearch}
+                  onChangeText={handleSearchChange}
+                />
+              </View>
+              {renderMobileCard && (
+                <Pressable
+                  style={[styles.viewToggleBtn, { borderColor: theme.colors.border }]}
+                  onPress={toggleViewMode}
+                >
+                  {currentViewMode === 'card' ? (
+                    <TableIcon size={18} color={theme.colors.textSecondary} />
+                  ) : (
+                    <LayoutGrid size={18} color={theme.colors.textSecondary} />
+                  )}
+                </Pressable>
+              )}
+            </View>
+
+            {filters && (
+              <View style={styles.toolbarMobileRow2}>
+                {filters}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Content: Mobile Cards or Table */}
         {currentViewMode === 'card' && renderMobileCard ? (
@@ -396,20 +451,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageHeader: {
+    marginBottom: 16,
+  },
+  pageHeaderDesktop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    flexWrap: 'wrap',
     gap: 16,
+  },
+  pageHeaderMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  titleWrapper: {
+    flexDirection: 'column',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   pageTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontWeight: '700',
+  },
+  pageTitleDesktop: {
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  countBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   pageSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
+    marginTop: 3,
   },
   pageActions: {
     flexDirection: 'row',
@@ -423,24 +508,58 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  toolbar: {
+  // Desktop toolbar: single line on md to xl, wraps to double line if narrow
+  toolbarDesktop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     flexWrap: 'wrap',
     gap: 10,
   },
-  searchContainer: {
+  searchContainerDesktop: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 12,
     height: 40,
-    minWidth: 160,
     flex: 1,
+    maxWidth: 280,
+    minWidth: 140,
+  },
+  toolbarRightDesktop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  // Mobile toolbar: strictly 2 rows
+  toolbarMobile: {
+    flexDirection: 'column',
+    padding: 12,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  toolbarMobileRow1: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+  },
+  searchContainerMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    height: 40,
+    flex: 1,
+  },
+  toolbarMobileRow2: {
+    width: '100%',
   },
   searchInput: {
     flex: 1,
@@ -448,15 +567,9 @@ const styles = StyleSheet.create({
     height: '100%',
     ...Platform.select({ web: { outlineStyle: 'none' } as any }),
   },
-  filtersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
   viewToggleBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderWidth: 1,
     borderRadius: 6,
     justifyContent: 'center',
