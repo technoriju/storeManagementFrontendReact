@@ -230,7 +230,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
   const isLandscapeDefault = activeDefault === 'halfA4Landscape' || activeDefault === 'invoice';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView style={[styles.container, { padding: isLargeScreen ? 24 : 12, backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.titleRow}>
@@ -511,14 +511,14 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
       <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         {/* Controls Toolbar */}
         <View style={styles.previewHeaderRow}>
-          <div>
+          <View>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               {viewMode === 'all' ? 'All Print Previews (Main Area)' : 'Template Focus Preview'}
             </Text>
             <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>
               {business.businessName || 'Tarama Enterprise'} • GSTIN: {business.gstin || '19BOBPP9698M1ZR'}
             </Text>
-          </div>
+          </View>
 
           <View style={styles.previewControlsRow}>
             {/* View Mode Selector */}
@@ -667,7 +667,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
               </View>
 
               {/* 140x210mm Document Sheet */}
-              <View style={styles.portrait140Sheet}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.sheetScrollCenter}
+              >
+                <View style={styles.portrait140Sheet}>
                 {/* Header */}
                 <View style={styles.p140HeaderTable}>
                   <View style={{ flex: 1.4 }}>
@@ -851,6 +856,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                   </View>
                 </View>
               </View>
+              </ScrollView>
             </View>
           )}
 
@@ -889,7 +895,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
               </View>
 
               {/* 80mm Thermal Paper Slip */}
-              <View style={styles.receiptSlip}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.sheetScrollCenter}
+              >
+                <View style={styles.receiptSlip}>
                 <Text style={styles.rcStoreName}>{business.businessName || 'Tarama Enterprise'}</Text>
                 {business.tagline && <Text style={styles.rcTagline}>{business.tagline}</Text>}
                 <Text style={styles.rcAddress}>{business.address || ''}</Text>
@@ -1023,6 +1034,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                 <Text style={styles.rcDashedLine}>- - - - - - - - - - - - - - - - - - - - - - - - -</Text>
                 <Text style={styles.rcPoweredBy}>Printed via Billing System</Text>
               </View>
+              </ScrollView>
             </View>
           )}
 
@@ -1061,7 +1073,12 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
               </View>
 
               {/* Landscape Sheet */}
-              <View style={styles.landscapeSheet}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.sheetScrollCenter}
+              >
+                <View style={styles.landscapeSheet}>
                 <View style={styles.invHeaderRow}>
                   <View style={{ flex: 1.5 }}>
                     <Text style={styles.invStoreTitle}>{business.businessName || 'Tarama Enterprise'}</Text>
@@ -1183,6 +1200,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                   </View>
                 </View>
               </View>
+              </ScrollView>
             </View>
           )}
         </View>
@@ -1286,7 +1304,7 @@ const styles = StyleSheet.create({
   },
   templateChoiceCard: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 260,
     borderRadius: 10,
     borderWidth: 2,
     padding: 16,
@@ -1434,12 +1452,18 @@ const styles = StyleSheet.create({
   allPreviewsContainer: {
     gap: 28,
   },
+  sheetScrollCenter: {
+    minWidth: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
   previewBoxWrapper: {
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
+    padding: 14,
   },
   previewBoxHeader: {
     flexDirection: 'row',
