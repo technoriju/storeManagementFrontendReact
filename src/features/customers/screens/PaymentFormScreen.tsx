@@ -307,12 +307,16 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <View style={[styles.modalOverlay, isMobile && { padding: 8 }]}>
+        <View style={[
+          styles.modalCard,
+          isMobile && { width: '98%', maxHeight: '96%' },
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+        ]}>
           {/* Header */}
-          <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-            <View>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+          <View style={[styles.modalHeader, isMobile && { padding: 14 }, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={[styles.modalTitle, isMobile && { fontSize: 16 }, { color: theme.colors.text }]}>
                 {activePaymentType === 'receive' ? 'Receive Payment (In)' : 'Add Payment (Out)'}
               </Text>
               <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
@@ -324,7 +328,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <ScrollView style={[styles.modalBody, isMobile && { padding: 14 }]} showsVerticalScrollIndicator={false}>
             {/* Party Type Toggle */}
             {!entityId && (
               <View style={styles.sectionBlock}>
@@ -560,13 +564,18 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={isSubmitting}>
+          <View style={[styles.modalFooter, isMobile && { flexDirection: 'column-reverse', gap: 8 }, { borderTopColor: theme.colors.border }]}>
+            <TouchableOpacity 
+              style={[styles.cancelButton, isMobile && { width: '100%', alignItems: 'center' }]} 
+              onPress={onClose} 
+              disabled={isSubmitting}
+            >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.submitButton,
+                isMobile && { width: '100%', alignItems: 'center' },
                 { backgroundColor: activePaymentType === 'receive' ? '#10B981' : '#F97316' },
               ]}
               onPress={handleSave}

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
@@ -52,6 +53,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
   onNavigate,
 }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const customerId = entityType === 'customer' ? entityId : (route?.params?.customerId ?? null);
   const supplierId = entityType === 'supplier' ? entityId : (route?.params?.supplierId ?? null);
 
@@ -303,52 +305,58 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
     );
   };
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const receiveBtnLabel = !isMobile ? 'Receive Payment' : (windowWidth >= 480 ? 'Receive Payment' : 'Receive');
+  const addBtnLabel = !isMobile ? 'Add Payment' : (windowWidth >= 480 ? 'Add Payment' : 'Pay');
+
   // Header action buttons matching other screens
   const headerActions = (
-    <View style={styles.headerActionsWrap}>
+    <View style={[styles.headerActionsWrap, isMobile && styles.headerActionsWrapMobile]}>
       {customerId && (
         <Pressable
-          style={[styles.backOutlineBtn, { borderColor: theme.colors.border }]}
+          style={[styles.backOutlineBtn, isMobile && styles.backOutlineBtnMobile, { borderColor: theme.colors.border }]}
           onPress={() => onNavigate ? onNavigate('details', customerId) : navigation?.goBack?.()}
         >
-          <ArrowLeft size={15} color={theme.colors.text} />
-          <Text style={[styles.backOutlineText, { color: theme.colors.text }]}>Back to Details</Text>
+          <ArrowLeft size={actionIconSize} color={theme.colors.text} />
+          <Text style={[styles.backOutlineText, isMobile && { fontSize: 12 }, { color: theme.colors.text }]}>Details</Text>
         </Pressable>
       )}
 
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={handleRefresh}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+      <Pressable 
+        style={[styles.iconButton, isMobile && styles.iconButtonMobile, { borderColor: theme.colors.border }]} 
+        onPress={handleRefresh}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
 
       {/* Receive Payment (In) */}
       <Pressable
-        style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+        style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#10B981' }]}
         onPress={() => openPaymentModal('customer', 'receive')}
       >
-        <ArrowDownLeft size={16} color="white" />
-        <Text style={styles.actionBtnText}>Receive Payment</Text>
+        <ArrowDownLeft size={actionIconSize} color="white" />
+        <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>{receiveBtnLabel}</Text>
       </Pressable>
 
       {/* Add Payment / Pay Out (Out) */}
       <Pressable
-        style={[styles.actionBtn, { backgroundColor: '#F97316' }]}
+        style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#F97316' }]}
         onPress={() => openPaymentModal('supplier', 'pay')}
       >
-        <ArrowUpRight size={16} color="white" />
-        <Text style={styles.actionBtnText}>Add Payment</Text>
+        <ArrowUpRight size={actionIconSize} color="white" />
+        <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>{addBtnLabel}</Text>
       </Pressable>
     </View>
   );
 
   // Table filter toolbar options
   const filterToolbar = (
-    <View style={styles.filtersRow}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={[styles.filtersRow, isMobile && { paddingRight: 10 }]}
+    >
       {/* Direction Pills */}
       <View style={styles.segmentedContainer}>
         <TouchableOpacity
@@ -364,7 +372,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onPress={() => setDirectionFilter('receive')}
         >
           <Text style={[styles.segmentBtnText, directionFilter === 'receive' && styles.segmentBtnTextActive]}>
-            Received In ({metrics.inCount})
+            Received ({metrics.inCount})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -372,7 +380,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onPress={() => setDirectionFilter('pay')}
         >
           <Text style={[styles.segmentBtnText, directionFilter === 'pay' && styles.segmentBtnTextActive]}>
-            Paid Out ({metrics.outCount})
+            Paid ({metrics.outCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -409,7 +417,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 
   const columns = [
@@ -548,12 +556,86 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
     </View>
   );
 
+  const renderPaymentCard = (item: Payment) => {
+    const custId = item.customerId ? Number(item.customerId) : null;
+    const suppId = item.supplierId ? Number(item.supplierId) : null;
+    const isCust = !!custId || item.type === 'receive';
+    const name = isCust
+      ? (item as any).customerName || (custId ? customerMap[custId]?.name : null) || (item as any).partyName || (custId ? `Customer #${custId}` : 'Customer')
+      : (item as any).supplierName || (suppId ? supplierMap[suppId]?.name : null) || (item as any).partyName || (suppId ? `Supplier #${suppId}` : 'Supplier');
+    const d = new Date(item.createdAt);
+    const dateStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const isReceive = item.type === 'receive';
+
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.reference || `PAY-${Math.abs(item.id).toString().slice(-4)}`}
+            </Text>
+            <Text style={[styles.cardPartyName, { color: theme.colors.text }]} numberOfLines={1}>
+              {name}
+            </Text>
+          </View>
+          <SyncBadge status={item.syncStatus || 'synced'} />
+        </View>
+
+        <View style={styles.cardBadgeRow}>
+          <View style={[styles.partyBadge, { backgroundColor: isCust ? '#EFF6FF' : '#F5F3FF' }]}>
+            {isCust ? <User size={10} color="#2563EB" style={{ marginRight: 3 }} /> : <Building2 size={10} color="#7C3AED" style={{ marginRight: 3 }} />}
+            <Text style={{ fontSize: 10, fontWeight: '700', color: isCust ? '#2563EB' : '#7C3AED' }}>
+              {isCust ? 'CUSTOMER' : 'SUPPLIER'}
+            </Text>
+          </View>
+
+          <View style={[styles.directionBadge, { backgroundColor: isReceive ? '#DCFCE7' : '#FEE2E2' }]}>
+            {isReceive ? <ArrowDownLeft size={11} color="#16A34A" style={{ marginRight: 3 }} /> : <ArrowUpRight size={11} color="#DC2626" style={{ marginRight: 3 }} />}
+            <Text style={{ fontSize: 10, fontWeight: '700', color: isReceive ? '#16A34A' : '#DC2626' }}>
+              {isReceive ? 'RECEIVED' : 'PAID OUT'}
+            </Text>
+          </View>
+
+          <View style={styles.methodPill}>
+            <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
+              {(item.method || 'CASH').toUpperCase()}
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
+          <View>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{dateStr}</Text>
+            <Text style={[styles.cardAmount, { color: isReceive ? '#16A34A' : '#DC2626' }]}>
+              {isReceive ? '+' : '-'}₹{item.amount.toFixed(2)}
+            </Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <Pressable
+              style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => setViewedPayment(item)}
+            >
+              <Eye size={15} color={theme.colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => handleDeletePayment(item)}
+            >
+              <Trash2 size={15} color={theme.colors.error} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const currentParty: any = entityType === 'customer'
     ? (customerId ? customerMap[Number(customerId)] : null)
     : (supplierId ? supplierMap[Number(supplierId)] : null);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       {/* Party Balance Banner if opened for specific party */}
       {currentParty && (
         <View style={[styles.partyBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -625,7 +707,11 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       {/* 4 Metric Summary Cards */}
       <View style={styles.metricsGrid}>
         {/* Total Received (In) */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#10B981' }]}>
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#10B981' }
+        ]}>
           <View style={styles.metricCardHeader}>
             <Text style={styles.metricCardLabel}>TOTAL RECEIVED (IN)</Text>
             <View style={[styles.metricIconCircle, { backgroundColor: '#DCFCE7' }]}>
@@ -639,7 +725,11 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
         </View>
 
         {/* Total Paid (Out) */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#EF4444' }]}>
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#EF4444' }
+        ]}>
           <View style={styles.metricCardHeader}>
             <Text style={styles.metricCardLabel}>TOTAL PAID (OUT)</Text>
             <View style={[styles.metricIconCircle, { backgroundColor: '#FEE2E2' }]}>
@@ -653,7 +743,11 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
         </View>
 
         {/* Net Cashflow */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#3B82F6' }]}>
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#3B82F6' }
+        ]}>
           <View style={styles.metricCardHeader}>
             <Text style={styles.metricCardLabel}>NET CASHFLOW</Text>
             <View style={[styles.metricIconCircle, { backgroundColor: '#DBEAFE' }]}>
@@ -667,7 +761,11 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
         </View>
 
         {/* Total Transactions */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#8B5CF6' }]}>
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#8B5CF6' }
+        ]}>
           <View style={styles.metricCardHeader}>
             <Text style={styles.metricCardLabel}>ALL TRANSACTIONS</Text>
             <View style={[styles.metricIconCircle, { backgroundColor: '#EDE9FE' }]}>
@@ -692,6 +790,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onSearch={setSearchQuery}
           filters={filterToolbar}
           renderRowActions={renderRowActions}
+          renderMobileCard={renderPaymentCard}
           isLoading={loading}
         />
       </View>
@@ -1048,6 +1147,75 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 8,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  metricCardMobile: {
+    minWidth: '47%',
+    padding: 10,
+  },
+  headerActionsWrapMobile: {
+    gap: 6,
+  },
+  iconButtonMobile: {
+    padding: 6,
+    width: 32,
+    height: 32,
+  },
+  backOutlineBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  actionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  actionBtnTextMobile: {
+    fontSize: 11,
+  },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cardPartyName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  cardBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  cardAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  cardActions: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
 });

@@ -8,6 +8,8 @@ import { CUSTOMER_QUERY_KEY } from '../api/useCustomer';
 import { Customer } from '../../../types/models';
 import { X } from 'lucide-react-native';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
+import { useTheme } from '../../../shared/theme/theme';
 
 interface CustomerFormScreenProps {
   customerId?: number | string | null;
@@ -16,6 +18,8 @@ interface CustomerFormScreenProps {
 
 export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customerId, onNavigate }) => {
   const queryClient = useQueryClient();
+  const theme = useTheme();
+  const { isMobile } = useResponsive();
   const { addCustomer, updateCustomer } = useCustomerStore();
   
   const [firstName, setFirstName] = useState('');
@@ -131,8 +135,8 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
 
   return (
     <Modal transparent visible animationType="fade">
-      <View style={styles.backdrop}>
-        <View style={styles.modalContainer}>
+      <View style={[styles.backdrop, isMobile && { padding: 8 }]}>
+        <View style={[styles.modalContainer, isMobile && { width: '96%', maxHeight: '95%' }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>{customerId ? 'Edit Customer' : 'Add Customer'}</Text>
@@ -141,14 +145,14 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 14 }]}>
             {/* Form Fields */}
-            <View style={styles.row}>
-              <View style={styles.halfCol}>
+            <View style={[styles.row, isMobile && { flexDirection: 'column', marginHorizontal: 0, gap: 12 }]}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>First Name <Text style={styles.asterisk}>*</Text></Text>
                 <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} />
               </View>
-              <View style={styles.halfCol}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>Last Name <Text style={styles.asterisk}>*</Text></Text>
                 <TextInput style={styles.input} value={lastName} onChangeText={setLastName} />
               </View>
@@ -169,23 +173,23 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
               <TextInput style={styles.input} value={address} onChangeText={setAddress} />
             </View>
 
-            <View style={styles.row}>
-              <View style={styles.halfCol}>
+            <View style={[styles.row, isMobile && { flexDirection: 'column', marginHorizontal: 0, gap: 12 }]}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>City <Text style={styles.asterisk}>*</Text></Text>
                 <AppSelect options={[]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
               </View>
-              <View style={styles.halfCol}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>State <Text style={styles.asterisk}>*</Text></Text>
                 <AppSelect options={[]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
               </View>
             </View>
 
-            <View style={styles.row}>
-              <View style={styles.halfCol}>
+            <View style={[styles.row, isMobile && { flexDirection: 'column', marginHorizontal: 0, gap: 12 }]}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>Country <Text style={styles.asterisk}>*</Text></Text>
                 <AppSelect options={[]} placeholder="Select" containerStyle={{ marginBottom: 0 }} />
               </View>
-              <View style={styles.halfCol}>
+              <View style={[styles.halfCol, isMobile && { paddingHorizontal: 0 }]}>
                 <Text style={styles.label}>Postal Code <Text style={styles.asterisk}>*</Text></Text>
                 <TextInput style={styles.input} value={postalCode} onChangeText={setPostalCode} />
               </View>
@@ -209,11 +213,17 @@ export const CustomerFormScreen: React.FC<CustomerFormScreenProps> = ({ customer
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
+          <View style={[styles.footer, isMobile && { flexDirection: 'column-reverse', gap: 8 }]}>
+            <TouchableOpacity 
+              style={[styles.cancelBtn, isMobile && { width: '100%', alignItems: 'center' }]} 
+              onPress={handleClose}
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.submitBtn} onPress={handleSave}>
+            <TouchableOpacity 
+              style={[styles.submitBtn, isMobile && { width: '100%', alignItems: 'center' }]} 
+              onPress={handleSave}
+            >
               <Text style={styles.submitBtnText}>{customerId ? 'Save Customer' : 'Add Customer'}</Text>
             </TouchableOpacity>
           </View>

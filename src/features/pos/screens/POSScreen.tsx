@@ -39,7 +39,14 @@ export const POSScreen = () => {
 
   const { products, fetchProducts } = useProductStore();
   const createSaleMutation = useCreateSale();
-  const { isMobile, isTablet, isDesktop } = useResponsive();
+  const { isMobile, isTablet, isDesktop, windowWidth } = useResponsive();
+
+  const productColumns = useMemo(() => {
+    if (isMobile) return 2;
+    if (isTablet) return 3;
+    if (windowWidth >= 1360) return 4;
+    return 3;
+  }, [isMobile, isTablet, windowWidth]);
 
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
   const [searchQuery, setSearchQuery] = useState('');
@@ -441,11 +448,11 @@ export const POSScreen = () => {
             />
           </View>
           <FlatList
-            key={isDesktop ? 'desktop-grid-4' : isTablet ? 'tablet-grid-3' : 'mobile-grid-2'}
+            key={`pos-prod-grid-${productColumns}`}
             data={filteredProducts}
             keyExtractor={(item) => String(item.id)}
             renderItem={renderProduct}
-            numColumns={isDesktop ? 4 : isTablet ? 3 : 2}
+            numColumns={productColumns}
             contentContainerStyle={styles.productList}
           />
 
@@ -659,7 +666,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
     elevation: 2,
-    minWidth: 150,
+    minWidth: 120,
   },
   productName: {
     fontSize: 16,
