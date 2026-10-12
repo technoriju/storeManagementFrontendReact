@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { useStockList } from '../api/useStock';
 import { AddStockModal } from '../components/AddStockModal';
@@ -32,6 +33,7 @@ interface Props {
 
 export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const { isMobile, isTablet, isDesktop, windowWidth } = useResponsive();
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -241,46 +243,62 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
     },
   ];
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addStockLabel = !isMobile ? 'Add Stock' : (windowWidth >= 480 ? 'Add Stock' : 'Add');
+  const adjustStockLabel = !isMobile ? 'Adjust Stock' : (windowWidth >= 480 ? 'Adjust Stock' : 'Adjust');
+  const historyLabel = !isMobile ? 'Stock Log' : 'Log';
+
   // Header Actions
   const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
+    <View style={[styles.headerActionsWrapper, isMobile && styles.headerActionsWrapperMobile]}>
       <Pressable
-        style={[styles.iconButton, { borderColor: theme.colors.border }]}
+        style={[
+          styles.iconButton,
+          isMobile && styles.iconButtonMobile,
+          { borderColor: theme.colors.border }
+        ]}
         onPress={() => refetch()}
       >
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
 
       <Pressable
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]}
+        style={[
+          styles.primaryActionBtn,
+          { backgroundColor: '#F97316' },
+          isMobile && styles.primaryActionBtnMobile,
+        ]}
         onPress={() => openAddStock()}
       >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Stock</Text>
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>{addStockLabel}</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.primaryActionBtn, { backgroundColor: '#1E3A8A' }]}
+        style={[
+          styles.primaryActionBtn,
+          { backgroundColor: '#1E3A8A' },
+          isMobile && styles.primaryActionBtnMobile,
+        ]}
         onPress={() => openAdjustStock()}
       >
-        <SlidersHorizontal size={15} color="white" />
-        <Text style={styles.primaryActionText}>Adjust Stock</Text>
+        <SlidersHorizontal size={actionIconSize} color="white" />
+        <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>{adjustStockLabel}</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+        style={[
+          styles.outlineActionBtn,
+          { borderColor: theme.colors.border },
+          isMobile && styles.outlineActionBtnMobile,
+        ]}
         onPress={() => openHistory()}
       >
-        <History size={15} color={theme.colors.text} />
-        <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Stock Log</Text>
+        <History size={actionIconSize} color={theme.colors.text} />
+        <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>{historyLabel}</Text>
       </Pressable>
-    </>
+    </View>
   );
 
   // Filter toolbar chips
@@ -376,12 +394,89 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
     </View>
   );
 
+  const renderStockCard = (item: StockItem) => {
+    const qty = Number(item.currentStock || 0);
+    const isOut = qty <= 0;
+    const isLow = !isOut && qty <= item.lowStockThreshold;
+    const qtyColor = isOut ? '#EF4444' : isLow ? '#D97706' : '#10B981';
+
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        {/* Header */}
+        <View style={styles.cardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+            <View style={[styles.productThumb, { backgroundColor: theme.colors.background }]}>
+              <Box size={16} color={theme.colors.textSecondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                {item.categoryName || 'General'} • SKU: {item.sku || 'N/A'}
+              </Text>
+            </View>
+          </View>
+          {renderStatusBadge(item.status)}
+        </View>
+
+        {/* Meta row: Brand, Unit, Cost */}
+        <View style={styles.cardMetaRow}>
+          <View style={styles.metaCol}>
+            <Text style={styles.metaKey}>Brand</Text>
+            <Text style={[styles.metaVal, { color: theme.colors.text }]}>{item.brandName || 'None'}</Text>
+          </View>
+          <View style={styles.metaCol}>
+            <Text style={styles.metaKey}>Cost</Text>
+            <Text style={[styles.metaVal, { color: theme.colors.text }]}>₹{Number(item.purchasePrice || 0).toFixed(2)}</Text>
+          </View>
+          <View style={styles.metaCol}>
+            <Text style={styles.metaKey}>Valuation</Text>
+            <Text style={[styles.metaVal, { color: theme.colors.text, fontWeight: '700' }]}>₹{Number(item.stockValue || 0).toFixed(2)}</Text>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Stock:</Text>
+            <Text style={[styles.cardQty, { color: qtyColor }]}>
+              {qty}
+            </Text>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{item.unit || 'pcs'}</Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <Pressable
+              style={[styles.rowActionBtn, { borderColor: '#FED7AA', backgroundColor: '#FFF7ED' }]}
+              onPress={() => openAddStock(item)}
+            >
+              <Plus size={15} color="#F97316" />
+            </Pressable>
+            <Pressable
+              style={[styles.rowActionBtn, { borderColor: '#DBEAFE', backgroundColor: '#EFF6FF' }]}
+              onPress={() => openAdjustStock(item)}
+            >
+              <Edit2 size={14} color="#1E3A8A" />
+            </Pressable>
+            <Pressable
+              style={[styles.rowActionBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+              onPress={() => openHistory(item)}
+            >
+              <History size={14} color={theme.colors.textSecondary} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       {/* KPI Counters Bar */}
       <View style={styles.kpiGrid}>
         {/* Total Products */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
             <Box size={20} color="#2563EB" />
           </View>
@@ -394,7 +489,7 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
         </View>
 
         {/* Total Stock Units */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
             <Layers size={20} color="#10B981" />
           </View>
@@ -407,7 +502,7 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
         </View>
 
         {/* Low Stock Alert */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
             <TrendingDown size={20} color="#D97706" />
           </View>
@@ -420,7 +515,7 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
         </View>
 
         {/* Out of Stock Alert */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
             <AlertTriangle size={20} color="#EF4444" />
           </View>
@@ -433,7 +528,7 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
         </View>
 
         {/* Total Valuation */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={[styles.kpiIconBox, { backgroundColor: '#F5F3FF' }]}>
             <CircleDollarSign size={20} color="#7C3AED" />
           </View>
@@ -457,6 +552,7 @@ export const ManageStockScreen: React.FC<Props> = ({ onNavigate }) => {
           onSearch={setSearchQuery}
           filters={filters}
           renderRowActions={renderRowActions}
+          renderMobileCard={renderStockCard}
           isLoading={isLoading}
         />
       </View>
@@ -601,6 +697,97 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'nowrap',
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
+  iconButtonMobile: {
+    width: 32,
+    height: 32,
+  },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  primaryActionTextMobile: {
+    fontSize: 12,
+  },
+  outlineActionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  outlineActionTextMobile: {
+    fontSize: 12,
+  },
+  kpiCardMobile: {
+    minWidth: '47%',
+    padding: 10,
+  },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  metaCol: {
+    flex: 1,
+  },
+  metaKey: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  metaVal: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  cardQty: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  cardActions: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
 });

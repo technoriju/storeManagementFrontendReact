@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { paymentRepository } from '../../../core/repositories/PaymentRepository';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
@@ -52,6 +53,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
   onNavigate,
 }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const customerId = entityType === 'customer' ? entityId : (route?.params?.customerId ?? null);
   const supplierId = entityType === 'supplier' ? entityId : (route?.params?.supplierId ?? null);
 
@@ -303,52 +305,58 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
     );
   };
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const receiveBtnLabel = !isMobile ? 'Receive Payment' : (windowWidth >= 480 ? 'Receive Payment' : 'Receive');
+  const addBtnLabel = !isMobile ? 'Add Payment' : (windowWidth >= 480 ? 'Add Payment' : 'Pay');
+
   // Header action buttons matching other screens
   const headerActions = (
-    <View style={styles.headerActionsWrap}>
+    <View style={[styles.headerActionsWrap, isMobile && styles.headerActionsWrapMobile]}>
       {customerId && (
         <Pressable
-          style={[styles.backOutlineBtn, { borderColor: theme.colors.border }]}
+          style={[styles.backOutlineBtn, isMobile && styles.backOutlineBtnMobile, { borderColor: theme.colors.border }]}
           onPress={() => onNavigate ? onNavigate('details', customerId) : navigation?.goBack?.()}
         >
-          <ArrowLeft size={15} color={theme.colors.text} />
-          <Text style={[styles.backOutlineText, { color: theme.colors.text }]}>Back to Details</Text>
+          <ArrowLeft size={actionIconSize} color={theme.colors.text} />
+          <Text style={[styles.backOutlineText, isMobile && { fontSize: 12 }, { color: theme.colors.text }]}>Details</Text>
         </Pressable>
       )}
 
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileText size={16} color="#E11D48" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]}>
-        <FileSpreadsheet size={16} color="#10B981" />
-      </Pressable>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={handleRefresh}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+      <Pressable 
+        style={[styles.iconButton, isMobile && styles.iconButtonMobile, { borderColor: theme.colors.border }]} 
+        onPress={handleRefresh}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
 
       {/* Receive Payment (In) */}
       <Pressable
-        style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+        style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#10B981' }]}
         onPress={() => openPaymentModal('customer', 'receive')}
       >
-        <ArrowDownLeft size={16} color="white" />
-        <Text style={styles.actionBtnText}>Receive Payment</Text>
+        <ArrowDownLeft size={actionIconSize} color="white" />
+        <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>{receiveBtnLabel}</Text>
       </Pressable>
 
       {/* Add Payment / Pay Out (Out) */}
       <Pressable
-        style={[styles.actionBtn, { backgroundColor: '#F97316' }]}
+        style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#F97316' }]}
         onPress={() => openPaymentModal('supplier', 'pay')}
       >
-        <ArrowUpRight size={16} color="white" />
-        <Text style={styles.actionBtnText}>Add Payment</Text>
+        <ArrowUpRight size={actionIconSize} color="white" />
+        <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>{addBtnLabel}</Text>
       </Pressable>
     </View>
   );
 
   // Table filter toolbar options
   const filterToolbar = (
-    <View style={styles.filtersRow}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={[styles.filtersRow, isMobile && { paddingRight: 10 }]}
+    >
       {/* Direction Pills */}
       <View style={styles.segmentedContainer}>
         <TouchableOpacity
@@ -364,7 +372,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onPress={() => setDirectionFilter('receive')}
         >
           <Text style={[styles.segmentBtnText, directionFilter === 'receive' && styles.segmentBtnTextActive]}>
-            Received In ({metrics.inCount})
+            Received ({metrics.inCount})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -372,7 +380,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onPress={() => setDirectionFilter('pay')}
         >
           <Text style={[styles.segmentBtnText, directionFilter === 'pay' && styles.segmentBtnTextActive]}>
-            Paid Out ({metrics.outCount})
+            Paid ({metrics.outCount})
           </Text>
         </TouchableOpacity>
       </View>
@@ -409,7 +417,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 
   const columns = [
@@ -548,22 +556,108 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
     </View>
   );
 
+  const renderPaymentCard = (item: Payment) => {
+    const custId = item.customerId ? Number(item.customerId) : null;
+    const suppId = item.supplierId ? Number(item.supplierId) : null;
+    const isCust = !!custId || item.type === 'receive';
+    const name = isCust
+      ? (item as any).customerName || (custId ? customerMap[custId]?.name : null) || (item as any).partyName || (custId ? `Customer #${custId}` : 'Customer')
+      : (item as any).supplierName || (suppId ? supplierMap[suppId]?.name : null) || (item as any).partyName || (suppId ? `Supplier #${suppId}` : 'Supplier');
+    const d = new Date(item.createdAt);
+    const dateStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    const isReceive = item.type === 'receive';
+
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardTopRow}>
+          <View style={[styles.cardTypeIconBox, { backgroundColor: isReceive ? '#DCFCE7' : '#FEE2E2' }]}>
+            {isReceive ? (
+              <ArrowDownLeft size={15} color="#16A34A" />
+            ) : (
+              <ArrowUpRight size={15} color="#DC2626" />
+            )}
+          </View>
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.cardPartyName, { color: theme.colors.text }]} numberOfLines={1}>
+                {name}
+              </Text>
+              <Text style={[styles.cardAmount, { color: isReceive ? '#16A34A' : '#DC2626' }]}>
+                {isReceive ? '+' : '-'}₹{item.amount.toFixed(2)}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+              <Text style={[styles.cardRefText, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                {item.reference || `PAY-${Math.abs(item.id).toString().slice(-4)}`} • {dateStr}
+              </Text>
+              <SyncBadge status={item.syncStatus || 'synced'} />
+            </View>
+          </View>
+        </View>
+
+        <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+          <View style={styles.cardBadgesGroup}>
+            <View style={[styles.partyBadge, { backgroundColor: isCust ? '#EFF6FF' : '#F5F3FF' }]}>
+              {isCust ? <User size={9} color="#2563EB" style={{ marginRight: 2 }} /> : <Building2 size={9} color="#7C3AED" style={{ marginRight: 2 }} />}
+              <Text style={{ fontSize: 9.5, fontWeight: '700', color: isCust ? '#2563EB' : '#7C3AED' }}>
+                {isCust ? 'CUSTOMER' : 'SUPPLIER'}
+              </Text>
+            </View>
+            <View style={styles.methodPill}>
+              <Text style={{ fontSize: 9.5, fontWeight: '600', color: '#475569' }}>
+                {(item.method || 'CASH').toUpperCase()}
+              </Text>
+            </View>
+            {item.notes ? (
+              <Text style={{ fontSize: 10, color: theme.colors.textSecondary, fontStyle: 'italic', maxWidth: 110 }} numberOfLines={1}>
+                {item.notes}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.cardActions}>
+            <Pressable
+              style={[styles.rowActionBtn, isMobile && styles.rowActionBtnMobile, { borderColor: theme.colors.border }]}
+              onPress={() => setViewedPayment(item)}
+            >
+              <Eye size={isMobile ? 13 : 15} color={theme.colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={[styles.rowActionBtn, isMobile && styles.rowActionBtnMobile, { borderColor: theme.colors.border }]}
+              onPress={() => handleDeletePayment(item)}
+            >
+              <Trash2 size={isMobile ? 13 : 15} color={theme.colors.error} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const currentParty: any = entityType === 'customer'
     ? (customerId ? customerMap[Number(customerId)] : null)
     : (supplierId ? supplierMap[Number(supplierId)] : null);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       {/* Party Balance Banner if opened for specific party */}
       {currentParty && (
-        <View style={[styles.partyBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <View style={[styles.partyAvatar, { backgroundColor: entityType === 'customer' ? '#EFF6FF' : '#FEF3C7' }]}>
-              {entityType === 'customer' ? <User size={22} color="#2563EB" /> : <Building2 size={22} color="#D97706" />}
+        <View style={[
+          styles.partyBanner, 
+          isMobile && styles.partyBannerMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }
+        ]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isMobile ? 8 : 12, flexWrap: 'wrap' }}>
+            <View style={[
+              styles.partyAvatar, 
+              isMobile && styles.partyAvatarMobile,
+              { backgroundColor: entityType === 'customer' ? '#EFF6FF' : '#FEF3C7' }
+            ]}>
+              {entityType === 'customer' ? <User size={isMobile ? 16 : 22} color="#2563EB" /> : <Building2 size={isMobile ? 16 : 22} color="#D97706" />}
             </View>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.text }}>{currentParty.name}</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={{ fontSize: isMobile ? 14 : 16, fontWeight: '700', color: theme.colors.text }}>{currentParty.name}</Text>
                 <View
                   style={{
                     backgroundColor:
@@ -572,14 +666,14 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
                         : (currentParty.outstandingBalance || 0) > 0
                         ? '#FEE2E2'
                         : '#F1F5F9',
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
                     borderRadius: 4,
                   }}
                 >
                   <Text
                     style={{
-                      fontSize: 11,
+                      fontSize: isMobile ? 9.5 : 11,
                       fontWeight: '700',
                       color:
                         (currentParty.outstandingBalance || 0) < 0
@@ -590,15 +684,15 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
                     }}
                   >
                     {(currentParty.outstandingBalance || 0) < 0
-                      ? 'ADVANCE AVAILABLE'
+                      ? 'ADVANCE'
                       : (currentParty.outstandingBalance || 0) > 0
-                      ? (entityType === 'customer' ? 'OVERDUE' : 'PAYABLE DUE')
-                      : 'ALL CLEARED'}
+                      ? (entityType === 'customer' ? 'OVERDUE' : 'DUE')
+                      : 'CLEARED'}
                   </Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>
-                Phone: {currentParty.phone || 'N/A'} • Current Balance:{' '}
+              <Text style={{ fontSize: isMobile ? 11 : 12, color: theme.colors.textSecondary, marginTop: 1 }}>
+                Bal:{' '}
                 <Text
                   style={{
                     fontWeight: '700',
@@ -611,11 +705,12 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
                   }}
                 >
                   {(currentParty.outstandingBalance || 0) < 0
-                    ? `₹${Math.abs(currentParty.outstandingBalance || 0).toFixed(2)} Advance Credit`
+                    ? `₹${Math.abs(currentParty.outstandingBalance || 0).toFixed(2)} Adv`
                     : (currentParty.outstandingBalance || 0) > 0
                     ? `₹${(currentParty.outstandingBalance || 0).toFixed(2)} Due`
-                    : '₹0.00 (Cleared)'}
+                    : '₹0.00'}
                 </Text>
+                {currentParty.phone ? ` • ${currentParty.phone}` : ''}
               </Text>
             </View>
           </View>
@@ -623,61 +718,77 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
       )}
 
       {/* 4 Metric Summary Cards */}
-      <View style={styles.metricsGrid}>
+      <View style={[styles.metricsGrid, isMobile && styles.metricsGridMobile]}>
         {/* Total Received (In) */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#10B981' }]}>
-          <View style={styles.metricCardHeader}>
-            <Text style={styles.metricCardLabel}>TOTAL RECEIVED (IN)</Text>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#DCFCE7' }]}>
-              <ArrowDownLeft size={16} color="#16A34A" />
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#10B981' }
+        ]}>
+          <View style={[styles.metricCardHeader, isMobile && styles.metricCardHeaderMobile]}>
+            <Text style={[styles.metricCardLabel, isMobile && styles.metricCardLabelMobile]}>TOTAL RECEIVED (IN)</Text>
+            <View style={[styles.metricIconCircle, isMobile && styles.metricIconCircleMobile, { backgroundColor: '#DCFCE7' }]}>
+              <ArrowDownLeft size={isMobile ? 12 : 16} color="#16A34A" />
             </View>
           </View>
-          <Text style={[styles.metricCardValue, { color: '#16A34A' }]}>
+          <Text style={[styles.metricCardValue, isMobile && styles.metricCardValueMobile, { color: '#16A34A' }]}>
             ₹{metrics.totalIn.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
-          <Text style={styles.metricCardSub}>From Customers: ₹{metrics.customerIn.toFixed(2)}</Text>
+          <Text style={[styles.metricCardSub, isMobile && styles.metricCardSubMobile]}>Customers: ₹{metrics.customerIn.toFixed(2)}</Text>
         </View>
 
         {/* Total Paid (Out) */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#EF4444' }]}>
-          <View style={styles.metricCardHeader}>
-            <Text style={styles.metricCardLabel}>TOTAL PAID (OUT)</Text>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#FEE2E2' }]}>
-              <ArrowUpRight size={16} color="#DC2626" />
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#EF4444' }
+        ]}>
+          <View style={[styles.metricCardHeader, isMobile && styles.metricCardHeaderMobile]}>
+            <Text style={[styles.metricCardLabel, isMobile && styles.metricCardLabelMobile]}>TOTAL PAID (OUT)</Text>
+            <View style={[styles.metricIconCircle, isMobile && styles.metricIconCircleMobile, { backgroundColor: '#FEE2E2' }]}>
+              <ArrowUpRight size={isMobile ? 12 : 16} color="#DC2626" />
             </View>
           </View>
-          <Text style={[styles.metricCardValue, { color: '#DC2626' }]}>
+          <Text style={[styles.metricCardValue, isMobile && styles.metricCardValueMobile, { color: '#DC2626' }]}>
             ₹{metrics.totalOut.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
-          <Text style={styles.metricCardSub}>To Suppliers: ₹{metrics.supplierOut.toFixed(2)}</Text>
+          <Text style={[styles.metricCardSub, isMobile && styles.metricCardSubMobile]}>Suppliers: ₹{metrics.supplierOut.toFixed(2)}</Text>
         </View>
 
         {/* Net Cashflow */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#3B82F6' }]}>
-          <View style={styles.metricCardHeader}>
-            <Text style={styles.metricCardLabel}>NET CASHFLOW</Text>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#DBEAFE' }]}>
-              <DollarSign size={16} color="#2563EB" />
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#3B82F6' }
+        ]}>
+          <View style={[styles.metricCardHeader, isMobile && styles.metricCardHeaderMobile]}>
+            <Text style={[styles.metricCardLabel, isMobile && styles.metricCardLabelMobile]}>NET CASHFLOW</Text>
+            <View style={[styles.metricIconCircle, isMobile && styles.metricIconCircleMobile, { backgroundColor: '#DBEAFE' }]}>
+              <DollarSign size={isMobile ? 12 : 16} color="#2563EB" />
             </View>
           </View>
-          <Text style={[styles.metricCardValue, { color: metrics.netCashflow >= 0 ? '#16A34A' : '#DC2626' }]}>
+          <Text style={[styles.metricCardValue, isMobile && styles.metricCardValueMobile, { color: metrics.netCashflow >= 0 ? '#16A34A' : '#DC2626' }]}>
             {metrics.netCashflow >= 0 ? '+' : ''}₹{metrics.netCashflow.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
-          <Text style={styles.metricCardSub}>{metrics.netCashflow >= 0 ? 'Cash Positive' : 'Cash Outflow'}</Text>
+          <Text style={[styles.metricCardSub, isMobile && styles.metricCardSubMobile]}>{metrics.netCashflow >= 0 ? 'Cash Positive' : 'Cash Outflow'}</Text>
         </View>
 
         {/* Total Transactions */}
-        <View style={[styles.metricCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#8B5CF6' }]}>
-          <View style={styles.metricCardHeader}>
-            <Text style={styles.metricCardLabel}>ALL TRANSACTIONS</Text>
-            <View style={[styles.metricIconCircle, { backgroundColor: '#EDE9FE' }]}>
-              <CreditCard size={16} color="#7C3AED" />
+        <View style={[
+          styles.metricCard,
+          isMobile && styles.metricCardMobile,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderLeftColor: '#8B5CF6' }
+        ]}>
+          <View style={[styles.metricCardHeader, isMobile && styles.metricCardHeaderMobile]}>
+            <Text style={[styles.metricCardLabel, isMobile && styles.metricCardLabelMobile]}>ALL TRANSACTIONS</Text>
+            <View style={[styles.metricIconCircle, isMobile && styles.metricIconCircleMobile, { backgroundColor: '#EDE9FE' }]}>
+              <CreditCard size={isMobile ? 12 : 16} color="#7C3AED" />
             </View>
           </View>
-          <Text style={[styles.metricCardValue, { color: '#7C3AED' }]}>
+          <Text style={[styles.metricCardValue, isMobile && styles.metricCardValueMobile, { color: '#7C3AED' }]}>
             {metrics.totalTransactions}
           </Text>
-          <Text style={styles.metricCardSub}>{metrics.inCount} In / {metrics.outCount} Out</Text>
+          <Text style={[styles.metricCardSub, isMobile && styles.metricCardSubMobile]}>{metrics.inCount} In / {metrics.outCount} Out</Text>
         </View>
       </View>
 
@@ -692,6 +803,7 @@ export const PaymentHistoryScreen: React.FC<Props> = ({
           onSearch={setSearchQuery}
           filters={filterToolbar}
           renderRowActions={renderRowActions}
+          renderMobileCard={renderPaymentCard}
           isLoading={loading}
         />
       </View>
@@ -1043,11 +1155,119 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
+  partyBannerMobile: {
+    padding: 10,
+    marginBottom: 10,
+  },
   partyAvatar: {
     width: 44,
     height: 44,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  partyAvatarMobile: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+  },
+  metricsGridMobile: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  metricCardMobile: {
+    minWidth: '47%',
+    padding: 8,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+  },
+  metricCardHeaderMobile: {
+    marginBottom: 4,
+  },
+  metricCardLabelMobile: {
+    fontSize: 9.5,
+  },
+  metricIconCircleMobile: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  metricCardValueMobile: {
+    fontSize: 14.5,
+    marginBottom: 2,
+  },
+  metricCardSubMobile: {
+    fontSize: 9.5,
+  },
+  headerActionsWrapMobile: {
+    gap: 6,
+  },
+  iconButtonMobile: {
+    padding: 6,
+    width: 32,
+    height: 32,
+  },
+  backOutlineBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  actionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 32,
+    gap: 4,
+  },
+  actionBtnTextMobile: {
+    fontSize: 11,
+  },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 9,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cardTypeIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardPartyName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  cardAmount: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  cardRefText: {
+    fontSize: 11,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 6,
+    marginTop: 6,
+  },
+  cardBadgesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowActionBtnMobile: {
+    width: 28,
+    height: 28,
   },
 });

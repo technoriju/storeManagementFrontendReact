@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { TrendingUp, TrendingDown, DollarSign, PieChart, Percent, ArrowUpRight, ArrowDownLeft } from 'lucide-react-native';
 
 interface ProfitLossViewProps {
@@ -13,6 +14,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
   dateRangeLabel = 'Current Financial Period',
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const summary = data?.summary || {
     grossSales: 0,
     totalDiscount: 0,
@@ -31,73 +33,75 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
   return (
     <View style={styles.container}>
       {/* KPI Cards */}
-      <View style={styles.kpiGrid}>
+      <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
         
         {/* Net Sales */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
-            <DollarSign size={20} color="#2563EB" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+            <DollarSign size={isMobile ? 16 : 20} color="#2563EB" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Net Sales Revenue</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>₹{Number(summary.netSales).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Gross ₹{Number(summary.grossSales).toLocaleString()}</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Net Sales</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{Number(summary.netSales).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Gross ₹{Number(summary.grossSales).toLocaleString()}</Text>}
           </View>
         </View>
 
         {/* COGS */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
-            <ArrowDownLeft size={20} color="#EF4444" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
+            <ArrowDownLeft size={isMobile ? 16 : 20} color="#EF4444" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Cost of Goods (COGS)</Text>
-            <Text style={[styles.kpiValue, { color: '#EF4444' }]}>₹{Number(summary.cogs).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Direct wholesale costs</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>COGS</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#EF4444' }]}>₹{Number(summary.cogs).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Direct wholesale costs</Text>}
           </View>
         </View>
 
         {/* Gross Profit */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-            <TrendingUp size={20} color="#10B981" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
+            <TrendingUp size={isMobile ? 16 : 20} color="#10B981" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Gross Profit</Text>
-            <Text style={[styles.kpiValue, { color: '#10B981' }]}>₹{Number(summary.grossProfit).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: '#10B981' }]}>Margin {summary.grossMarginPercent}%</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Gross Profit</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{Number(summary.grossProfit).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: '#10B981' }]}>Margin {summary.grossMarginPercent}%</Text>}
           </View>
         </View>
 
         {/* Operating Expenses */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-            <PieChart size={20} color="#D97706" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FFFBEB' }]}>
+            <PieChart size={isMobile ? 16 : 20} color="#D97706" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Operating Overhead</Text>
-            <Text style={[styles.kpiValue, { color: '#D97706' }]}>₹{Number(summary.totalExpenses).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Store rent, salaries, utilities</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Overhead</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#D97706' }]}>₹{Number(summary.totalExpenses).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Store rent, salaries, utilities</Text>}
           </View>
         </View>
 
         {/* Net Profit */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: isNetProfitable ? '#10B981' : '#EF4444' }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: isNetProfitable ? '#ECFDF5' : '#FEF2F2' }]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: isNetProfitable ? '#10B981' : '#EF4444' }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: isNetProfitable ? '#ECFDF5' : '#FEF2F2' }]}>
             {isNetProfitable ? (
-              <ArrowUpRight size={20} color="#10B981" />
+              <ArrowUpRight size={isMobile ? 16 : 20} color="#10B981" />
             ) : (
-              <TrendingDown size={20} color="#EF4444" />
+              <TrendingDown size={isMobile ? 16 : 20} color="#EF4444" />
             )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>NET PROFIT / (LOSS)</Text>
-            <Text style={[styles.kpiValue, { color: isNetProfitable ? '#10B981' : '#EF4444' }]}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>NET PROFIT</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: isNetProfitable ? '#10B981' : '#EF4444' }]}>
               ₹{Number(summary.netProfit).toLocaleString()}
             </Text>
-            <Text style={[styles.kpiSub, { color: isNetProfitable ? '#10B981' : '#EF4444', fontWeight: '600' }]}>
-              Net Margin: {summary.netMarginPercent}%
-            </Text>
+            {!isMobile && (
+              <Text style={[styles.kpiSub, { color: isNetProfitable ? '#10B981' : '#EF4444', fontWeight: '600' }]}>
+                Net Margin: {summary.netMarginPercent}%
+              </Text>
+            )}
           </View>
         </View>
 
@@ -107,9 +111,9 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
       <View style={[styles.statementCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         
         {/* Card Header */}
-        <View style={[styles.cardHeader, { borderBottomColor: theme.colors.divider }]}>
+        <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile, { borderBottomColor: theme.colors.divider }]}>
           <View>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Income Statement Breakdown</Text>
+            <Text style={[styles.cardTitle, isMobile && styles.cardTitleMobile, { color: theme.colors.text }]}>Income Statement Breakdown</Text>
             <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
               GAAP compliant profit & loss accounting schedule • {dateRangeLabel}
             </Text>
@@ -264,5 +268,33 @@ const styles = StyleSheet.create({
   },
   metricText: {
     fontSize: 13,
+  },
+  kpiGridMobile: {
+    gap: 8,
+  },
+  kpiCardMobile: {
+    minWidth: '47%',
+    padding: 8,
+    gap: 8,
+    borderRadius: 8,
+  },
+  kpiIconBoxMobile: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+  },
+  kpiLabelMobile: {
+    fontSize: 10,
+  },
+  kpiValueMobile: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  cardHeaderMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  cardTitleMobile: {
+    fontSize: 14,
   },
 });

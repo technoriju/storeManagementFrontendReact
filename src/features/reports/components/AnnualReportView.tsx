@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { Calendar, TrendingUp, DollarSign, ShoppingBag, PieChart, ArrowUpRight } from 'lucide-react-native';
 
 interface AnnualReportViewProps {
@@ -13,6 +14,7 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
   dateRangeLabel = 'FY 2025 - 2026',
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const summary = data?.summary || {
     totalTurnover: 0,
     totalPurchases: 0,
@@ -29,53 +31,53 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
   return (
     <View style={styles.container}>
       {/* KPI Cards */}
-      <View style={styles.kpiGrid}>
+      <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
         
         {/* Annual Turnover */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
-            <DollarSign size={20} color="#2563EB" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+            <DollarSign size={isMobile ? 16 : 20} color="#2563EB" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Annual Turnover</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>₹{Number(summary.totalTurnover).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: '#10B981' }]}>+{summary.growthRate}% YoY Growth</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Annual Turnover</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{Number(summary.totalTurnover).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: '#10B981' }]}>+{summary.growthRate}% YoY Growth</Text>}
           </View>
         </View>
 
         {/* Annual Purchases */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#F5F3FF' }]}>
-            <ShoppingBag size={20} color="#7C3AED" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F5F3FF' }]}>
+            <ShoppingBag size={isMobile ? 16 : 20} color="#7C3AED" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Annual Purchases</Text>
-            <Text style={[styles.kpiValue, { color: '#7C3AED' }]}>₹{Number(summary.totalPurchases).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Vendor procurement</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Annual Purchases</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#7C3AED' }]}>₹{Number(summary.totalPurchases).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Vendor procurement</Text>}
           </View>
         </View>
 
         {/* Operating Overhead */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-            <PieChart size={20} color="#D97706" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FFFBEB' }]}>
+            <PieChart size={isMobile ? 16 : 20} color="#D97706" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Annual Expenses</Text>
-            <Text style={[styles.kpiValue, { color: '#D97706' }]}>₹{Number(summary.totalExpenses).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Fixed & variable costs</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Annual Expenses</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#D97706' }]}>₹{Number(summary.totalExpenses).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Fixed & variable costs</Text>}
           </View>
         </View>
 
         {/* Annual Net Profit */}
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.surface, borderColor: '#10B981' }]}>
-          <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-            <TrendingUp size={20} color="#10B981" />
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: '#10B981' }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
+            <TrendingUp size={isMobile ? 16 : 20} color="#10B981" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Annual Net Profit</Text>
-            <Text style={[styles.kpiValue, { color: '#10B981' }]}>₹{Number(summary.totalNetProfit).toLocaleString()}</Text>
-            <Text style={[styles.kpiSub, { color: '#10B981', fontWeight: '600' }]}>Avg Margin: {summary.avgNetMargin}%</Text>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Annual Net Profit</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{Number(summary.totalNetProfit).toLocaleString()}</Text>
+            {!isMobile && <Text style={[styles.kpiSub, { color: '#10B981', fontWeight: '600' }]}>Avg Margin: {summary.avgNetMargin}%</Text>}
           </View>
         </View>
 
@@ -85,9 +87,9 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
       <View style={[styles.statementCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
         
         {/* Card Header */}
-        <View style={[styles.cardHeader, { borderBottomColor: theme.colors.divider }]}>
+        <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile, { borderBottomColor: theme.colors.divider }]}>
           <View>
-            <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Month-by-Month Financial Performance</Text>
+            <Text style={[styles.cardTitle, isMobile && styles.cardTitleMobile, { color: theme.colors.text }]}>Month-by-Month Financial Performance</Text>
             <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
               Comparative sales volume, procurement, and bottom-line margin • {dateRangeLabel}
             </Text>
@@ -272,5 +274,33 @@ const styles = StyleSheet.create({
   barFill: {
     height: '100%',
     borderRadius: 2,
+  },
+  kpiGridMobile: {
+    gap: 8,
+  },
+  kpiCardMobile: {
+    minWidth: '47%',
+    padding: 8,
+    gap: 8,
+    borderRadius: 8,
+  },
+  kpiIconBoxMobile: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+  },
+  kpiLabelMobile: {
+    fontSize: 10,
+  },
+  kpiValueMobile: {
+    fontSize: 14,
+    marginTop: 1,
+  },
+  cardHeaderMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  cardTitleMobile: {
+    fontSize: 14,
   },
 });
