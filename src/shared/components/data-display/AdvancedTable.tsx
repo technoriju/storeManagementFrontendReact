@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Pressable, Platform } from 'react-native';
 import { useTheme } from '../../theme/theme';
-import { Search, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
+import { useResponsive } from '../../hooks/useResponsive';
+import { Search, ChevronLeft, ChevronRight, ChevronDown, LayoutGrid, Table as TableIcon } from 'lucide-react-native';
 
 export interface AdvancedTableColumn<T> {
   key: string;
@@ -32,6 +33,9 @@ export interface AdvancedTableProps<T> {
   totalPages?: number;
   onPageChange?: (newPage: number) => void;
   onRowsPerPageChange?: (newRowsPerPage: number) => void;
+  renderMobileCard?: (item: T, index: number) => React.ReactNode;
+  viewMode?: 'table' | 'card';
+  onViewModeChange?: (mode: 'table' | 'card') => void;
 }
 
 export const AdvancedTable = <T extends Record<string, any>>({
@@ -54,13 +58,29 @@ export const AdvancedTable = <T extends Record<string, any>>({
   totalPages: controlledTotalPages,
   onPageChange,
   onRowsPerPageChange,
+  renderMobileCard,
+  viewMode: controlledViewMode,
+  onViewModeChange,
 }: AdvancedTableProps<T>) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const isServerSide = controlledTotalItems !== undefined;
 
   const [internalPage, setInternalPage] = useState(1);
   const [internalRowsPerPage, setInternalRowsPerPage] = useState(10);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [internalViewMode, setInternalViewMode] = useState<'table' | 'card'>(isMobile && renderMobileCard ? 'card' : 'table');
+
+  const currentViewMode = controlledViewMode ?? internalViewMode;
+
+  const toggleViewMode = () => {
+    const nextMode = currentViewMode === 'table' ? 'card' : 'table';
+    if (onViewModeChange) {
+      onViewModeChange(nextMode);
+    } else {
+      setInternalViewMode(nextMode);
+    }
+  };
 
   const page = isServerSide && controlledPage !== undefined ? controlledPage : internalPage;
   const rowsPerPage = isServerSide && controlledRowsPerPage !== undefined ? controlledRowsPerPage : internalRowsPerPage;
@@ -167,81 +187,113 @@ export const AdvancedTable = <T extends Record<string, any>>({
           <View style={styles.filtersContainer}>
             {filters}
           </View>
+          {renderMobileCard && (
+            <Pressable
+              style={[styles.viewToggleBtn, { borderColor: theme.colors.border }]}
+              onPress={toggleViewMode}
+            >
+              {currentViewMode === 'card' ? (
+                <TableIcon size={18} color={theme.colors.textSecondary} />
+              ) : (
+                <LayoutGrid size={18} color={theme.colors.textSecondary} />
+              )}
+            </Pressable>
+          )}
         </View>
 
-        {/* Table Content */}
-        <ScrollView horizontal style={styles.tableScroll} contentContainerStyle={{ minWidth: '100%', flexGrow: 1 }}>
-          <View style={{ minWidth: '100%', flex: 1 }}>
-            {/* Header Row */}
-            <View style={[styles.headerRow, { borderBottomColor: theme.colors.divider }]}>
-              {hasCheckbox && (
-                <View style={styles.checkboxCell}>
-                  <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
+        {/* Content: Mobile Cards or Table */}
+        {currentViewMode === 'card' && renderMobileCard ? (
+          <ScrollView style={styles.cardListScroll} contentContainerStyle={{ padding: 12 }}>
+            {isLoading ? (
+              <View style={styles.emptyState}>
+                <Text style={{ color: theme.colors.textSecondary }}>Loading data...</Text>
+              </View>
+            ) : currentData.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={{ color: theme.colors.textSecondary }}>No data found</Text>
+              </View>
+            ) : (
+              currentData.map((item, rowIndex) => (
+                <View key={`card-row-${item.id ?? ''}-${rowIndex}`} style={{ marginBottom: 12 }}>
+                  {renderMobileCard(item, rowIndex)}
                 </View>
-              )}
-              {columns.map((col, index) => (
-                <View 
-                  key={col.key || index.toString()} 
-                  style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
-                >
-                  <Text style={[styles.headerText, { color: theme.colors.textSecondary }]}>{col.title}</Text>
-                </View>
-              ))}
-              {renderRowActions && (
-                <View style={[styles.cell, { width: 140, paddingRight: 24 }]} />
-              )}
-            </View>
-
-            {/* Body Rows */}
-            <ScrollView style={{ flex: 1 }}>
-              {isLoading ? (
-                <View style={styles.emptyState}>
-                  <Text style={{ color: theme.colors.textSecondary }}>Loading data...</Text>
-                </View>
-              ) : currentData.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={{ color: theme.colors.textSecondary }}>No data found</Text>
-                </View>
-              ) : (
-                currentData.map((item, rowIndex) => (
-                  <View 
-                    key={`row-${item.id ?? ''}-${rowIndex}`} 
-                    style={[
-                      styles.row, 
-                      { borderBottomColor: theme.colors.divider },
-                      rowIndex === currentData.length - 1 && { borderBottomWidth: 0 }
-                    ]}
-                  >
-                    {hasCheckbox && (
-                      <View style={styles.checkboxCell}>
-                        <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
-                      </View>
-                    )}
-                    {columns.map((col, colIndex) => (
-                      <View 
-                        key={col.key || colIndex.toString()} 
-                        style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
-                      >
-                        {col.render ? (
-                          col.render(item[col.key], item)
-                        ) : (
-                          <Text style={[styles.cellText, { color: theme.colors.textSecondary }]}>
-                            {item[col.key]}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                    {renderRowActions && (
-                      <View style={[styles.cell, { width: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, paddingRight: 24 }]}>
-                        {renderRowActions(item)}
-                      </View>
-                    )}
+              ))
+            )}
+          </ScrollView>
+        ) : (
+          <ScrollView horizontal style={styles.tableScroll} contentContainerStyle={{ minWidth: '100%', flexGrow: 1 }}>
+            <View style={{ minWidth: '100%', flex: 1 }}>
+              {/* Header Row */}
+              <View style={[styles.headerRow, { borderBottomColor: theme.colors.divider }]}>
+                {hasCheckbox && (
+                  <View style={styles.checkboxCell}>
+                    <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
                   </View>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        </ScrollView>
+                )}
+                {columns.map((col, index) => (
+                  <View 
+                    key={col.key || index.toString()} 
+                    style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
+                  >
+                    <Text style={[styles.headerText, { color: theme.colors.textSecondary }]}>{col.title}</Text>
+                  </View>
+                ))}
+                {renderRowActions && (
+                  <View style={[styles.cell, { width: 140, paddingRight: 24 }]} />
+                )}
+              </View>
+
+              {/* Body Rows */}
+              <ScrollView style={{ flex: 1 }}>
+                {isLoading ? (
+                  <View style={styles.emptyState}>
+                    <Text style={{ color: theme.colors.textSecondary }}>Loading data...</Text>
+                  </View>
+                ) : currentData.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={{ color: theme.colors.textSecondary }}>No data found</Text>
+                  </View>
+                ) : (
+                  currentData.map((item, rowIndex) => (
+                    <View 
+                      key={`row-${item.id ?? ''}-${rowIndex}`} 
+                      style={[
+                        styles.row, 
+                        { borderBottomColor: theme.colors.divider },
+                        rowIndex === currentData.length - 1 && { borderBottomWidth: 0 }
+                      ]}
+                    >
+                      {hasCheckbox && (
+                        <View style={styles.checkboxCell}>
+                          <View style={[styles.checkbox, { borderColor: theme.colors.border }]} />
+                        </View>
+                      )}
+                      {columns.map((col, colIndex) => (
+                        <View 
+                          key={col.key || colIndex.toString()} 
+                          style={[styles.cell, col.width ? { width: col.width } : { flex: col.flex || 1 }, col.minWidth ? { minWidth: col.minWidth } : null]}
+                        >
+                          {col.render ? (
+                            col.render(item[col.key], item)
+                          ) : (
+                            <Text style={[styles.cellText, { color: theme.colors.textSecondary }]}>
+                              {item[col.key]}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                      {renderRowActions && (
+                        <View style={[styles.cell, { width: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, paddingRight: 24 }]}>
+                          {renderRowActions(item)}
+                        </View>
+                      )}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+          </ScrollView>
+        )}
 
         {/* Footer / Pagination */}
         <View style={[styles.footer, { borderTopColor: theme.colors.divider }]}>
@@ -375,10 +427,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     borderBottomWidth: 1,
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 10,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -387,7 +439,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 12,
     height: 40,
-    minWidth: 250,
+    minWidth: 160,
+    flex: 1,
   },
   searchInput: {
     flex: 1,
@@ -397,7 +450,21 @@ const styles = StyleSheet.create({
   },
   filtersContainer: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  viewToggleBtn: {
+    width: 36,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  cardListScroll: {
+    flex: 1,
   },
   tableScroll: {
     flex: 1,

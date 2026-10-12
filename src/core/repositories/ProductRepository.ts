@@ -357,20 +357,34 @@ export class ProductRepository extends BaseRepository<Product> {
     page?: number;
     limit?: number;
     search?: string;
+    categoryId?: number;
+    brandId?: number;
   }): Promise<{ data: Product[]; total: number; page: number; limit: number; totalPages: number }> {
     const page = Math.max(1, params.page || 1);
     const limit = Math.max(1, params.limit || 10);
     const offset = (page - 1) * limit;
     const search = (params.search || '').trim();
+    const categoryId = params.categoryId ? Number(params.categoryId) : undefined;
+    const brandId = params.brandId ? Number(params.brandId) : undefined;
 
     try {
-      let whereClause = '';
+      const conditions: string[] = [];
       const queryParams: any[] = [];
       if (search) {
-        whereClause = `WHERE (name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR categoryName LIKE ? OR brandName LIKE ?)`;
+        conditions.push(`(name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR categoryName LIKE ? OR brandName LIKE ?)`);
         const pattern = `%${search}%`;
         queryParams.push(pattern, pattern, pattern, pattern, pattern);
       }
+      if (categoryId && !isNaN(categoryId)) {
+        conditions.push(`categoryId = ?`);
+        queryParams.push(categoryId);
+      }
+      if (brandId && !isNaN(brandId)) {
+        conditions.push(`brandId = ?`);
+        queryParams.push(brandId);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
       const countRes = await db.execute(`SELECT COUNT(*) as totalCount FROM ${this.tableName} ${whereClause}`, queryParams);
       let total = 0;
@@ -422,6 +436,12 @@ export class ProductRepository extends BaseRepository<Product> {
             (p.categoryName && p.categoryName.toLowerCase().includes(s)) ||
             (p.brandName && p.brandName.toLowerCase().includes(s))
         );
+      }
+      if (categoryId && !isNaN(categoryId)) {
+        filtered = filtered.filter((p) => Number(p.categoryId) === categoryId);
+      }
+      if (brandId && !isNaN(brandId)) {
+        filtered = filtered.filter((p) => Number(p.brandId) === brandId);
       }
       filtered.sort((a, b) => {
         const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
