@@ -65,6 +65,7 @@ export type IconName =
   | 'key'
   | 'trash-2'
   | 'truck'
+  | 'x'
   | 'copy';
 
 interface IconProps {
