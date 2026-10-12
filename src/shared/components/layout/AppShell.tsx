@@ -32,6 +32,7 @@ const isTabActive = (tabId: string, currentTab: string) => {
   if (tabId === 'products' && (
     currentTab === 'products' || 
     currentTab === 'create_product' || 
+    currentTab === 'add_product' || 
     currentTab === 'expired_products' ||
     currentTab === 'category' || 
     currentTab === 'sub_category' || 
@@ -166,6 +167,7 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
     const found = TABS.find(t => t.id === tab);
     if (found) return found.label;
     if (tab === 'profit_loss') return 'Profit & Loss';
+    if (tab === 'add_product' || tab === 'create_product') return 'Add Product';
     return tab.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
