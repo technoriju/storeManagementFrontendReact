@@ -236,7 +236,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
 
         {/* Quick Actions Launcher - Footer Style Multi-row Grid */}
         <View style={styles.quickActionsSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionHeaderTitleWrapper}>
+              <View style={[styles.sectionHeaderAccent, { backgroundColor: theme.colors.primary }]} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
+            </View>
+            <View style={[styles.sectionDividerLine, { backgroundColor: theme.colors.border }]} />
+          </View>
+
           <View style={styles.quickActionsGrid}>
             {QUICK_ACTIONS.map((action) => (
               <TouchableOpacity
@@ -266,6 +273,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Horizontal line with quick action */}
+          <View style={[styles.quickActionsBottomLine, { backgroundColor: theme.colors.border }]} />
         </View>
 
         {/* Low Stock Contextual Banner */}
@@ -283,14 +293,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           </TouchableOpacity>
         )}
 
-        {/* 2x2 Financial KPI Grid - 4 Cards of Equal Size (No percentage hike) */}
+        {/* 2x2 Financial KPI Grid - 4 Cards: Amount on Top, Icon + Text on Bottom */}
         <View style={styles.kpiGrid}>
           <View style={styles.kpiRow}>
             <DashboardCard
               variant="compact"
               title="Total Sales"
               value={formatCurrency(metrics.todaySales, 48988)}
-              icon={<FileText size={15} color="#F89B29" />}
+              icon={<FileText size={13} color="#F89B29" />}
               color="#F89B29"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('pos')}
@@ -299,7 +309,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Total Purchase"
               value={formatCurrency(purchasesVal, 24145)}
-              icon={<Gift size={15} color="#1E9B85" />}
+              icon={<Gift size={13} color="#1E9B85" />}
               color="#1E9B85"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('purchases')}
@@ -311,7 +321,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Invoice Due"
               value={formatCurrency(outstandingVal, 4898878)}
-              icon={<Clock size={15} color="#FF4560" />}
+              icon={<Clock size={13} color="#FF4560" />}
               color="#FF4560"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('customers')}
@@ -320,7 +330,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Stock Value"
               value={formatCurrency(stockVal, 18458747)}
-              icon={<Layers size={15} color="#2664FF" />}
+              icon={<Layers size={13} color="#2664FF" />}
               color="#2664FF"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('inventory')}
@@ -762,12 +772,32 @@ const styles = StyleSheet.create({
   quickActionsSection: {
     marginBottom: 14,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionHeaderTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  sectionHeaderAccent: {
+    width: 3.5,
+    height: 13,
+    borderRadius: 2,
+    marginRight: 6,
+  },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
-    marginBottom: 8,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  },
+  sectionDividerLine: {
+    flex: 1,
+    height: 1,
+    opacity: 0.6,
   },
   quickActionsGrid: {
     flexDirection: 'row',
@@ -799,6 +829,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     lineHeight: 13,
+  },
+  quickActionsBottomLine: {
+    height: 1,
+    width: '100%',
+    marginTop: 4,
+    marginBottom: 2,
+    opacity: 0.6,
   },
 
   // Alert Banner
