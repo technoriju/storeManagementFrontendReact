@@ -174,6 +174,7 @@ const AuthenticatedApp = () => {
 
 import { syncEngine } from '../core/sync/SyncEngine';
 import { initSettingsFromDb } from '../features/settings/store/invoiceSettings.store';
+import { PWAInstallBanner } from '../shared/components/PWAInstallBanner';
 
 const RootNavigator = () => {
   const { isInitializing, isAuthenticated, initialize, logout } = useAuthStore();
@@ -204,7 +205,12 @@ const RootNavigator = () => {
     );
   }
 
-  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />;
+  return (
+    <>
+      {isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />}
+      <PWAInstallBanner />
+    </>
+  );
 };
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
