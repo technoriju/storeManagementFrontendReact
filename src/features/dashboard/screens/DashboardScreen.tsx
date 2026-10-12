@@ -33,8 +33,123 @@ import {
   Package,
   Receipt,
   Sparkles,
+  FolderTree,
+  GitCommit,
+  Tag,
+  Scale,
+  Copy,
+  PieChart,
+  CreditCard,
 } from 'lucide-react-native';
 import { format } from 'date-fns';
+
+interface QuickActionConfig {
+  id: string;
+  label: string;
+  route: string;
+  icon: (color: string) => React.ReactNode;
+  color: string;
+  bgColor: string;
+}
+
+const QUICK_ACTIONS: QuickActionConfig[] = [
+  {
+    id: 'category',
+    label: 'Category',
+    route: 'category',
+    icon: (col) => <FolderTree size={19} color={col} />,
+    color: '#2563EB',
+    bgColor: '#EFF6FF',
+  },
+  {
+    id: 'sub_category',
+    label: 'Subcategory',
+    route: 'sub_category',
+    icon: (col) => <GitCommit size={19} color={col} />,
+    color: '#0284C7',
+    bgColor: '#F0F9FF',
+  },
+  {
+    id: 'brands',
+    label: 'Brand',
+    route: 'brands',
+    icon: (col) => <Tag size={19} color={col} />,
+    color: '#7C3AED',
+    bgColor: '#F5F3FF',
+  },
+  {
+    id: 'units',
+    label: 'Unit',
+    route: 'units',
+    icon: (col) => <Scale size={19} color={col} />,
+    color: '#DB2777',
+    bgColor: '#FDF2F8',
+  },
+  {
+    id: 'sub_units',
+    label: 'Subunit',
+    route: 'sub_units',
+    icon: (col) => <Copy size={19} color={col} />,
+    color: '#E11D48',
+    bgColor: '#FFF1F2',
+  },
+  {
+    id: 'stock',
+    label: 'Stock',
+    route: 'manage_stock',
+    icon: (col) => <Package size={19} color={col} />,
+    color: '#10B981',
+    bgColor: '#ECFDF5',
+  },
+  {
+    id: 'reports',
+    label: 'Report',
+    route: 'reports',
+    icon: (col) => <FileText size={19} color={col} />,
+    color: '#F59E0B',
+    bgColor: '#FFFBEB',
+  },
+  {
+    id: 'balancesheet',
+    label: 'Balance Sheet',
+    route: 'profit_loss',
+    icon: (col) => <PieChart size={19} color={col} />,
+    color: '#6366F1',
+    bgColor: '#EEF2FF',
+  },
+  {
+    id: 'payment',
+    label: 'Payment',
+    route: 'customer_payment',
+    icon: (col) => <CreditCard size={19} color={col} />,
+    color: '#0D9488',
+    bgColor: '#F0FDFA',
+  },
+  {
+    id: 'pos',
+    label: 'POS Sale',
+    route: 'pos',
+    icon: (col) => <ShoppingCart size={19} color={col} />,
+    color: '#EA580C',
+    bgColor: '#FFF7ED',
+  },
+  {
+    id: 'add_product',
+    label: 'Add Product',
+    route: 'add_product',
+    icon: (col) => <PlusCircle size={19} color={col} />,
+    color: '#2564FF',
+    bgColor: '#EFF6FF',
+  },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    route: 'invoices',
+    icon: (col) => <Receipt size={19} color={col} />,
+    color: '#F89B29',
+    bgColor: '#FEF3C7',
+  },
+];
 
 interface DashboardScreenProps {
   onNavigateTab?: (tab: string) => void;
@@ -89,6 +204,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
   // MOBILE VIEW (< 768px)
   // -------------------------------------------------------------
   if (isMobile) {
+    // Adjust 4 to 5 or 6 items per line based on screen width, wrapping overflow to next line
+    const numCols = width < 380 ? 4 : width < 520 ? 5 : 6;
+    const horizontalPadding = 28;
+    const quickActionItemWidth = Math.floor((width - horizontalPadding) / numCols);
+
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -114,63 +234,46 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           </View>
         </View>
 
-        {/* Quick Actions Launcher */}
+        {/* Quick Actions Launcher - Footer Style Multi-row Grid */}
         <View style={styles.quickActionsSection}>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Quick Actions</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionsScroll}>
-            <TouchableOpacity
-              style={[styles.quickActionBtn, styles.quickActionPrimary]}
-              onPress={() => onNavigateTab?.('pos')}
-              activeOpacity={0.8}
-            >
-              <ShoppingCart size={18} color="#fff" />
-              <Text style={styles.quickActionPrimaryText}>New Sale (POS)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.quickActionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-              onPress={() => onNavigateTab?.('add_product')}
-              activeOpacity={0.8}
-            >
-              <Package size={18} color="#2664FF" />
-              <Text style={[styles.quickActionBtnText, { color: theme.colors.text }]}>Add Product</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.quickActionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-              onPress={() => onNavigateTab?.('customers')}
-              activeOpacity={0.8}
-            >
-              <UserPlus size={18} color="#1E9B85" />
-              <Text style={[styles.quickActionBtnText, { color: theme.colors.text }]}>Add Customer</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.quickActionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-              onPress={() => onNavigateTab?.('invoices')}
-              activeOpacity={0.8}
-            >
-              <Receipt size={18} color="#F89B29" />
-              <Text style={[styles.quickActionBtnText, { color: theme.colors.text }]}>Invoices</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.quickActionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-              onPress={() => onNavigateTab?.('purchases')}
-              activeOpacity={0.8}
-            >
-              <Gift size={18} color="#8A2BE2" />
-              <Text style={[styles.quickActionBtnText, { color: theme.colors.text }]}>Purchases</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          <View style={styles.quickActionsGrid}>
+            {QUICK_ACTIONS.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={[styles.quickActionFooterBtn, { width: quickActionItemWidth }]}
+                onPress={() => onNavigateTab?.(action.route)}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.quickActionIconCircle,
+                    {
+                      backgroundColor: theme.isDark ? `${action.color}22` : action.bgColor,
+                      borderColor: theme.isDark ? `${action.color}44` : `${action.color}30`,
+                    },
+                  ]}
+                >
+                  {action.icon(action.color)}
+                </View>
+                <Text
+                  style={[styles.quickActionFooterLabel, { color: theme.colors.text }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {action.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
-        {/* Hero Financial Highlight Card */}
+        {/* Hero Financial Highlight Card - 1/3 reduced height on mobile */}
         <DashboardCard
           variant="hero"
           title="Today's Total Sales"
           value={formatCurrency(metrics.todaySales, 48988)}
-          icon={<FileText size={22} color="#fff" />}
+          icon={<FileText size={18} color="#fff" />}
           trend="+22%"
           trendUp={true}
           color="#1C2E46"
@@ -185,22 +288,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             onPress={() => onNavigateTab?.('inventory')}
             activeOpacity={0.8}
           >
-            <AlertTriangle size={18} color="#EA580C" style={{ marginRight: 8 }} />
+            <AlertTriangle size={16} color="#EA580C" style={{ marginRight: 8 }} />
             <Text style={styles.alertBannerText}>
               <Text style={{ fontWeight: '700' }}>{metrics.lowStockCount} items</Text> are low on stock. Tap to review.
             </Text>
-            <ChevronRight size={16} color="#EA580C" />
+            <ChevronRight size={15} color="#EA580C" />
           </TouchableOpacity>
         )}
 
-        {/* 2x2 Modern Financial KPI Grid */}
+        {/* 2x2 Modern Financial KPI Grid - Reduced card size */}
         <View style={styles.kpiGrid}>
           <View style={styles.kpiRow}>
             <DashboardCard
               variant="compact"
               title="Total Purchase"
               value={formatCurrency(purchasesVal, 24145)}
-              icon={<Gift size={18} color="#1E9B85" />}
+              icon={<Gift size={15} color="#1E9B85" />}
               trend="+18%"
               trendUp={true}
               color="#1E9B85"
@@ -211,7 +314,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Invoice Due"
               value={formatCurrency(outstandingVal, 4898878)}
-              icon={<Clock size={18} color="#FF4560" />}
+              icon={<Clock size={15} color="#FF4560" />}
               trend="Due"
               trendUp={false}
               color="#FF4560"
@@ -225,7 +328,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Expenses"
               value={formatCurrency(expensesVal, 8980)}
-              icon={<Target size={18} color="#F89B29" />}
+              icon={<Target size={15} color="#F89B29" />}
               trend="-5%"
               trendUp={true}
               color="#F89B29"
@@ -235,7 +338,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Stock Value"
               value={formatCurrency(stockVal, 18458747)}
-              icon={<Layers size={18} color="#2664FF" />}
+              icon={<Layers size={15} color="#2664FF" />}
               trend="+12%"
               trendUp={true}
               color="#2664FF"
@@ -675,67 +778,73 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Quick Action Launcher
+  // Quick Action Launcher (Footer style: icon top, name bottom)
   quickActionsSection: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  quickActionsScroll: {
-    gap: 8,
-    paddingRight: 8,
-  },
-  quickActionBtn: {
+  quickActionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
+  quickActionFooterBtn: {
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    justifyContent: 'center',
+    paddingVertical: 5,
+    marginBottom: 8,
+  },
+  quickActionIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
-    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  quickActionPrimary: {
-    backgroundColor: '#F89B29',
-    borderColor: '#F89B29',
-  },
-  quickActionPrimaryText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickActionBtnText: {
-    fontSize: 12,
+  quickActionFooterLabel: {
+    fontSize: 10.5,
     fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 13,
   },
 
   // Alert Banner
   alertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   alertBannerText: {
     flex: 1,
     color: '#9A3412',
-    fontSize: 12,
+    fontSize: 11.5,
   },
 
-  // 2x2 KPI Grid
+  // 2x2 KPI Grid (Reduced card sizing)
   kpiGrid: {
-    gap: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 12,
   },
   kpiRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   kpiGridCard: {
     flex: 1,

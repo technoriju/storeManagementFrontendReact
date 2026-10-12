@@ -173,8 +173,10 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   const formatTabTitle = (tab: string) => {
     const found = TABS.find(t => t.id === tab);
     if (found) return found.label;
-    if (tab === 'profit_loss') return 'Profit & Loss';
+    if (tab === 'profit_loss' || tab === 'balance_sheet' || tab === 'balancesheet') return 'Balance Sheet';
     if (tab === 'add_product' || tab === 'create_product') return 'Add Product';
+    if (tab === 'customer_payment' || tab === 'payment') return 'Customer Payments';
+    if (tab === 'manage_stock' || tab === 'stock') return 'Manage Stock';
     return tab.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 

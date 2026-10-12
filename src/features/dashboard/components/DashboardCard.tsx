@@ -42,25 +42,28 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
         ]}
       >
         <View style={styles.heroTopRow}>
-          <View style={styles.heroIconBadge}>{icon}</View>
+          <View style={styles.heroHeaderLeft}>
+            <View style={styles.heroIconBadge}>{icon}</View>
+            <Text style={styles.heroTitle}>{title}</Text>
+          </View>
           {trend && (
             <View style={styles.heroTrendBadge}>
-              {trendUp ? <ArrowUpRight size={14} color="#fff" /> : <ArrowDownRight size={14} color="#fff" />}
+              {trendUp ? <ArrowUpRight size={12} color="#fff" /> : <ArrowDownRight size={12} color="#fff" />}
               <Text style={styles.heroTrendText}>{trend}</Text>
             </View>
           )}
         </View>
 
-        <Text style={styles.heroTitle}>{title}</Text>
-        <Text style={styles.heroValue}>{value}</Text>
+        <View style={styles.heroValueRow}>
+          <Text style={styles.heroValue}>{value}</Text>
+          {onViewAll && (
+            <TouchableOpacity onPress={onViewAll} style={styles.heroActionBtn} activeOpacity={0.8}>
+              <Text style={styles.heroActionText}>View Details →</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-        {subtitle && <Text style={styles.heroSubtitle}>{subtitle}</Text>}
-
-        {onViewAll && (
-          <TouchableOpacity onPress={onViewAll} style={styles.heroActionBtn} activeOpacity={0.8}>
-            <Text style={styles.heroActionText}>View Details →</Text>
-          </TouchableOpacity>
-        )}
+        {subtitle && <Text style={styles.heroSubtitle} numberOfLines={1}>{subtitle}</Text>}
       </View>
     );
   }
@@ -174,127 +177,137 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // Hero Variant (Mobile Featured)
+  // Hero Variant (Mobile Featured - 1/3 reduced height)
   heroContainer: {
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  heroHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   heroIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.22)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroTitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   heroTrendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   heroTrendText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    marginLeft: 3,
+    marginLeft: 2,
   },
-  heroTitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  heroValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
   heroValue: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: '800',
-    marginBottom: 6,
-  },
-  heroSubtitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
-    fontWeight: '500',
+    letterSpacing: -0.3,
   },
   heroActionBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   heroActionText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
+  heroSubtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 11,
+    fontWeight: '500',
+  },
 
-  // Compact Variant (Mobile 2x2 Grid)
+  // Compact Variant (Mobile 2x2 Grid - reduced size)
   compactContainer: {
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderWidth: 1,
     justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 1,
   },
   compactTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   compactIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   compactTrendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 6,
   },
   compactTrendText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     marginLeft: 2,
   },
   compactValue: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   compactTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
   },
   compactSubtitle: {
-    fontSize: 10,
-    marginTop: 2,
+    fontSize: 9.5,
+    marginTop: 1,
   },
 
   // Primary Variant (Desktop)
