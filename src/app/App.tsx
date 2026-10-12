@@ -52,7 +52,7 @@ const AuthenticatedApp = () => {
 
   const renderContent = () => {
     if (activeTab === 'dashboard') {
-      return <DashboardModule />;
+      return <DashboardModule onNavigateTab={setActiveTab} />;
     }
     if (
       activeTab === 'reports' ||
@@ -70,14 +70,17 @@ const AuthenticatedApp = () => {
       activeTab === 'income_report' ||
       activeTab === 'tax_report' ||
       activeTab === 'profit_loss' ||
-      activeTab === 'annual_report'
+      activeTab === 'annual_report' ||
+      activeTab === 'balance_sheet' ||
+      activeTab === 'balancesheet'
     ) {
-      return <ReportsModule initialReport={activeTab} onNavigateReport={setActiveTab} />;
+      const reportId = activeTab === 'balance_sheet' || activeTab === 'balancesheet' ? 'profit_loss' : activeTab;
+      return <ReportsModule initialReport={reportId} onNavigateReport={setActiveTab} />;
     }
-    if (activeTab === 'products') {
-      return <ProductsModule />;
+    if (activeTab === 'products' || activeTab === 'create_product' || activeTab === 'add_product') {
+      return <ProductsModule initialScreen={activeTab} onNavigateTab={setActiveTab} />;
     }
-    if (activeTab === 'purchases' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
+    if (activeTab === 'purchases' || activeTab === 'purchase' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
       return <PurchasesModule initialScreen={activeTab} />;
     }
     if (
@@ -85,9 +88,10 @@ const AuthenticatedApp = () => {
       activeTab === 'inventory' ||
       activeTab === 'stock_adjustment' ||
       activeTab === 'stock_transfer' ||
-      activeTab === 'low_stocks'
+      activeTab === 'low_stocks' ||
+      activeTab === 'stock'
     ) {
-      return <InventoryModule initialScreen={activeTab} />;
+      return <InventoryModule initialScreen={activeTab === 'stock' ? 'manage_stock' : activeTab} />;
     }
     if (activeTab === 'category') {
       return <CategoryModule />;
@@ -107,8 +111,13 @@ const AuthenticatedApp = () => {
     if (activeTab === 'pos' || activeTab === 'sales' || activeTab === 'invoices' || activeTab === 'sales_return' || activeTab === 'quotation') {
       return <POSModule initialScreen={activeTab} />;
     }
-    if (activeTab === 'customers' || activeTab === 'customer_payment' || activeTab === 'customer_payments') {
-      return <CustomersModule initialScreen={activeTab} />;
+    if (
+      activeTab === 'customers' ||
+      activeTab === 'customer_payment' ||
+      activeTab === 'customer_payments' ||
+      activeTab === 'payment'
+    ) {
+      return <CustomersModule initialScreen={activeTab === 'payment' ? 'customer_payment' : activeTab} />;
     }
     if (activeTab === 'suppliers' || activeTab === 'supplier_payment' || activeTab === 'supplier_payments') {
       return <SuppliersModule initialScreen={activeTab} />;

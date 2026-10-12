@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable } from 'react-native';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { X } from 'lucide-react-native';
@@ -11,6 +12,7 @@ interface AddBrandModalProps {
 }
 
 export const AddBrandModal: React.FC<AddBrandModalProps> = ({ visible, onClose, onSubmit }) => {
+  const { isMobile } = useResponsive();
   const [brandName, setBrandName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -30,7 +32,7 @@ export const AddBrandModal: React.FC<AddBrandModalProps> = ({ visible, onClose, 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
           <View style={styles.modalContainer}>
             {/* Header */}
             <View style={styles.header}>
@@ -55,18 +57,21 @@ export const AddBrandModal: React.FC<AddBrandModalProps> = ({ visible, onClose, 
             </View>
 
             {/* Footer */}
-            <View style={styles.footer}>
+            <View style={[
+              styles.footer,
+              isMobile && { flexDirection: 'column-reverse', gap: 8 }
+            ]}>
               <AppButton 
                 title="Cancel" 
                 onPress={onClose} 
-                style={styles.cancelBtn} 
+                style={[styles.cancelBtn, isMobile && { width: '100%' }]} 
                 textStyle={{ color: '#FFF' }}
               />
               <AppButton 
                 title="Submit" 
                 onPress={handleSubmit} 
                 isLoading={isSubmitting}
-                style={styles.submitBtn} 
+                style={[styles.submitBtn, isMobile && { width: '100%' }]} 
               />
             </View>
           </View>

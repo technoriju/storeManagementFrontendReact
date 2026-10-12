@@ -17,13 +17,43 @@ export type ProductScreenType =
   | 'units' 
   | 'import';
 
-export const ProductsModule = () => {
-  const [currentScreen, setCurrentScreen] = useState<ProductScreenType>('list');
+interface ProductsModuleProps {
+  initialScreen?: string;
+  onNavigateTab?: (tab: string) => void;
+}
+
+export const ProductsModule: React.FC<ProductsModuleProps> = ({
+  initialScreen = 'list',
+  onNavigateTab,
+}) => {
+  const getResolvedScreen = (scr?: string): ProductScreenType => {
+    if (scr === 'add_product' || scr === 'create_product' || scr === 'form') {
+      return 'form';
+    }
+    return 'list';
+  };
+
+  const [currentScreen, setCurrentScreen] = useState<ProductScreenType>(() => getResolvedScreen(initialScreen));
   const [selectedProductId, setSelectedProductId] = useState<number | string | null>(null);
+
+  React.useEffect(() => {
+    if (initialScreen === 'add_product' || initialScreen === 'create_product' || initialScreen === 'form') {
+      setSelectedProductId(null);
+      setCurrentScreen('form');
+    } else if (initialScreen === 'products' || initialScreen === 'list') {
+      setSelectedProductId(null);
+      setCurrentScreen('list');
+    }
+  }, [initialScreen]);
 
   const navigateTo = (screen: ProductScreenType, productId?: string | number) => {
     setSelectedProductId(productId !== undefined && productId !== null ? productId : null);
     setCurrentScreen(screen);
+    if (screen === 'list' && onNavigateTab) {
+      onNavigateTab('products');
+    } else if (screen === 'form' && (productId === undefined || productId === null) && onNavigateTab) {
+      onNavigateTab('add_product');
+    }
   };
 
   const renderScreen = () => {
@@ -33,7 +63,13 @@ export const ProductsModule = () => {
       case 'details':
         return <ProductDetailsScreen productId={selectedProductId!} onNavigate={navigateTo} />;
       case 'form':
-        return <ProductFormScreen productId={selectedProductId} onNavigate={navigateTo} />;
+        return (
+          <ProductFormScreen 
+            key={selectedProductId ? String(selectedProductId) : 'new'} 
+            productId={selectedProductId} 
+            onNavigate={navigateTo} 
+          />
+        );
       case 'categories':
         return <CategoriesScreen onNavigate={navigateTo} />;
       case 'brands':

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, Alert, Platform } from 'react-native';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import DocumentPicker, { types } from 'react-native-document-picker';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { X, CloudUpload, FileSpreadsheet, CheckCircle2 } from 'lucide-react-native';
@@ -17,6 +18,7 @@ export const ImportProductModal: React.FC<ImportProductModalProps> = ({
   onSubmit,
   onOpenImportScreen,
 }) => {
+  const { isMobile } = useResponsive();
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
   const handlePickFile = async () => {
@@ -72,7 +74,7 @@ export const ImportProductModal: React.FC<ImportProductModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
           <View style={styles.modalContainer}>
               {/* Header */}
               <View style={styles.header}>
@@ -112,17 +114,20 @@ export const ImportProductModal: React.FC<ImportProductModalProps> = ({
               </View>
 
               {/* Footer */}
-              <View style={styles.footer}>
+              <View style={[
+                styles.footer,
+                isMobile && { flexDirection: 'column-reverse', gap: 8 }
+              ]}>
                 <AppButton 
                   title="Cancel" 
                   onPress={onClose} 
-                  style={styles.cancelBtn} 
+                  style={[styles.cancelBtn, isMobile && { width: '100%' }]} 
                   textStyle={{ color: '#FFF' }}
                 />
                 <AppButton 
                   title="Proceed to Import" 
                   onPress={handleSubmit} 
-                  style={styles.submitBtn} 
+                  style={[styles.submitBtn, isMobile && { width: '100%' }]} 
                 />
               </View>
             </View>

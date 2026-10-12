@@ -1710,6 +1710,15 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const [showTerms, setShowTerms] = useState(true);
   const [showSignatures, setShowSignatures] = useState(true);
   const [zoomScale, setZoomScale] = useState(1);
+  const handleZoomIn = () => {
+    setZoomScale(prev => Math.min(1.5, Math.round((prev + 0.15) * 100) / 100));
+  };
+  const handleZoomOut = () => {
+    setZoomScale(prev => Math.max(0.35, Math.round((prev - 0.15) * 100) / 100));
+  };
+  const handleZoomReset = () => {
+    setZoomScale(1);
+  };
   const [showShareModal, setShowShareModal] = useState(false);
   const [showPreviousBalance, setShowPreviousBalance] = useState<boolean>(
     data?.showPreviousBalance !== undefined ? Boolean(data.showPreviousBalance) : true
@@ -1794,216 +1803,312 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const isWholesale = customerType === 'wholesale';
   const isThermal = paperFormat === '80mm';
 
+  // Active payable and amount in words
+  const activePayableAmount =
+    isBalanceActive && previousDue > 0
+      ? totalPayable
+      : isBalanceActive && advancePayment > 0
+      ? netPayable
+      : total;
+  const words = amountToWords(activePayableAmount);
+
   // Tax calculations for GST
   const cgstAmount = Number((gst / 2).toFixed(2));
   const sgstAmount = Number((gst / 2).toFixed(2));
 
+  const renderControlsContent = () => (
+    <>
+      <View style={styles.selectorGroup}>
+        <Text style={styles.controlLabel}>Paper Size:</Text>
+        <View style={styles.segmentedButtons}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, paperFormat === '80mm' && styles.segmentBtnActive]}
+            onPress={() => setPaperFormat('80mm')}
+          >
+            <FileText size={13} color={paperFormat === '80mm' ? '#FFFFFF' : '#94A3B8'} />
+            <Text style={[styles.segmentText, paperFormat === '80mm' && styles.segmentTextActive]}>
+              80 mm Thermal
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, paperFormat === '140x210mm' && styles.segmentBtnActive]}
+            onPress={() => setPaperFormat('140x210mm')}
+          >
+            <FileText size={13} color={paperFormat === '140x210mm' ? '#FFFFFF' : '#94A3B8'} />
+            <Text style={[styles.segmentText, paperFormat === '140x210mm' && styles.segmentTextActive]}>
+              140×210 mm
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, paperFormat === 'halfA4Landscape' && styles.segmentBtnActive]}
+            onPress={() => setPaperFormat('halfA4Landscape')}
+          >
+            <Building2 size={13} color={paperFormat === 'halfA4Landscape' ? '#FFFFFF' : '#94A3B8'} />
+            <Text style={[styles.segmentText, paperFormat === 'halfA4Landscape' && styles.segmentTextActive]}>
+              Half A4 Landscape
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.selectorGroup}>
+        <Text style={styles.controlLabel}>Type:</Text>
+        <View style={styles.segmentedButtons}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, !isWholesale && styles.segmentBtnGreenActive]}
+            onPress={() => setCustomerType('retail')}
+          >
+            <User size={13} color={!isWholesale ? '#FFFFFF' : '#94A3B8'} />
+            <Text style={[styles.segmentText, !isWholesale && styles.segmentTextActive]}>
+              Retail Receipt
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, isWholesale && styles.segmentBtnPurpleActive]}
+            onPress={() => setCustomerType('wholesale')}
+          >
+            <Building2 size={13} color={isWholesale ? '#FFFFFF' : '#94A3B8'} />
+            <Text style={[styles.segmentText, isWholesale && styles.segmentTextActive]}>
+              Wholesale Tax Invoice
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Color Mode Selector */}
+      <View style={styles.selectorGroup}>
+        <Text style={styles.controlLabel}>Color:</Text>
+        <View style={styles.segmentedButtons}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, colorMode === 'bw' && styles.segmentBtnDarkActive]}
+            onPress={() => setColorMode('bw')}
+          >
+            <Text style={[styles.segmentText, colorMode === 'bw' && styles.segmentTextActive]}>
+              ⚫ B&W
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, colorMode === 'color' && styles.segmentBtnActive]}
+            onPress={() => setColorMode('color')}
+          >
+            <Text style={[styles.segmentText, colorMode === 'color' && styles.segmentTextActive]}>
+              🎨 Color
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Quick toggles */}
+      <View style={styles.togglesRow}>
+        <TouchableOpacity
+          style={[styles.toggleChip, showTaxBreakdown && styles.toggleChipActive]}
+          onPress={() => setShowTaxBreakdown(!showTaxBreakdown)}
+        >
+          {showTaxBreakdown && <Check size={11} color="#2563EB" />}
+          <Text style={[styles.toggleChipText, showTaxBreakdown && styles.toggleChipTextActive]}>
+            Tax / GST
+          </Text>
+        </TouchableOpacity>
+
+        {isWholesale && !isThermal && (
+          <TouchableOpacity
+            style={[styles.toggleChip, showBankDetails && styles.toggleChipActive]}
+            onPress={() => setShowBankDetails(!showBankDetails)}
+          >
+            {showBankDetails && <Check size={11} color="#2563EB" />}
+            <Text style={[styles.toggleChipText, showBankDetails && styles.toggleChipTextActive]}>
+              Bank Info
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={[styles.toggleChip, showQrCode && styles.toggleChipActive]}
+          onPress={() => setShowQrCode(!showQrCode)}
+        >
+          {showQrCode && <Check size={11} color="#2563EB" />}
+          <Text style={[styles.toggleChipText, showQrCode && styles.toggleChipTextActive]}>
+            UPI QR
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.toggleChip, showTerms && styles.toggleChipActive]}
+          onPress={() => setShowTerms(!showTerms)}
+        >
+          {showTerms && <Check size={11} color="#2563EB" />}
+          <Text style={[styles.toggleChipText, showTerms && styles.toggleChipTextActive]}>
+            Terms & Sign
+          </Text>
+        </TouchableOpacity>
+
+        {((previousDue > 0) || (advancePayment > 0) || data.showPreviousBalance !== undefined) && (
+          <TouchableOpacity
+            style={[styles.toggleChip, showPreviousBalance && styles.toggleChipActive]}
+            onPress={() => setShowPreviousBalance(!showPreviousBalance)}
+          >
+            {showPreviousBalance && <Check size={11} color="#2563EB" />}
+            <Text style={[styles.toggleChipText, showPreviousBalance && styles.toggleChipTextActive]}>
+              {previousDue > 0 ? 'Prev Due' : advancePayment > 0 ? 'Advance' : 'Prev Balance'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={[styles.modalCard, { width: isMobile ? '98%' : '94%', height: isMobile ? '96%' : '92%' }]}>
+      <View style={[styles.modalBackdrop, { padding: isMobile ? 0 : 16 }]}>
+        <View
+          style={[
+            styles.modalCard,
+            isMobile
+              ? { width: '100%', height: '100%', borderRadius: 0, borderWidth: 0 }
+              : { width: '94%', maxWidth: 1080, height: '92%', borderRadius: 12, borderWidth: 1, borderColor: '#334155' },
+          ]}
+        >
           {/* Header Action Bar */}
-          <View style={styles.topBar}>
-            <View style={styles.titleGroup}>
-              <View style={styles.printerIconBadge}>
-                <Printer size={18} color="#2563EB" />
-              </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.modalTitle}>Receipt Print Preview</Text>
-                  <View style={styles.invoiceBadge}>
-                    <Text style={styles.invoiceBadgeText}>{invNumber}</Text>
+          {isMobile ? (
+            <View style={styles.topBarMobile}>
+              <View style={styles.titleGroupMobile}>
+                <View style={styles.printerIconBadge}>
+                  <Printer size={16} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.modalTitleMobile} numberOfLines={1}>Print Preview</Text>
+                    <View style={styles.invoiceBadge}>
+                      <Text style={styles.invoiceBadgeText} numberOfLines={1}>{invNumber}</Text>
+                    </View>
                   </View>
                 </View>
-                <Text style={styles.modalSubtitle}>
-                  Preview before sending to {isThermal ? '80mm Thermal Printer' : 'Half A4 Landscape Sheet'}
-                </Text>
+              </View>
+
+              <View style={styles.topActionsMobile}>
+                {/* Zoom Controls */}
+                <View style={styles.zoomControls}>
+                  <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut} accessibilityLabel="Zoom Out">
+                    <ZoomOut size={13} color="#94A3B8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.zoomResetBtn} onPress={handleZoomReset} accessibilityLabel="Reset Zoom">
+                    <Text style={styles.zoomText}>{Math.round(zoomScale * 100)}%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn} accessibilityLabel="Zoom In">
+                    <ZoomIn size={13} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity style={styles.closeIconButton} onPress={onClose} accessibilityLabel="Close Preview">
+                  <X size={18} color="#94A3B8" />
+                </TouchableOpacity>
               </View>
             </View>
+          ) : (
+            <View style={styles.topBar}>
+              <View style={styles.titleGroup}>
+                <View style={styles.printerIconBadge}>
+                  <Printer size={18} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Text style={styles.modalTitle}>Receipt Print Preview</Text>
+                    <View style={styles.invoiceBadge}>
+                      <Text style={styles.invoiceBadgeText}>{invNumber}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.modalSubtitle} numberOfLines={1}>
+                    Preview before sending to {isThermal ? '80mm Thermal Printer' : paperFormat === '140x210mm' ? '140×210 mm Sheet' : 'Half A4 Landscape Sheet'}
+                  </Text>
+                </View>
+              </View>
 
-            <View style={styles.topActions}>
-              <TouchableOpacity style={[styles.printButton, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
-                <Share2 size={16} color="#FFFFFF" />
-                <Text style={styles.printButtonText}>Share</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.printButton} onPress={handlePrint}>
-                <Printer size={16} color="#FFFFFF" />
-                <Text style={styles.printButtonText}>Print Receipt</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
-                <X size={20} color="#64748B" />
-              </TouchableOpacity>
+              <View style={styles.topActions}>
+                {/* Desktop Zoom Controls */}
+                <View style={styles.zoomControls}>
+                  <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut} accessibilityLabel="Zoom Out">
+                    <ZoomOut size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.zoomResetBtn} onPress={handleZoomReset} accessibilityLabel="Reset Zoom">
+                    <Text style={styles.zoomText}>{Math.round(zoomScale * 100)}%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn} accessibilityLabel="Zoom In">
+                    <ZoomIn size={14} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.printButton, { backgroundColor: '#10B981' }]}
+                  onPress={() => setShowShareModal(true)}
+                >
+                  <Share2 size={16} color="#FFFFFF" />
+                  <Text style={styles.printButtonText}>Share</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.printButton}
+                  onPress={handlePrint}
+                >
+                  <Printer size={16} color="#FFFFFF" />
+                  <Text style={styles.printButtonText}>Print</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.closeIconButton} onPress={onClose} accessibilityLabel="Close Preview">
+                  <X size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Controls Bar: Format Selector & Customer Type Selector */}
-          <View style={styles.controlsBar}>
-            <View style={styles.selectorGroup}>
-              <Text style={styles.controlLabel}>Printer / Paper Size:</Text>
-              <View style={styles.segmentedButtons}>
-                <TouchableOpacity
-                  style={[styles.segmentBtn, paperFormat === '80mm' && styles.segmentBtnActive]}
-                  onPress={() => setPaperFormat('80mm')}
-                >
-                  <FileText size={14} color={paperFormat === '80mm' ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, paperFormat === '80mm' && styles.segmentTextActive]}>
-                    80 mm Thermal
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.segmentBtn, paperFormat === '140x210mm' && styles.segmentBtnActive]}
-                  onPress={() => setPaperFormat('140x210mm')}
-                >
-                  <FileText size={14} color={paperFormat === '140x210mm' ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, paperFormat === '140x210mm' && styles.segmentTextActive]}>
-                    140×210 mm
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.segmentBtn, paperFormat === 'halfA4Landscape' && styles.segmentBtnActive]}
-                  onPress={() => setPaperFormat('halfA4Landscape')}
-                >
-                  <Building2 size={14} color={paperFormat === 'halfA4Landscape' ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, paperFormat === 'halfA4Landscape' && styles.segmentTextActive]}>
-                    Half A4 Landscape
-                  </Text>
-                </TouchableOpacity>
-              </View>
+          {isMobile ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.controlsScrollContent}
+              style={styles.controlsBarMobileScroll}
+            >
+              {renderControlsContent()}
+            </ScrollView>
+          ) : (
+            <View style={styles.controlsBar}>
+              {renderControlsContent()}
             </View>
-
-            <View style={styles.selectorGroup}>
-              <Text style={styles.controlLabel}>Customer / Invoice Type:</Text>
-              <View style={styles.segmentedButtons}>
-                <TouchableOpacity
-                  style={[styles.segmentBtn, !isWholesale && styles.segmentBtnGreenActive]}
-                  onPress={() => setCustomerType('retail')}
-                >
-                  <User size={14} color={!isWholesale ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, !isWholesale && styles.segmentTextActive]}>
-                    Retail Receipt
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.segmentBtn, isWholesale && styles.segmentBtnPurpleActive]}
-                  onPress={() => setCustomerType('wholesale')}
-                >
-                  <Building2 size={14} color={isWholesale ? '#FFFFFF' : '#475569'} />
-                  <Text style={[styles.segmentText, isWholesale && styles.segmentTextActive]}>
-                    Wholesale Tax Invoice
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Color Mode Selector */}
-            <View style={styles.selectorGroup}>
-              <Text style={styles.controlLabel}>Color Mode:</Text>
-              <View style={styles.segmentedButtons}>
-                <TouchableOpacity
-                  style={[styles.segmentBtn, colorMode === 'bw' && styles.segmentBtnDarkActive]}
-                  onPress={() => setColorMode('bw')}
-                >
-                  <Text style={[styles.segmentText, colorMode === 'bw' && styles.segmentTextActive]}>
-                    ⚫ B&W (Default)
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.segmentBtn, colorMode === 'color' && styles.segmentBtnActive]}
-                  onPress={() => setColorMode('color')}
-                >
-                  <Text style={[styles.segmentText, colorMode === 'color' && styles.segmentTextActive]}>
-                    🎨 Color
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Quick toggles */}
-            <View style={styles.togglesRow}>
-              <TouchableOpacity
-                style={[styles.toggleChip, showTaxBreakdown && styles.toggleChipActive]}
-                onPress={() => setShowTaxBreakdown(!showTaxBreakdown)}
-              >
-                {showTaxBreakdown && <Check size={12} color="#2563EB" />}
-                <Text style={[styles.toggleChipText, showTaxBreakdown && styles.toggleChipTextActive]}>
-                  Tax / GST
-                </Text>
-              </TouchableOpacity>
-
-              {isWholesale && !isThermal && (
-                <TouchableOpacity
-                  style={[styles.toggleChip, showBankDetails && styles.toggleChipActive]}
-                  onPress={() => setShowBankDetails(!showBankDetails)}
-                >
-                  {showBankDetails && <Check size={12} color="#2563EB" />}
-                  <Text style={[styles.toggleChipText, showBankDetails && styles.toggleChipTextActive]}>
-                    Bank Info
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={[styles.toggleChip, showQrCode && styles.toggleChipActive]}
-                onPress={() => setShowQrCode(!showQrCode)}
-              >
-                {showQrCode && <Check size={12} color="#2563EB" />}
-                <Text style={[styles.toggleChipText, showQrCode && styles.toggleChipTextActive]}>
-                  UPI QR
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.toggleChip, showTerms && styles.toggleChipActive]}
-                onPress={() => setShowTerms(!showTerms)}
-              >
-                {showTerms && <Check size={12} color="#2563EB" />}
-                <Text style={[styles.toggleChipText, showTerms && styles.toggleChipTextActive]}>
-                  Terms & Sign
-                </Text>
-              </TouchableOpacity>
-
-              {((previousDue > 0) || (advancePayment > 0) || data.showPreviousBalance !== undefined) && (
-                <TouchableOpacity
-                  style={[styles.toggleChip, showPreviousBalance && styles.toggleChipActive]}
-                  onPress={() => setShowPreviousBalance(!showPreviousBalance)}
-                >
-                  {showPreviousBalance && <Check size={12} color="#2563EB" />}
-                  <Text style={[styles.toggleChipText, showPreviousBalance && styles.toggleChipTextActive]}>
-                    {previousDue > 0 ? 'Prev Due' : advancePayment > 0 ? 'Advance' : 'Prev Balance'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
+          )}
 
           {/* Main Preview Container */}
           <View style={styles.previewCanvasArea}>
             <ScrollView
-              contentContainerStyle={[
-                styles.scrollContent,
-                isThermal ? styles.scrollContentThermal : styles.scrollContentLandscape,
-              ]}
+              style={styles.canvasVerticalScroll}
+              contentContainerStyle={styles.canvasVerticalContent}
               showsVerticalScrollIndicator={true}
-              showsHorizontalScrollIndicator={true}
-              horizontal={!isThermal && isMobile}
+              showsHorizontalScrollIndicator={false}
             >
-              {/* Native Print Area Container with ID for CSS Print Query */}
-              {/* @ts-ignore */}
-              <View
-                nativeID="receipt-print-canvas"
-                id="receipt-print-canvas"
-                style={[
-                  isThermal ? styles.thermalSheet : styles.landscapeSheet,
-                  {
-                    transform: zoomScale !== 1 ? [{ scale: zoomScale }] : undefined,
-                  },
-                  colorMode === 'bw' && Platform.OS === 'web' ? ({ filter: 'grayscale(100%)' } as any) : undefined,
-                ]}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                contentContainerStyle={styles.canvasHorizontalContent}
               >
+                {/* Native Print Area Container with ID for CSS Print Query */}
+                {/* @ts-ignore */}
+                <View
+                  nativeID="receipt-print-canvas"
+                  id="receipt-print-canvas"
+                  style={[
+                    isThermal
+                      ? styles.thermalSheet
+                      : paperFormat === '140x210mm'
+                      ? styles.p140Sheet
+                      : styles.landscapeSheet,
+                    {
+                      transform: zoomScale !== 1 ? [{ scale: zoomScale }] : undefined,
+                      ...(Platform.OS === 'web' ? { transformOrigin: 'top center' } : {}),
+                    },
+                    colorMode === 'bw' && Platform.OS === 'web' ? ({ filter: 'grayscale(100%)' } as any) : undefined,
+                  ]}
+                >
                 {isThermal ? (
                   /* ======================================================== */
                   /*                80 MM THERMAL RECEIPT LAYOUT              */
@@ -2239,6 +2344,284 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                     <View style={styles.thermalDashedLine} />
                     <Text style={styles.thermalPoweredBy}>Printed via Billing System</Text>
+                  </View>
+                ) : paperFormat === '140x210mm' ? (
+                  /* ======================================================== */
+                  /*        140 MM X 210 MM PORTRAIT INVOICE LAYOUT          */
+                  /* ======================================================== */
+                  <View style={styles.p140Inner}>
+                    {/* Header */}
+                    <View style={styles.p140HeaderTable}>
+                      <View style={{ flex: 1.4 }}>
+                        <Text style={styles.p140StoreName}>{business.businessName || 'Tarama Enterprise'}</Text>
+                        {business.tagline ? <Text style={styles.p140Tagline}>{business.tagline}</Text> : null}
+                        <Text style={styles.p140StoreSub}>{business.address || ''}</Text>
+                        <Text style={styles.p140StoreSub}>Phone: {business.phone || ''}</Text>
+                        <Text style={[styles.p140StoreSub, { fontWeight: '700', color: '#0F172A', marginTop: 2 }]}>
+                          GSTIN: {business.gstin || ''} | State: {business.state || 'West Bengal'} ({business.stateCode || '19'})
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <View style={[styles.p140Badge, { backgroundColor: isWholesale ? '#1E293B' : '#047857' }]}>
+                          <Text style={styles.p140BadgeText}>
+                            {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+                          </Text>
+                        </View>
+                        <Text style={styles.p140Original}>ORIGINAL FOR RECIPIENT</Text>
+
+                        <View style={styles.p140MetaGrid}>
+                          <View style={styles.p140MetaRow}>
+                            <Text style={styles.p140MetaKey}>Invoice No:</Text>
+                            <Text style={styles.p140MetaVal}>{invNumber}</Text>
+                          </View>
+                          <View style={styles.p140MetaRow}>
+                            <Text style={styles.p140MetaKey}>Date:</Text>
+                            <Text style={styles.p140MetaVal}>{invDate}</Text>
+                          </View>
+                          <View style={styles.p140MetaRow}>
+                            <Text style={styles.p140MetaKey}>Mode:</Text>
+                            <Text style={styles.p140MetaVal}>{paymentMethod.toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.p140MetaRow}>
+                            <Text style={styles.p140MetaKey}>Biller:</Text>
+                            <Text style={styles.p140MetaVal}>{biller}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Parties */}
+                    <View style={styles.p140PartiesRow}>
+                      <View style={{ flex: 1.4 }}>
+                        <Text style={styles.p140SectionHead}>
+                          {isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}
+                        </Text>
+                        <Text style={styles.p140CustName}>{custName}</Text>
+                        {custPhone ? <Text style={styles.p140PartySub}>Phone: {custPhone}</Text> : null}
+                        {custAddress ? <Text style={styles.p140PartySub}>Address: {custAddress}</Text> : null}
+                        {isWholesale && custGstin ? (
+                          <Text style={[styles.p140PartySub, { fontWeight: '700', marginTop: 1 }]}>
+                            GSTIN: {custGstin}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={[styles.p140StatusPaid, { color: due === 0 ? '#059669' : paid > 0 ? '#D97706' : '#DC2626' }]}>
+                          STATUS: {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
+                        </Text>
+                        <Text style={styles.p140PartySub}>Place of Supply: {business.state} ({business.stateCode})</Text>
+                      </View>
+                    </View>
+
+                    {/* Items Table */}
+                    <View style={styles.p140Table}>
+                      <View style={styles.p140TableHead}>
+                        <Text style={[styles.p140Th, { width: 22, textAlign: 'center' }]}>#</Text>
+                        <Text style={[styles.p140Th, { flex: 2 }]}>ITEM & DESCRIPTION</Text>
+                        {isWholesale && <Text style={[styles.p140Th, { width: 42, textAlign: 'center' }]}>HSN</Text>}
+                        <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>QTY</Text>
+                        <Text style={[styles.p140Th, { width: 48, textAlign: 'right' }]}>RATE</Text>
+                        <Text style={[styles.p140Th, { width: 42, textAlign: 'right' }]}>DISC</Text>
+                        {showTaxBreakdown && (
+                          <>
+                            <Text style={[styles.p140Th, { width: 48, textAlign: 'right' }]}>TAXABLE</Text>
+                            <Text style={[styles.p140Th, { width: 34, textAlign: 'center' }]}>GST%</Text>
+                          </>
+                        )}
+                        <Text style={[styles.p140Th, { width: 62, textAlign: 'right' }]}>TOTAL</Text>
+                      </View>
+
+                      {items.map((item, idx) => {
+                        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+                        const rawAmt = Number(item.unitPrice || 0) * itemQty;
+                        const discAmt = Number(item.discount || 0);
+                        const taxableAmt = Math.max(0, rawAmt - discAmt);
+                        const metaText = formatItemMeta(item);
+
+                        return (
+                          <View key={idx} style={[styles.p140TableRow, idx % 2 === 1 && styles.p140TableRowAlt]}>
+                            <Text style={[styles.p140Td, { width: 22, textAlign: 'center' }]}>{idx + 1}</Text>
+                            <View style={{ flex: 2 }}>
+                              <Text style={[styles.p140Td, { fontWeight: '600', color: '#0F172A' }]}>
+                                {item.productName || `Item #${idx + 1}`}
+                              </Text>
+                              {metaText ? <Text style={{ fontSize: 7.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
+                            </View>
+                            {isWholesale && (
+                              <Text style={[styles.p140Td, { width: 42, textAlign: 'center' }]}>{item.hsn || '-'}</Text>
+                            )}
+                            <Text style={[styles.p140Td, { width: 36, textAlign: 'center' }]}>
+                              {item.quantity}{item.unit ? ` ${item.unit}` : ''}
+                            </Text>
+                            <Text style={[styles.p140Td, { width: 48, textAlign: 'right' }]}>
+                              {Number(item.unitPrice).toFixed(2)}
+                            </Text>
+                            <Text style={[styles.p140Td, { width: 42, textAlign: 'right' }]}>
+                              {discAmt > 0 ? discAmt.toFixed(2) : '-'}
+                            </Text>
+                            {showTaxBreakdown && (
+                              <>
+                                <Text style={[styles.p140Td, { width: 48, textAlign: 'right' }]}>
+                                  {taxableAmt.toFixed(2)}
+                                </Text>
+                                <Text style={[styles.p140Td, { width: 34, textAlign: 'center' }]}>
+                                  {item.gst || 0}%
+                                </Text>
+                              </>
+                            )}
+                            <Text style={[styles.p140Td, { width: 62, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
+                              {Number(item.total).toFixed(2)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Bottom Section */}
+                    <View style={styles.p140BottomGrid}>
+                      {/* Left: Words, Bank, Terms */}
+                      <View style={{ flex: 1.2, paddingRight: 10 }}>
+                        <View style={styles.p140WordsBox}>
+                          <Text style={styles.p140WordsTitle}>Invoice Amount in Words:</Text>
+                          <Text style={styles.p140WordsVal}>{words}</Text>
+                        </View>
+
+                        {isWholesale && showBankDetails && (
+                          <View style={styles.p140BankBox}>
+                            <Text style={styles.p140BankTitle}>BANK DETAILS FOR WIRE TRANSFER / NEFT:</Text>
+                            <Text style={styles.p140BankText}>
+                              Bank: <Text style={{ fontWeight: '700' }}>{business.bankName}</Text>
+                            </Text>
+                            <Text style={styles.p140BankText}>
+                              A/C: <Text style={{ fontWeight: '700' }}>{business.accountNumber}</Text> | IFSC: <Text style={{ fontWeight: '700' }}>{business.ifscCode}</Text>
+                            </Text>
+                          </View>
+                        )}
+
+                        {showTerms && (
+                          <View style={styles.p140TermsBox}>
+                            <Text style={styles.p140TermsHead}>Terms & Conditions:</Text>
+                            <Text style={styles.p140TermsText}>1. Goods once sold will not be exchanged after 7 days.</Text>
+                            <Text style={styles.p140TermsText}>2. Subject to local jurisdiction.</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Right: Calculations & QR */}
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.p140TotalsTable}>
+                          <View style={styles.p140TotalRow}>
+                            <Text style={styles.p140TotalKey}>Subtotal:</Text>
+                            <Text style={styles.p140TotalVal}>₹{subtotal.toFixed(2)}</Text>
+                          </View>
+                          {discount > 0 && (
+                            <View style={styles.p140TotalRow}>
+                              <Text style={styles.p140TotalKey}>Discount:</Text>
+                              <Text style={[styles.p140TotalVal, { color: '#DC2626' }]}>-₹{discount.toFixed(2)}</Text>
+                            </View>
+                          )}
+                          {showTaxBreakdown && gst > 0 && (
+                            <>
+                              <View style={styles.p140TotalRow}>
+                                <Text style={styles.p140TotalKey}>CGST:</Text>
+                                <Text style={styles.p140TotalVal}>₹{cgstAmount.toFixed(2)}</Text>
+                              </View>
+                              <View style={styles.p140TotalRow}>
+                                <Text style={styles.p140TotalKey}>SGST:</Text>
+                                <Text style={styles.p140TotalVal}>₹{sgstAmount.toFixed(2)}</Text>
+                              </View>
+                            </>
+                          )}
+                          <View style={styles.p140GrandTotalRow}>
+                            <Text style={styles.p140GrandTotalKey}>
+                              {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'GRAND TOTAL:'}
+                            </Text>
+                            <Text style={styles.p140GrandTotalVal}>₹{total.toFixed(2)}</Text>
+                          </View>
+
+                          {isBalanceActive && previousDue > 0 && (
+                            <>
+                              <View style={styles.p140TotalRow}>
+                                <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due:</Text>
+                                <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
+                              </View>
+                              <View style={[styles.p140GrandTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 2.5 }]}>
+                                <Text style={[styles.p140GrandTotalKey, { color: '#991B1B', fontSize: 9 }]}>TOTAL PAYABLE:</Text>
+                                <Text style={[styles.p140GrandTotalVal, { color: '#991B1B', fontSize: 10 }]}>₹{totalPayable.toFixed(2)}</Text>
+                              </View>
+                            </>
+                          )}
+
+                          {isBalanceActive && advancePayment > 0 && (
+                            <>
+                              <View style={styles.p140TotalRow}>
+                                <Text style={[styles.p140TotalKey, { color: '#16A34A', fontWeight: '700' }]}>Advance Credit:</Text>
+                                <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
+                              </View>
+                              <View style={[styles.p140GrandTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
+                                <Text style={[styles.p140GrandTotalKey, { color: '#166534', fontSize: 9 }]}>NET PAYABLE:</Text>
+                                <Text style={[styles.p140GrandTotalVal, { color: '#166534', fontSize: 10 }]}>₹{netPayable.toFixed(2)}</Text>
+                              </View>
+                            </>
+                          )}
+
+                          <View style={styles.p140TotalRow}>
+                            <Text style={styles.p140TotalKey}>Received:</Text>
+                            <Text style={[styles.p140TotalVal, { color: '#059669', fontWeight: '700' }]}>₹{paid.toFixed(2)}</Text>
+                          </View>
+
+                          {isBalanceActive && previousDue > 0 ? (
+                            <View style={styles.p140TotalRow}>
+                              <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
+                              <Text style={[styles.p140TotalVal, { color: netBalanceDue > 0 ? '#DC2626' : '#059669', fontWeight: '700' }]}>
+                                ₹{netBalanceDue.toFixed(2)}
+                              </Text>
+                            </View>
+                          ) : isBalanceActive && advancePayment > 0 ? (
+                            <View style={styles.p140TotalRow}>
+                              <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Balance Due:</Text>
+                              <Text style={[styles.p140TotalVal, { color: netDue > 0 ? '#DC2626' : '#059669', fontWeight: '700' }]}>
+                                ₹{netDue.toFixed(2)}
+                              </Text>
+                            </View>
+                          ) : (
+                            due > 0 && (
+                              <View style={styles.p140TotalRow}>
+                                <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Balance Due:</Text>
+                                <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>₹{due.toFixed(2)}</Text>
+                              </View>
+                            )
+                          )}
+                        </View>
+
+                        {/* QR Code */}
+                        {showQrCode && (
+                          <View style={styles.p140QrRow}>
+                            <Image source={{ uri: QR_CODE_DATA_URI }} style={styles.p140QrImg} resizeMode="contain" />
+                            <View>
+                              <Text style={styles.p140QrCaption}>Scan with UPI to Pay</Text>
+                              <Text style={styles.p140QrUpi}>{business.upiId}</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Signatures */}
+                    {showSignatures && (
+                      <View style={styles.p140SignaturesRow}>
+                        <View style={styles.p140SignBox}>
+                          <View style={styles.p140SignLine} />
+                          <Text style={styles.p140SignLabel}>Customer Signature</Text>
+                        </View>
+                        <View style={styles.p140SignBox}>
+                          <Text style={styles.p140SignCompany}>For {business.businessName}</Text>
+                          <View style={styles.p140SignLine} />
+                          <Text style={styles.p140SignLabel}>Authorized Signatory</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 ) : (
                   /* ======================================================== */
@@ -2640,15 +3023,44 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                 )}
               </View>
             </ScrollView>
-          </View>
+          </ScrollView>
+        </View>
 
-          {/* Footer Controls */}
+        {/* Footer Controls */}
+        {isMobile ? (
+          <View style={styles.bottomBarMobile}>
+            <TouchableOpacity
+              style={styles.mobileCloseBtn}
+              onPress={onClose}
+            >
+              <Text style={styles.secondaryBtnText}>Close</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mobileShareBtn}
+              onPress={() => setShowShareModal(true)}
+            >
+              <Share2 size={15} color="#FFFFFF" />
+              <Text style={styles.primaryPrintBtnText}>Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.mobilePrintBtn}
+              onPress={handlePrint}
+            >
+              <Printer size={15} color="#FFFFFF" />
+              <Text style={styles.primaryPrintBtnText}>Print</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <View style={styles.bottomBar}>
             <View style={styles.bottomInfoGroup}>
               <Text style={styles.bottomPaperSizeText}>
                 Active Sheet:{' '}
-                <Text style={{ fontWeight: '700', color: '#1E293B' }}>
-                  {isThermal ? '80 mm Thermal Roll' : 'Half of A4 Page (Landscape / 210x148.5mm)'}
+                <Text style={{ fontWeight: '700', color: '#CBD5E1' }}>
+                  {isThermal
+                    ? '80 mm Thermal Roll'
+                    : paperFormat === '140x210mm'
+                    ? '140×210 mm Portrait Sheet'
+                    : 'Half of A4 Page (Landscape / 210x148.5mm)'}
                 </Text>
               </Text>
               <Text style={styles.bottomFormatBadge}>
@@ -2657,19 +3069,29 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
             </View>
 
             <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={onClose}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={onClose}
+              >
                 <Text style={styles.secondaryBtnText}>Close</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryPrintBtn, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
+              <TouchableOpacity
+                style={[styles.primaryPrintBtn, { backgroundColor: '#10B981' }]}
+                onPress={() => setShowShareModal(true)}
+              >
                 <Share2 size={16} color="#FFFFFF" />
                 <Text style={styles.primaryPrintBtnText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryPrintBtn} onPress={handlePrint}>
+              <TouchableOpacity
+                style={styles.primaryPrintBtn}
+                onPress={handlePrint}
+              >
                 <Printer size={16} color="#FFFFFF" />
                 <Text style={styles.primaryPrintBtnText}>Print Invoice</Text>
               </TouchableOpacity>
             </View>
           </View>
+        )}
         </View>
       </View>
 
@@ -2709,10 +3131,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
   },
+  topBarMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#1E293B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    gap: 8,
+  },
   titleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  titleGroupMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   printerIconBadge: {
     width: 38,
@@ -2724,6 +3164,11 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  modalTitleMobile: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#F8FAFC',
   },
@@ -2747,6 +3192,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  topActionsMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  zoomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+    gap: 2,
+  },
+  zoomBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  zoomResetBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: '#1E293B',
+  },
+  zoomText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#CBD5E1',
   },
   printButton: {
     flexDirection: 'row',
@@ -2777,6 +3254,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
+    gap: 12,
+  },
+  controlsBarMobileScroll: {
+    backgroundColor: '#1E293B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    maxHeight: 52,
+    flexGrow: 0,
+  },
+  controlsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 12,
   },
   selectorGroup: {
@@ -2859,9 +3350,22 @@ const styles = StyleSheet.create({
   previewCanvasArea: {
     flex: 1,
     backgroundColor: '#0B1120',
+  },
+  canvasVerticalScroll: {
+    flex: 1,
+    width: '100%',
+  },
+  canvasVerticalContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 14,
+  },
+  canvasHorizontalContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    minWidth: '100%',
+    paddingHorizontal: 12,
   },
   scrollContent: {
     alignItems: 'center',
@@ -3536,5 +4040,335 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  /* Mobile Bottom Bar */
+  bottomBarMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#1E293B',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    gap: 8,
+  },
+  mobileCloseBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 6,
+    backgroundColor: '#334155',
+  },
+  mobileShareBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+  },
+  mobilePrintBtn: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 6,
+    backgroundColor: '#2563EB',
+  },
+
+  /* ------------------------------------------------------------------------ */
+  /*          140 MM X 210 MM PORTRAIT INVOICE STYLES                         */
+  /* ------------------------------------------------------------------------ */
+  p140Sheet: {
+    width: 560,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  p140Inner: {
+    width: '100%',
+  },
+  p140HeaderTable: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 2,
+    borderBottomColor: '#0F172A',
+    paddingBottom: 6,
+    marginBottom: 6,
+  },
+  p140StoreName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+  },
+  p140Tagline: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#0284C7',
+    marginBottom: 1,
+  },
+  p140StoreSub: {
+    fontSize: 9,
+    color: '#334155',
+    lineHeight: 13,
+  },
+  p140Badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 3,
+    marginBottom: 2,
+    alignSelf: 'flex-end',
+  },
+  p140BadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  p140Original: {
+    fontSize: 8,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  p140MetaGrid: {
+    width: 140,
+    gap: 2,
+    marginTop: 4,
+  },
+  p140MetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  p140MetaKey: {
+    fontSize: 8.5,
+    color: '#64748B',
+  },
+  p140MetaVal: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  p140PartiesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  p140SectionHead: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  p140CustName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  p140PartySub: {
+    fontSize: 9,
+    color: '#334155',
+    lineHeight: 12,
+  },
+  p140StatusPaid: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  p140Table: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  p140TableHead: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#CBD5E1',
+  },
+  p140Th: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  p140TableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  p140TableRowAlt: {
+    backgroundColor: '#F8FAFC',
+  },
+  p140Td: {
+    fontSize: 9,
+    color: '#334155',
+  },
+  p140BottomGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 12,
+  },
+  p140WordsBox: {
+    backgroundColor: '#F8FAFC',
+    padding: 5,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  p140WordsTitle: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  p140WordsVal: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#0F172A',
+    fontStyle: 'italic',
+  },
+  p140BankBox: {
+    marginTop: 5,
+    backgroundColor: '#F0FDF4',
+    padding: 5,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  p140BankTitle: {
+    fontSize: 7.5,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  p140BankText: {
+    fontSize: 8,
+    color: '#14532D',
+  },
+  p140TermsBox: {
+    marginTop: 5,
+  },
+  p140TermsHead: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  p140TermsText: {
+    fontSize: 7.5,
+    color: '#64748B',
+    lineHeight: 10,
+  },
+  p140TotalsTable: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: '#FAFAFA',
+  },
+  p140TotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 2.5,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  p140TotalKey: {
+    fontSize: 9,
+    color: '#475569',
+  },
+  p140TotalVal: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  p140GrandTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    backgroundColor: '#0F172A',
+  },
+  p140GrandTotalKey: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  p140GrandTotalVal: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#FACC15',
+  },
+  p140QrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+    padding: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  p140QrImg: {
+    width: 36,
+    height: 36,
+  },
+  p140QrCaption: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  p140QrUpi: {
+    fontSize: 7.5,
+    color: '#64748B',
+  },
+  p140SignaturesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 10,
+    paddingTop: 4,
+  },
+  p140SignBox: {
+    width: 140,
+    alignItems: 'center',
+  },
+  p140SignLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#334155',
+    marginBottom: 2,
+  },
+  p140SignCompany: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 14,
+  },
+  p140SignLabel: {
+    fontSize: 8,
+    color: '#64748B',
+    textAlign: 'center',
   },
 });

@@ -12,7 +12,7 @@ jest.mock('@op-engineering/op-sqlite', () => ({
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+  require('@react-native-async-storage/async-storage/jest'),
 );
 
 jest.mock('react-native-fs', () => ({

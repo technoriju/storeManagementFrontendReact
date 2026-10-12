@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import {
   Share2,
   Mail,
@@ -129,6 +130,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
   onOpenFullPreview,
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const invoiceSettings = useInvoiceSettingsStore((state) => state.settings);
   const business = invoiceSettings?.businessProfile || {
     businessName: 'Tarama Enterprise',
@@ -399,7 +401,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.65)' }]}>
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.65)', padding: isMobile ? 8 : 12 }]}>
         <View
           style={[
             styles.container,
@@ -407,6 +409,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
             },
+            isMobile && { width: '98%', height: '96%' },
           ]}
         >
           {/* Header Bar */}
@@ -757,10 +760,17 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
           {/* Quick Sharing Toolbar (Bottom Action Bar) */}
           <View style={[styles.bottomBarContainer, { borderTopColor: theme.colors.border }]}>
             {/* Primary Action Buttons */}
-            <View style={styles.bottomBar}>
+            <View style={[
+              styles.bottomBar,
+              isMobile && { flexDirection: 'column', gap: 8 }
+            ]}>
               {/* Share as Image Button */}
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#10B981' }]}
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: '#10B981' },
+                  isMobile && { flex: 0, width: '100%', paddingVertical: 12 }
+                ]}
                 onPress={handleShareImage}
                 disabled={isConvertingImage}
               >
@@ -780,7 +790,11 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
               {/* Save Image Button */}
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: '#3B82F6' },
+                  isMobile && { flex: 0, width: '100%', paddingVertical: 12 }
+                ]}
                 onPress={handleSaveImage}
                 disabled={isConvertingImage}
               >
@@ -790,7 +804,11 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
               {/* Print / Save as PDF Button */}
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#1E293B' }]}
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: '#1E293B' },
+                  isMobile && { flex: 0, width: '100%', paddingVertical: 12 }
+                ]}
                 onPress={handlePrintOrSavePdf}
                 disabled={isConvertingImage}
               >

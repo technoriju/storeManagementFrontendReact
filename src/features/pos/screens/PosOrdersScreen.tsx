@@ -1,11 +1,13 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Image, Modal, Alert, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddSalesModal } from '../components/AddSalesModal';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { useDeleteSale, fetchPaginatedSales } from '../api/useSales';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { 
@@ -131,9 +133,11 @@ const ActionMenu = ({
 
 export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [tableOrders, setTableOrders] = useState<any[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -486,28 +490,83 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     },
   ];
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = !isMobile ? 'Add Sales' : (windowWidth >= 480 ? 'Add Sales' : 'Add');
+
+  const filteredOrders = useMemo(() => {
+    if (!selectedStatus) return tableOrders;
+    return tableOrders.filter((o) => o.status?.toLowerCase() === selectedStatus.toLowerCase());
+  }, [tableOrders, selectedStatus]);
+
+  const statusOptions = [
+    { label: 'All Statuses', value: '' },
+    { label: 'Completed', value: 'Completed' },
+    { label: 'Pending', value: 'Pending' },
+  ];
+
   const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => loadData(page, rowsPerPage, searchQuery)}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+    <View style={[
+      styles.headerActionsWrapper,
+      isMobile && styles.headerActionsWrapperMobile,
+      isSmallMobile && styles.headerActionsWrapperSmall,
+    ]}>
+      <Pressable 
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile,
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]} 
+        onPress={() => loadData(page, rowsPerPage, searchQuery)}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#F97316' },
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
         onPress={() => setShowAddModal(true)}
       >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Sales</Text>
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText,
+          isMobile && styles.primaryActionTextMobile,
+          isSmallMobile && styles.primaryActionTextSmall,
+        ]}>{addBtnLabel}</Text>
       </Pressable>
-    </>
+    </View>
   );
 
   const filters = (
-    <>
-      <View style={[styles.filterDropdown, { borderColor: theme.colors.border }]}>
-        <Text style={{ color: theme.colors.text }}>Status</Text>
-        <ChevronDown size={14} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
-      </View>
-    </>
+    <View style={[styles.filtersWrapper, isMobile && { width: '100%' }]}>
+      <AppSelect
+        placeholder="Status"
+        value={selectedStatus}
+        options={statusOptions}
+        onSelect={(val) => {
+          setSelectedStatus(val ? String(val) : '');
+          setPage(1);
+        }}
+        clearable
+        containerStyle={[
+          styles.filterSelect,
+          isMobile ? { flex: 1, minWidth: 0 } : { width: 140 }
+        ]}
+      />
+      {!!selectedStatus && (
+        <Pressable
+          style={[styles.clearFilterBtn, { borderColor: theme.colors.border }]}
+          onPress={() => setSelectedStatus('')}
+        >
+          <X size={14} color="#EF4444" />
+          <Text style={styles.clearFilterText}>Reset</Text>
+        </Pressable>
+      )}
+    </View>
   );
 
   const renderRowActions = (item: any) => (
@@ -525,24 +584,85 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     />
   );
 
+  const renderOrderCard = (item: any) => {
+    const statusCol = getStatusColor(item.status);
+    const payStyle = getPaymentStatusStyle(item.paymentStatus);
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+            <Image source={{ uri: item.avatar }} style={{ width: 32, height: 32, borderRadius: 16 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                {item.customerName}
+              </Text>
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                {item.reference} • {item.date}
+              </Text>
+            </View>
+          </View>
+          <SyncBadge status={item.syncStatus} />
+        </View>
+
+        <View style={styles.cardBadgeRow}>
+          <View style={[styles.statusBadge, { backgroundColor: statusCol.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: statusCol.text }]}>{item.status}</Text>
+          </View>
+          <View style={[styles.paymentBadge, { backgroundColor: payStyle.bg }]}>
+            <View style={[styles.dot, { backgroundColor: payStyle.dot }]} />
+            <Text style={[styles.paymentBadgeText, { color: payStyle.text }]}>{item.paymentStatus}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
+          <View>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Grand Total</Text>
+            <Text style={[styles.cardPrice, { color: theme.colors.text }]}>₹{item.grandTotal?.toFixed(2)}</Text>
+          </View>
+          <View>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Due</Text>
+            <Text style={[styles.cardDue, { color: item.due > 0 ? '#EF4444' : theme.colors.textSecondary }]}>
+              ₹{item.due?.toFixed(2)}
+            </Text>
+          </View>
+          <View style={styles.cardActions}>
+            <ActionMenu
+              item={item}
+              theme={theme}
+              onDelete={handleDelete}
+              onEdit={(order) => {
+                setEditSaleId(order.id);
+                setShowAddModal(true);
+              }}
+              onView={handleViewOrder}
+              onPrint={handleOpenPrintPreview}
+              onShare={handleOpenShare}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const handleSearch = (text: string) => {
     setSearchQuery(text);
     setPage(1);
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       <AdvancedTable
         title="POS Orders"
         subtitle="Manage your pos orders and sales transactions"
         headerActions={headerActions}
         columns={columns}
-        data={tableOrders}
+        data={filteredOrders}
         searchValue={searchQuery}
         onSearch={handleSearch}
         debounceSearchMs={400}
         filters={filters}
         renderRowActions={renderRowActions}
+        renderMobileCard={renderOrderCard}
         isLoading={isLoadingData}
         page={page}
         rowsPerPage={rowsPerPage}
@@ -606,9 +726,15 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
               </ScrollView>
 
               {/* Modal Footer with Share and Print Actions */}
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+              <View style={[
+                { flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border },
+                isMobile && { alignItems: 'stretch' }
+              ]}>
                 <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#10B981' }}
+                  style={[
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#10B981' },
+                    isMobile && { width: '100%' }
+                  ]}
                   onPress={() => {
                     handleOpenShare(selectedOrder);
                   }}
@@ -617,7 +743,10 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                   <Text style={{ color: 'white', fontWeight: '600' }}>Share</Text>
                 </Pressable>
                 <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' }}
+                  style={[
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' },
+                    isMobile && { width: '100%' }
+                  ]}
                   onPress={() => {
                     handleOpenPrintPreview(selectedOrder);
                   }}
@@ -731,6 +860,18 @@ const styles = StyleSheet.create({
   },
   menuItemText: { fontSize: 13, color: '#1E293B' },
   container: { flex: 1 },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'nowrap',
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
+  headerActionsWrapperSmall: {
+    gap: 4,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -740,6 +881,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
+  iconButtonMobile: {
+    width: 30,
+    height: 30,
+  },
+  iconButtonSmall: {
+    width: 28,
+    height: 28,
+  },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -748,15 +897,113 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 8,
   },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 8,
+    height: 30,
+    gap: 4,
+  },
+  primaryActionBtnSmall: {
+    paddingHorizontal: 6,
+    height: 28,
+    gap: 3,
+  },
   primaryActionText: { color: 'white', fontWeight: '600', fontSize: 13 },
-  filterDropdown: {
+  primaryActionTextMobile: { fontSize: 12 },
+  primaryActionTextSmall: { fontSize: 11 },
+  filtersWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    gap: 8,
+  },
+  filterSelect: {
+    marginBottom: 0,
+  },
+  clearFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: 6,
-    paddingHorizontal: 12,
-    height: 36,
-    backgroundColor: 'white',
-    marginRight: 8,
+    borderWidth: 1,
+    backgroundColor: '#FEF2F2',
+  },
+  clearFilterText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  cardBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  paymentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  cardPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  cardDue: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

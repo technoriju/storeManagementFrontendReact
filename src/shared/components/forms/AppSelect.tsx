@@ -18,6 +18,7 @@ export interface AppSelectProps {
   containerStyle?: any;
   isMulti?: boolean;
   searchable?: boolean;
+  clearable?: boolean;
 }
 
 export const AppSelect = ({ 
@@ -29,7 +30,8 @@ export const AppSelect = ({
   error, 
   containerStyle,
   isMulti = false,
-  searchable = false
+  searchable = false,
+  clearable = false
 }: AppSelectProps) => {
   const theme = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
@@ -45,23 +47,38 @@ export const AppSelect = ({
 
   const openModal = () => {
     setSearchQuery('');
+    const screenWidth = Dimensions.get('window').width;
+    const screenHeight = Dimensions.get('window').height;
+
     if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
       selectRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-        const screenHeight = Dimensions.get('window').height;
-        const spaceBelow = screenHeight - y - height;
+        const measuredWidth = width && width > 0 ? width : screenWidth - 32;
+        const measuredHeight = height && height > 0 ? height : 40;
         const maxDropdownHeight = 300;
-        
-        const layout: any = { left: x, width };
+        const spaceBelow = screenHeight - y - measuredHeight;
+
+        let dropWidth = Math.max(measuredWidth, 180);
+        if (dropWidth > screenWidth - 24) {
+          dropWidth = screenWidth - 24;
+        }
+
+        let dropLeft = x || 12;
+        if (dropLeft + dropWidth > screenWidth - 12) {
+          dropLeft = Math.max(12, screenWidth - dropWidth - 12);
+        }
+
+        const layout: any = { left: dropLeft, width: dropWidth };
         if (spaceBelow < maxDropdownHeight && y > spaceBelow) {
-          layout.bottom = screenHeight - y + 4;
+          layout.bottom = Math.max(10, screenHeight - y + 4);
         } else {
-          layout.top = y + height + 4;
+          layout.top = Math.max(10, (y || 80) + measuredHeight + 4);
         }
 
         setDropdownLayout(layout);
         setModalVisible(true);
       });
     } else {
+      setDropdownLayout({ left: 16, width: screenWidth - 32, top: 120 });
       setModalVisible(true);
     }
   };
@@ -181,9 +198,13 @@ export const AppSelect = ({
         onPress={openModal}
         activeOpacity={0.7}
       >
-        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
           {!isMulti || !hasValue ? (
-            <Text style={{ color: hasValue ? theme.colors.text : theme.colors.textSecondary }}>
+            <Text 
+              style={{ color: hasValue ? theme.colors.text : theme.colors.textSecondary, fontSize: 13 }} 
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {displayValue}
             </Text>
           ) : (
@@ -205,7 +226,24 @@ export const AppSelect = ({
             })
           )}
         </View>
-        <View style={{ marginLeft: 8 }}>
+        <View style={{ marginLeft: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {clearable && hasValue && (
+            <TouchableOpacity
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                if (isMulti) {
+                  setInternalValue([]);
+                  onSelect?.([]);
+                } else {
+                  setInternalValue('');
+                  onSelect?.('');
+                }
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <X size={14} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
           <ChevronDown size={16} color={theme.colors.textSecondary} />
         </View>
       </TouchableOpacity>
@@ -304,10 +342,10 @@ export const AppSelect = ({
 };
 
 const styles = StyleSheet.create({
-  container: { width: '100%' },
+  container: { alignSelf: 'stretch' },
   input: { 
     borderWidth: 1, 
-    paddingHorizontal: 16, 
+    paddingHorizontal: 10, 
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'

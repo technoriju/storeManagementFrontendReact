@@ -263,8 +263,8 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '95%' : '80%', maxWidth: 900 }]}>
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)', padding: isMobile ? 8 : 16 }]}>
+        <View style={[styles.dialog, { backgroundColor: theme.colors.surface, width: isMobile ? '96%' : '80%', maxWidth: 900 }]}>
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -276,7 +276,7 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body} contentContainerStyle={{ padding: 20 }}>
+          <ScrollView style={styles.body} contentContainerStyle={{ padding: isMobile ? 12 : 20 }}>
             {errorMessage && (
               <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
                 <AlertCircle size={16} color="#DC2626" />
@@ -389,91 +389,95 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
                 </View>
               ) : (
                 <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
-                  <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
-                    <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Price (₹)</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Qty</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Tax (₹)</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Total (₹)</Text>
-                    <Text style={[styles.th, { width: 40 }]}></Text>
-                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator>
+                    <View style={{ minWidth: 540 }}>
+                      <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
+                        <Text style={[styles.th, { flex: 2, minWidth: 160, color: theme.colors.text }]}>Product</Text>
+                        <Text style={[styles.th, { flex: 1, minWidth: 90, color: theme.colors.text }]}>Price (₹)</Text>
+                        <Text style={[styles.th, { flex: 1, minWidth: 110, color: theme.colors.text }]}>Qty</Text>
+                        <Text style={[styles.th, { flex: 1, minWidth: 80, color: theme.colors.text }]}>Tax (₹)</Text>
+                        <Text style={[styles.th, { flex: 1, minWidth: 90, color: theme.colors.text }]}>Total (₹)</Text>
+                        <Text style={[styles.th, { width: 40 }]}></Text>
+                      </View>
 
-                  {items.map((row, idx) => (
-                    <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
-                      <View style={{ flex: 2 }}>
-                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
-                      </View>
-                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
-                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => {
-                            const current = parseFloat(String(row.quantity)) || 1;
-                            const next = Math.max(0.001, Number((current - 1).toFixed(4)));
-                            handleUpdateQuantity(idx, next);
-                          }}
-                        >
-                          <Text style={{ color: theme.colors.text }}>-</Text>
-                        </TouchableOpacity>
-                        <TextInput
-                          style={{
-                            minWidth: 44,
-                            height: 28,
-                            textAlign: 'center',
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            borderRadius: 4,
-                            color: theme.colors.text,
-                            backgroundColor: theme.colors.surface,
-                            paddingVertical: 0,
-                            paddingHorizontal: 4,
-                            fontWeight: '600',
-                            fontSize: 13,
-                          }}
-                          keyboardType="decimal-pad"
-                          selectTextOnFocus
-                          value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
-                          placeholder="1"
-                          placeholderTextColor={theme.colors.textSecondary}
-                          onChangeText={(v) => {
-                            const clean = v.replace(/[^0-9.]/g, '');
-                            const parts = clean.split('.');
-                            const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
-                            handleUpdateQuantityRaw(idx, sanitized);
-                          }}
-                          onBlur={() => {
-                            const parsed = parseFloat(String(row.quantity));
-                            if (isNaN(parsed) || parsed <= 0) {
-                              handleUpdateQuantity(idx, 1);
-                            } else {
-                              handleUpdateQuantity(idx, parsed);
-                            }
-                          }}
-                        />
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => {
-                            const current = parseFloat(String(row.quantity)) || 0;
-                            const next = Number((current + 1).toFixed(4));
-                            handleUpdateQuantity(idx, next);
-                          }}
-                        >
-                          <Text style={{ color: theme.colors.text }}>+</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.taxAmount.toFixed(2)}</Text>
-                      <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
-                      <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
-                        <Trash2 size={16} color="#EF4444" />
-                      </TouchableOpacity>
+                      {items.map((row, idx) => (
+                        <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
+                          <View style={{ flex: 2, minWidth: 160 }}>
+                            <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
+                          </View>
+                          <Text style={{ flex: 1, minWidth: 90, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
+                          <View style={{ flex: 1, minWidth: 110, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                              style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                              onPress={() => {
+                                const current = parseFloat(String(row.quantity)) || 1;
+                                const next = Math.max(0.001, Number((current - 1).toFixed(4)));
+                                handleUpdateQuantity(idx, next);
+                              }}
+                            >
+                              <Text style={{ color: theme.colors.text }}>-</Text>
+                            </TouchableOpacity>
+                            <TextInput
+                              style={{
+                                minWidth: 44,
+                                height: 28,
+                                textAlign: 'center',
+                                borderWidth: 1,
+                                borderColor: theme.colors.border,
+                                borderRadius: 4,
+                                color: theme.colors.text,
+                                backgroundColor: theme.colors.surface,
+                                paddingVertical: 0,
+                                paddingHorizontal: 4,
+                                fontWeight: '600',
+                                fontSize: 13,
+                              }}
+                              keyboardType="decimal-pad"
+                              selectTextOnFocus
+                              value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
+                              placeholder="1"
+                              placeholderTextColor={theme.colors.textSecondary}
+                              onChangeText={(v) => {
+                                const clean = v.replace(/[^0-9.]/g, '');
+                                const parts = clean.split('.');
+                                const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                                handleUpdateQuantityRaw(idx, sanitized);
+                              }}
+                              onBlur={() => {
+                                const parsed = parseFloat(String(row.quantity));
+                                if (isNaN(parsed) || parsed <= 0) {
+                                  handleUpdateQuantity(idx, 1);
+                                } else {
+                                  handleUpdateQuantity(idx, parsed);
+                                }
+                              }}
+                            />
+                            <TouchableOpacity
+                              style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                              onPress={() => {
+                                const current = parseFloat(String(row.quantity)) || 0;
+                                const next = Number((current + 1).toFixed(4));
+                                handleUpdateQuantity(idx, next);
+                              }}
+                            >
+                              <Text style={{ color: theme.colors.text }}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <Text style={{ flex: 1, minWidth: 80, color: theme.colors.textSecondary }}>₹{row.taxAmount.toFixed(2)}</Text>
+                          <Text style={{ flex: 1, minWidth: 90, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
+                          <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
+                            <Trash2 size={16} color="#EF4444" />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
-                  ))}
+                  </ScrollView>
                 </View>
               )}
             </View>
 
             {/* Totals & Notes */}
-            <View style={[styles.formRow, { marginTop: 16 }]}>
+            <View style={[styles.formRow, isMobile && styles.formRowCol, { marginTop: 16 }]}>
               <View style={{ flex: 1, gap: 12 }}>
                 <AppInput
                   label="Discount (₹)"
@@ -531,18 +535,18 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
           </ScrollView>
 
           {/* Footer */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.border }, isMobile && { flexDirection: 'column-reverse', gap: 8 }]}>
             <AppButton
               title="Cancel"
               variant="outline"
               onPress={onClose}
-              style={{ minWidth: 100 }}
+              style={[isMobile && { width: '100%' }, { minWidth: 100 }]}
             />
             <AppButton
               title={createQuotationMutation.isPending ? 'Saving...' : 'Submit Quotation'}
               onPress={handleSubmit}
               disabled={createQuotationMutation.isPending}
-              style={{ minWidth: 140 }}
+              style={[isMobile && { width: '100%' }, { minWidth: 140 }]}
             />
           </View>
         </View>

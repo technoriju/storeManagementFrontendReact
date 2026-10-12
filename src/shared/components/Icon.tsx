@@ -64,6 +64,7 @@ export type IconName =
   | 'shield'
   | 'key'
   | 'trash-2'
+  | 'truck'
   | 'copy';
 
 interface IconProps {
@@ -73,15 +74,25 @@ interface IconProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const ICON_ALIASES: Record<string, any> = {
+  dot: (LucideIcons as any).Circle,
+  home: (LucideIcons as any).Home || (LucideIcons as any).House,
+  house: (LucideIcons as any).House || (LucideIcons as any).Home,
+  cube: (LucideIcons as any).Box || (LucideIcons as any).Package,
+  people: (LucideIcons as any).Users,
+  business: (LucideIcons as any).Briefcase || (LucideIcons as any).Building2,
+  cart: (LucideIcons as any).ShoppingCart,
+};
+
 const getIconComponent = (name: string) => {
-  if (name === 'dot') return LucideIcons.Circle;
+  if (ICON_ALIASES[name]) return ICON_ALIASES[name];
   
   const pascalName = name
     .split('-')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join('');
     
-  return (LucideIcons as any)[pascalName] || LucideIcons.HelpCircle;
+  return (LucideIcons as any)[pascalName] || (LucideIcons as any).HelpCircle;
 };
 
 export const Icon: React.FC<IconProps> = ({ 

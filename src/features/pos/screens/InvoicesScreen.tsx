@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
@@ -32,6 +33,7 @@ interface Props {
 
 export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
@@ -405,57 +407,139 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
     }
   ];
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = !isMobile ? 'Add Sales Invoice' : (windowWidth >= 480 ? 'Add Invoice' : 'Add');
+
+  const headerActions = (
+    <View style={[
+      styles.headerActionsWrapper,
+      isMobile && styles.headerActionsWrapperMobile,
+      isSmallMobile && styles.headerActionsWrapperSmall,
+    ]}>
+      <Pressable 
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile,
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]} 
+        onPress={() => loadData(page, rowsPerPage, searchQuery)}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
+      </Pressable>
+      <Pressable 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#F97316' },
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
+        onPress={() => setShowAddModal(true)}
+      >
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText,
+          isMobile && styles.primaryActionTextMobile,
+          isSmallMobile && styles.primaryActionTextSmall,
+        ]}>{addBtnLabel}</Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderInvoiceCard = (item: any) => {
+    const statusStyle = getStatusStyle(item.paymentStatus);
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.invoiceNumber}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <User size={12} color={theme.colors.textSecondary} />
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                {item.customerName}
+              </Text>
+            </View>
+          </View>
+          <SyncBadge status={item.syncStatus} />
+        </View>
+
+        <View style={styles.cardInfoRow}>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Date: {item.date}</Text>
+          <View style={[styles.paymentBadge, { backgroundColor: statusStyle.bg }]}>
+            <View style={[styles.dot, { backgroundColor: statusStyle.dot }]} />
+            <Text style={[styles.paymentBadgeText, { color: statusStyle.text }]}>{item.paymentStatus}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
+          <View>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Amount / Due</Text>
+            <Text style={[styles.cardPrice, { color: theme.colors.text }]}>
+              ₹{item.total?.toFixed(2)}
+              {item.due > 0 && (
+                <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: 'normal' }}> (Due: ₹{item.due.toFixed(2)})</Text>
+              )}
+            </Text>
+          </View>
+          <View style={styles.cardActions}>
+            <Pressable onPress={() => handleOpenPrintPreview(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Printer size={15} color={theme.colors.primary} />
+            </Pressable>
+            <Pressable onPress={() => handleOpenShare(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Share2 size={15} color="#10B981" />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setEditSaleId(item.id);
+                setShowAddModal(true);
+              }}
+              style={[styles.actionBtn, { borderColor: theme.colors.border }]}
+            >
+              <Edit size={15} color="#F59E0B" />
+            </Pressable>
+            <Pressable onPress={() => handleViewInvoice(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Eye size={15} color={theme.colors.textSecondary} />
+            </Pressable>
+            <Pressable onPress={() => handleDelete(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Trash2 size={15} color="#EF4444" />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header bar */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Invoices</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Sales invoices, receipts, and payment status</Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <Pressable 
-            style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
-            onPress={() => setShowAddModal(true)}
-          >
-            <PlusCircle size={16} color="white" />
-            <Text style={styles.primaryActionText}>Add Sales Invoice</Text>
-          </Pressable>
-          <Pressable 
-            style={[styles.iconButton, { borderColor: theme.colors.border }]}
-            onPress={() => loadData(page, rowsPerPage, searchQuery)}
-          >
-            <RefreshCw size={16} color={theme.colors.textSecondary} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Advanced Table */}
-      <View style={styles.tableCard}>
-        <AdvancedTable
-          data={tableInvoices}
-          columns={columns}
-          searchValue={searchQuery}
-          onSearch={(text) => {
-            setSearchQuery(text);
-            setPage(1);
-          }}
-          debounceSearchMs={400}
-          searchPlaceholder="Search invoice no, customer, payment status..."
-          isLoading={isLoadingData}
-          hasCheckbox={false}
-          page={page}
-          rowsPerPage={rowsPerPage}
-          totalItems={totalItems}
-          totalPages={totalPages}
-          onPageChange={(newPage) => setPage(newPage)}
-          onRowsPerPageChange={(newRows) => {
-            setRowsPerPage(newRows);
-            setPage(1);
-          }}
-        />
-      </View>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
+      <AdvancedTable
+        title="Invoices"
+        subtitle="Sales invoices, receipts, and payment status"
+        headerActions={headerActions}
+        data={tableInvoices}
+        columns={columns}
+        searchValue={searchQuery}
+        onSearch={(text) => {
+          setSearchQuery(text);
+          setPage(1);
+        }}
+        debounceSearchMs={400}
+        searchPlaceholder="Search invoice no, customer, payment status..."
+        isLoading={isLoadingData}
+        hasCheckbox={false}
+        renderMobileCard={renderInvoiceCard}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalItems={totalItems}
+        totalPages={totalPages}
+        onPageChange={(newPage) => setPage(newPage)}
+        onRowsPerPageChange={(newRows) => {
+          setRowsPerPage(newRows);
+          setPage(1);
+        }}
+      />
 
       {/* Invoice Details Modal */}
       {viewInvoice && (
@@ -597,9 +681,17 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
               </ScrollView>
 
               {/* Modal footer with Share and Print actions */}
-              <View style={[styles.modalFooter, { borderTopColor: theme.colors.border, gap: 10 }]}>
+              <View style={[
+                styles.modalFooter,
+                { borderTopColor: theme.colors.border, gap: 10 },
+                isMobile && { flexDirection: 'column-reverse', gap: 8, alignItems: 'stretch' },
+              ]}>
                 <Pressable
-                  style={[styles.printButton, { backgroundColor: '#10B981' }]}
+                  style={[
+                    styles.printButton,
+                    { backgroundColor: '#10B981', justifyContent: 'center' },
+                    isMobile && { width: '100%' },
+                  ]}
                   onPress={() => {
                     handleOpenShare(viewInvoice);
                   }}
@@ -608,7 +700,11 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                   <Text style={{ color: 'white', fontWeight: '600' }}>Share</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.printButton, { backgroundColor: theme.colors.primary }]}
+                  style={[
+                    styles.printButton,
+                    { backgroundColor: theme.colors.primary, justifyContent: 'center' },
+                    isMobile && { width: '100%' },
+                  ]}
                   onPress={() => {
                     handleOpenPrintPreview(viewInvoice);
                   }}
@@ -696,11 +792,33 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  iconButton: { padding: 8, borderWidth: 1, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1 },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'nowrap',
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
+  headerActionsWrapperSmall: {
+    gap: 4,
+  },
+  iconButton: {
+    padding: 8,
+    borderWidth: 1,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  iconButtonMobile: {
+    padding: 6,
+  },
+  iconButtonSmall: {
+    padding: 4,
+  },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -709,13 +827,90 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 6,
   },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  primaryActionBtnSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    gap: 3,
+  },
   primaryActionText: {
     color: 'white',
     fontSize: 13,
     fontWeight: '600',
   },
+  primaryActionTextMobile: { fontSize: 12 },
+  primaryActionTextSmall: { fontSize: 11 },
   tableCard: { flex: 1 },
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 12,
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  paymentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  cardPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionBtn: {
+    padding: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    backgroundColor: 'white',
+  },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 16, fontWeight: 'bold' },

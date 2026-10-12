@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
@@ -23,6 +24,7 @@ import {
 
 export const CategoryListScreen = () => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
 
   const { data: categories = [], isLoading, error, refetch } = useCategories();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
@@ -43,6 +45,10 @@ export const CategoryListScreen = () => {
   
   const [categoryName, setCategoryName] = useState('');
   const [categoryDescription, setCategoryDescription] = useState('');
+
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = isSmallMobile ? 'Add' : (isMobile && windowWidth < 460 ? 'Add' : 'Add Category');
 
   const columns = [
     { 
@@ -82,12 +88,25 @@ export const CategoryListScreen = () => {
   ];
 
   const headerActions = (
-    <>
-      <Pressable style={[styles.iconButton, { borderColor: theme.colors.border }]} onPress={() => { import('../../../core/sync/SyncEngine').then(m => m.syncEngine.syncNow().then(() => refetch())); }}>
-        <RefreshCw size={16} color={theme.colors.textSecondary} />
+    <View style={[styles.headerActionsWrapper, isMobile && styles.headerActionsWrapperMobile]}>
+      <Pressable 
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile,
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]} 
+        onPress={() => { import('../../../core/sync/SyncEngine').then(m => m.syncEngine.syncNow().then(() => refetch())); }}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
       <Pressable 
-        style={[styles.primaryActionBtn, { backgroundColor: '#F97316' }]} 
+        style={[
+          styles.primaryActionBtn, 
+          { backgroundColor: '#F97316' },
+          isMobile && styles.primaryActionBtnMobile,
+          isSmallMobile && styles.primaryActionBtnSmall,
+        ]} 
         onPress={() => {
           setEditingCategory(null);
           setCategoryName('');
@@ -95,10 +114,15 @@ export const CategoryListScreen = () => {
           setIsModalVisible(true);
         }}
       >
-        <PlusCircle size={16} color="white" />
-        <Text style={styles.primaryActionText}>Add Category</Text>
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.primaryActionText,
+          isMobile && styles.primaryActionTextMobile,
+        ]}>
+          {addBtnLabel}
+        </Text>
       </Pressable>
-    </>
+    </View>
   );
 
   const handleEdit = (category: Category) => {
@@ -139,7 +163,7 @@ export const CategoryListScreen = () => {
   };
 
   const renderRowActions = (item: Category) => (
-    <>
+    <View style={styles.actionButtonsRow}>
       <Pressable 
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
         onPress={() => handleEdit(item)}
@@ -152,8 +176,41 @@ export const CategoryListScreen = () => {
       >
         <Trash2 size={16} color={theme.colors.error} />
       </Pressable>
-    </>
+    </View>
   );
+
+  const renderCategoryCard = (category: Category) => {
+    const date = category.createdAt
+      ? new Date(category.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '-';
+
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardTopRow}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {category.name}
+            </Text>
+            {category.description ? (
+              <Text style={[styles.cardDesc, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+                {category.description}
+              </Text>
+            ) : null}
+          </View>
+          <SyncBadge status={category.syncStatus} />
+        </View>
+
+        <View style={[styles.cardBottomRow, { borderTopColor: theme.colors.divider }]}>
+          <Text style={[styles.cardDate, { color: theme.colors.textSecondary }]}>
+            {date}
+          </Text>
+          <View style={styles.cardActionsRow}>
+            {renderRowActions(category)}
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   const handleSaveCategory = () => {
     if (!categoryName.trim()) {
@@ -194,7 +251,7 @@ export const CategoryListScreen = () => {
   const isSaving = addCategoryMutation.isPending || updateCategoryMutation.isPending;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
       {isLoading && !isModalVisible ? (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#F97316" />
@@ -215,6 +272,7 @@ export const CategoryListScreen = () => {
           data={filteredCategories}
           onSearch={setSearchQuery}
           renderRowActions={renderRowActions}
+          renderMobileCard={renderCategoryCard}
         />
       )}
 
@@ -228,13 +286,14 @@ export const CategoryListScreen = () => {
               title="Cancel" 
               variant="secondary" 
               onPress={() => setIsModalVisible(false)} 
-              style={{ backgroundColor: '#0F172A', minWidth: 100 }} 
+              style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton 
               title={editingCategory ? "Save Changes" : "Add Category"} 
               onPress={handleSaveCategory} 
-              style={{ backgroundColor: '#F97316', minWidth: 120 }}
+              style={[styles.dialogBtn, { backgroundColor: '#F97316' }]}
               disabled={isSaving}
+              isLoading={isSaving}
             />
           </>
         }
@@ -259,15 +318,22 @@ export const CategoryListScreen = () => {
           onChangeText={setCategoryDescription}
           placeholder="Category description"
         />
-        {isSaving && <ActivityIndicator style={{ marginTop: 16 }} color="#F97316" />}
       </AppDialog>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1 },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -277,6 +343,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'white',
   },
+  iconButtonMobile: {
+    width: 32,
+    height: 32,
+  },
+  iconButtonSmall: {
+    width: 28,
+    height: 28,
+  },
   primaryActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,10 +359,27 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 8,
   },
+  primaryActionBtnMobile: {
+    paddingHorizontal: 10,
+    height: 32,
+    gap: 4,
+  },
+  primaryActionBtnSmall: {
+    paddingHorizontal: 8,
+    height: 28,
+  },
   primaryActionText: {
     color: 'white',
     fontWeight: '500',
     fontSize: 14,
+  },
+  primaryActionTextMobile: {
+    fontSize: 12,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   rowActionBtn: {
     width: 32,
@@ -298,8 +389,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'white',
-    marginRight: 8,
-  }
+  },
+  dialogBtn: {
+    minWidth: 110,
+    height: 40,
+    borderRadius: 6,
+  },
+  // Mobile Card styles
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  cardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 8,
+  },
+  cardDate: {
+    fontSize: 12,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
 });
 
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, ScrollView, TextInput, TouchableOpacity, Pressable, Platform, Alert } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { useProductStore } from '../store/productStore';
 import { ProductScreenType } from '../ProductsModule';
 
@@ -49,20 +50,23 @@ const TEXT_MAIN = '#333333';
 const TEXT_MUTED = '#888888';
 const RED = '#FF4C51';
 
-const Card = ({ title, icon, children }: any) => (
-  <View style={styles.card}>
-    <View style={styles.cardHeader}>
-      <View style={styles.cardTitleRow}>
-        {icon}
-        <Text style={styles.cardTitle}>{title}</Text>
+const Card = ({ title, icon, children }: any) => {
+  const { isMobile } = useResponsive();
+  return (
+    <View style={styles.card}>
+      <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile]}>
+        <View style={styles.cardTitleRow}>
+          {icon}
+          <Text style={styles.cardTitle}>{title}</Text>
+        </View>
+        <ChevronDown size={20} color={TEXT_MUTED} />
       </View>
-      <ChevronDown size={20} color={TEXT_MUTED} />
+      <View style={[styles.cardBody, isMobile && styles.cardBodyMobile]}>
+        {children}
+      </View>
     </View>
-    <View style={styles.cardBody}>
-      {children}
-    </View>
-  </View>
-);
+  );
+};
 
 const FormGroup = ({ label, children, actionRight, width }: any) => (
   <View style={[styles.formGroup, width ? { width } : null]}>
@@ -78,7 +82,11 @@ const FormGroup = ({ label, children, actionRight, width }: any) => (
 
 const EditorField = ({ value, onChangeText }: { value?: string; onChangeText?: (text: string) => void }) => (
   <View style={styles.editorContainer}>
-    <View style={styles.editorToolbar}>
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.editorToolbar}
+    >
       <Text style={styles.toolbarText}>Normal</Text>
       <ChevronDown size={14} color={TEXT_MAIN} style={{marginRight: 16}} />
       <Text style={styles.toolbarIcon}>B</Text>
@@ -88,7 +96,7 @@ const EditorField = ({ value, onChangeText }: { value?: string; onChangeText?: (
       <Text style={styles.toolbarIcon}>≣</Text>
       <Text style={styles.toolbarIcon}>≡</Text>
       <Text style={styles.toolbarIcon}>Tx</Text>
-    </View>
+    </ScrollView>
     <AppInput 
       style={styles.editorInput} 
       multiline={true} 
@@ -112,6 +120,9 @@ const dedupeOptions = <T extends { label: string; value: string }>(list: T[]): T
 };
 
 export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) => {
+  const { isMobile, isTablet } = useResponsive();
+  const col2 = isMobile ? '100%' : '50%';
+  const col3 = isMobile ? '100%' : (isTablet ? '50%' : '33.33%');
   const { products, addProduct, updateProduct, fetchProducts } = useProductStore();
 
   // Basic Information
@@ -829,7 +840,10 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        style={styles.scrollArea} 
+        contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
+      >
         
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('list')}>
@@ -840,7 +854,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         {/* 1. PRODUCT INFORMATION CARD */}
         <Card title="Product Information" icon={<Info size={18} color={ORANGE} />}>
           <View style={styles.grid2}>
-            <FormGroup width="50%" label="Product Name *">
+            <FormGroup width={col2} label="Product Name *">
               <AppInput 
                 placeholder="e.g. Basmati Rice" 
                 value={productName}
@@ -854,7 +868,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               />
             </FormGroup>
 
-            <FormGroup width="50%" label="Slug">
+            <FormGroup width={col2} label="Slug">
               <AppInput 
                 placeholder="e.g. basmati-rice" 
                 value={slug}
@@ -863,7 +877,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               />
             </FormGroup>
 
-            <FormGroup width="50%" label="SKU *">
+            <FormGroup width={col2} label="SKU *">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <AppInput 
@@ -882,7 +896,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             </FormGroup>
 
             <FormGroup 
-              width="50%"
+              width={col2}
               label="Category" 
               actionRight={
                 <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}} onPress={() => setCategoryModalVisible(true)}>
@@ -901,7 +915,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             </FormGroup>
 
             {Boolean(selectedCategory) && (
-              <FormGroup width="50%" label="Sub Category">
+              <FormGroup width={col2} label="Sub Category">
                 <AppSelect 
                   options={subCategories} 
                   placeholder={subCategories.length > 0 ? "Select Subcategory" : "No Subcategory Found"} 
@@ -913,7 +927,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             )}
 
             <FormGroup 
-              width="50%" 
+              width={col2} 
               label="Brand"
               actionRight={
                 <TouchableOpacity style={{flexDirection: 'row', alignItems: 'center'}} onPress={() => setBrandModalVisible(true)}>
@@ -931,7 +945,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               />
             </FormGroup>
 
-            <FormGroup width="50%" label="Barcode Symbology">
+            <FormGroup width={col2} label="Barcode Symbology">
               <AppSelect 
                 options={[
                   {label: 'CODE128', value: 'CODE128'}, 
@@ -945,7 +959,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               />
             </FormGroup>
 
-            <FormGroup width="50%" label="Item Barcode">
+            <FormGroup width={col2} label="Item Barcode">
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <AppInput 
@@ -988,7 +1002,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </View>
 
               <View style={styles.grid3}>
-                <FormGroup width="33.33%" label="Purchase Price (₹) *">
+                <FormGroup width={col3} label="Purchase Price (₹) *">
                   <AppInput 
                     placeholder="₹ 0.00" 
                     keyboardType="numeric"
@@ -998,7 +1012,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Wholesale Price (Sales) (₹) *">
+                <FormGroup width={col3} label="Wholesale Price (Sales) (₹) *">
                   <AppInput 
                     placeholder="₹ 0.00" 
                     keyboardType="numeric"
@@ -1008,7 +1022,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Retail Price (Sales) (₹) *">
+                <FormGroup width={col3} label="Retail Price (Sales) (₹) *">
                   <AppInput 
                     placeholder="₹ 0.00" 
                     keyboardType="numeric"
@@ -1026,7 +1040,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </View>
 
               <View style={styles.grid3}>
-                <FormGroup width="33.33%" label="Base Unit *">
+                <FormGroup width={col3} label="Base Unit *">
                   <AppSelect 
                     options={units} 
                     placeholder="Select Base Unit" 
@@ -1036,7 +1050,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Sub Unit">
+                <FormGroup width={col3} label="Sub Unit">
                   <AppSelect 
                     options={subUnitsList} 
                     placeholder={selectedUnit ? "Select Sub Unit" : "Select Base Unit First"} 
@@ -1046,7 +1060,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label={`Conversion (1 ${baseUnitName} = ? ${subUnitName})`}>
+                <FormGroup width={col3} label={`Conversion (1 ${baseUnitName} = ? ${subUnitName})`}>
                   <AppInput 
                     placeholder="e.g. 10" 
                     keyboardType="numeric"
@@ -1059,9 +1073,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
 
               {/* 3. WHEN CHOOSE SUB UNIT THEN AUTOMATICALLY SHOW PRICE */}
               {selectedSubUnit ? (
-                <View style={styles.subUnitPriceCard}>
+                <View style={[styles.subUnitPriceCard, isMobile && styles.subUnitPriceCardMobile]}>
                   <View style={styles.subUnitPriceHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <Calculator size={16} color="#0D9488" />
                       <Text style={styles.subUnitPriceTitle}>
                         Automatically Calculated Sub Unit Prices ({subUnitName})
@@ -1074,20 +1088,20 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     </View>
                   </View>
 
-                  <View style={styles.subUnitPriceGrid}>
-                    <View style={styles.priceStatBox}>
+                  <View style={[styles.subUnitPriceGrid, isMobile && styles.subUnitPriceGridMobile]}>
+                    <View style={[styles.priceStatBox, isMobile && styles.priceStatBoxMobile]}>
                       <Text style={styles.priceStatLabel}>Sub Unit Purchase Price</Text>
                       <Text style={styles.priceStatValue}>₹{autoSubPurchasePrice}</Text>
                       <Text style={styles.priceStatFormula}>(₹{purchasePrice || '0'} / {rateNumber})</Text>
                     </View>
 
-                    <View style={[styles.priceStatBox, styles.priceStatBoxWholesale]}>
+                    <View style={[styles.priceStatBox, styles.priceStatBoxWholesale, isMobile && styles.priceStatBoxMobile]}>
                       <Text style={styles.priceStatLabel}>Sub Unit Wholesale Price</Text>
                       <Text style={[styles.priceStatValue, { color: '#0369A1' }]}>₹{autoSubWholesalePrice}</Text>
                       <Text style={styles.priceStatFormula}>(₹{wholesalePrice || '0'} / {rateNumber})</Text>
                     </View>
 
-                    <View style={[styles.priceStatBox, styles.priceStatBoxRetail]}>
+                    <View style={[styles.priceStatBox, styles.priceStatBoxRetail, isMobile && styles.priceStatBoxMobile]}>
                       <Text style={styles.priceStatLabel}>Sub Unit Retail Price</Text>
                       <Text style={[styles.priceStatValue, { color: '#15803D' }]}>₹{autoSubRetailPrice}</Text>
                       <Text style={styles.priceStatFormula}>(₹{retailPrice || '0'} / {rateNumber})</Text>
@@ -1106,74 +1120,76 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </View>
 
               {hasMultipleUnits && (
-                <View style={{ width: '100%', paddingHorizontal: 10, marginBottom: 20 }}>
-                  <View style={styles.variantTable}>
-                    <View style={styles.tableHeader}>
-                      <Text style={[styles.tableCell, { flex: 1.8 }]}>Sub Unit</Text>
-                      <Text style={[styles.tableCell, { flex: 1.4 }]}>Equal To ({baseUnitName})</Text>
-                      <Text style={[styles.tableCell, { flex: 1.5 }]}>Purchase Price</Text>
-                      <Text style={[styles.tableCell, { flex: 1.5 }]}>Wholesale Price</Text>
-                      <Text style={[styles.tableCell, { flex: 1.5 }]}>Retail Price</Text>
-                      <Text style={[styles.tableCell, { flex: 0.8 }]}></Text>
-                    </View>
-                    
-                    {subUnits.map((item, index) => {
-                      const itemRate = parseFloat(item.value) > 0 ? parseFloat(item.value) : 1;
-                      const itemSubPurchase = (pPriceNum / itemRate).toFixed(2);
-                      const itemSubWholesale = (wPriceNum / itemRate).toFixed(2);
-                      const itemSubRetail = (rPriceNum / itemRate).toFixed(2);
+                <View style={{ width: '100%', paddingHorizontal: isMobile ? 0 : 10, marginBottom: 20 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                    <View style={[styles.variantTable, { minWidth: 620 }]}>
+                      <View style={styles.tableHeader}>
+                        <Text style={[styles.tableCell, { flex: 1.8 }]}>Sub Unit</Text>
+                        <Text style={[styles.tableCell, { flex: 1.4 }]}>Equal To ({baseUnitName})</Text>
+                        <Text style={[styles.tableCell, { flex: 1.5 }]}>Purchase Price</Text>
+                        <Text style={[styles.tableCell, { flex: 1.5 }]}>Wholesale Price</Text>
+                        <Text style={[styles.tableCell, { flex: 1.5 }]}>Retail Price</Text>
+                        <Text style={[styles.tableCell, { flex: 0.8 }]}></Text>
+                      </View>
+                      
+                      {subUnits.map((item, index) => {
+                        const itemRate = parseFloat(item.value) > 0 ? parseFloat(item.value) : 1;
+                        const itemSubPurchase = (pPriceNum / itemRate).toFixed(2);
+                        const itemSubWholesale = (wPriceNum / itemRate).toFixed(2);
+                        const itemSubRetail = (rPriceNum / itemRate).toFixed(2);
 
-                      return (
-                        <View style={styles.tableRow} key={`subunit-row-${item.id}-${index}`}>
-                          <View style={[styles.tableCell, { flex: 1.8 }]}>
-                            <AppSelect 
-                              options={subUnitsList} 
-                              placeholder="Select" 
-                              containerStyle={{ marginBottom: 0 }} 
-                              value={item.unit}
-                              onSelect={(val: string) => handleUpdateSubUnit(item.id, 'unit', val)}
-                            />
-                          </View>
-                          <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                            <Text style={{ color: '#888888' }}>=</Text>
-                            <View style={{ flex: 1 }}>
-                              <AppInput 
+                        return (
+                          <View style={styles.tableRow} key={`subunit-row-${item.id}-${index}`}>
+                            <View style={[styles.tableCell, { flex: 1.8 }]}>
+                              <AppSelect 
+                                options={subUnitsList} 
+                                placeholder="Select" 
                                 containerStyle={{ marginBottom: 0 }} 
-                                placeholder="e.g. 10" 
-                                keyboardType="numeric"
-                                value={item.value} 
-                                onChangeText={(val: string) => handleUpdateSubUnit(item.id, 'value', val)} 
+                                value={item.unit}
+                                onSelect={(val: string) => handleUpdateSubUnit(item.id, 'unit', val)}
                               />
                             </View>
+                            <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                              <Text style={{ color: '#888888' }}>=</Text>
+                              <View style={{ flex: 1 }}>
+                                <AppInput 
+                                  containerStyle={{ marginBottom: 0 }} 
+                                  placeholder="e.g. 10" 
+                                  keyboardType="numeric"
+                                  value={item.value} 
+                                  onChangeText={(val: string) => handleUpdateSubUnit(item.id, 'value', val)} 
+                                />
+                              </View>
+                            </View>
+                            <View style={[styles.tableCell, { flex: 1.5 }]}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: TEXT_MAIN }}>₹{itemSubPurchase}</Text>
+                            </View>
+                            <View style={[styles.tableCell, { flex: 1.5 }]}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#0369A1' }}>₹{itemSubWholesale}</Text>
+                            </View>
+                            <View style={[styles.tableCell, { flex: 1.5 }]}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803D' }}>₹{itemSubRetail}</Text>
+                            </View>
+                            <View style={[styles.tableCell, { flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
+                              <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddSubUnit}>
+                                <Plus size={14} color="#333333" />
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveSubUnit(item.id)}>
+                                <Trash2 size={14} color="#333333" />
+                              </TouchableOpacity>
+                            </View>
                           </View>
-                          <View style={[styles.tableCell, { flex: 1.5 }]}>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: TEXT_MAIN }}>₹{itemSubPurchase}</Text>
-                          </View>
-                          <View style={[styles.tableCell, { flex: 1.5 }]}>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#0369A1' }}>₹{itemSubWholesale}</Text>
-                          </View>
-                          <View style={[styles.tableCell, { flex: 1.5 }]}>
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803D' }}>₹{itemSubRetail}</Text>
-                          </View>
-                          <View style={[styles.tableCell, { flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
-                            <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddSubUnit}>
-                              <Plus size={14} color="#333333" />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveSubUnit(item.id)}>
-                              <Trash2 size={14} color="#333333" />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    })}
+                        );
+                      })}
 
-                    {subUnits.length === 0 && (
-                      <View style={{ padding: 16, alignItems: 'center' }}>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 13, marginBottom: 8 }}>No extra sub units added yet.</Text>
-                        <AppButton title="+ Add Sub Unit Row" onPress={handleAddSubUnit} variant="outline" style={{ height: 36 }} />
-                      </View>
-                    )}
-                  </View>
+                      {subUnits.length === 0 && (
+                        <View style={{ padding: 16, alignItems: 'center' }}>
+                          <Text style={{ color: TEXT_MUTED, fontSize: 13, marginBottom: 8 }}>No extra sub units added yet.</Text>
+                          <AppButton title="+ Add Sub Unit Row" onPress={handleAddSubUnit} variant="outline" style={{ height: 36 }} />
+                        </View>
+                      )}
+                    </View>
+                  </ScrollView>
                 </View>
               )}
 
@@ -1184,7 +1200,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </View>
 
               <View style={styles.grid3}>
-                <FormGroup width="33.33%" label="Quantity / Opening Stock">
+                <FormGroup width={col3} label="Quantity / Opening Stock">
                   <AppInput 
                     placeholder="0" 
                     keyboardType="decimal-pad"
@@ -1194,7 +1210,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Quantity Alert">
+                <FormGroup width={col3} label="Quantity Alert">
                   <AppInput 
                     placeholder="5" 
                     keyboardType="decimal-pad"
@@ -1204,7 +1220,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Tax Type">
+                <FormGroup width={col3} label="Tax Type">
                   <AppSelect 
                     options={[
                       {label: 'Exclusive', value: 'Exclusive'}, 
@@ -1217,7 +1233,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
                 
-                <FormGroup width="33.33%" label="Tax (%)">
+                <FormGroup width={col3} label="Tax (%)">
                   <AppInput 
                     placeholder="e.g. 18" 
                     keyboardType="numeric"
@@ -1227,7 +1243,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Discount Type">
+                <FormGroup width={col3} label="Discount Type">
                   <AppSelect 
                     options={[
                       {label: 'Percentage', value: 'Percentage'}, 
@@ -1240,7 +1256,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   />
                 </FormGroup>
 
-                <FormGroup width="33.33%" label="Discount Value">
+                <FormGroup width={col3} label="Discount Value">
                   <AppInput 
                     placeholder="0" 
                     keyboardType="numeric"
@@ -1265,43 +1281,45 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               </FormGroup>
 
               {/* Variant Table */}
-              <View style={styles.variantTable}>
-                <View style={styles.tableHeader}>
-                  <Text style={[styles.tableCell, {flex: 1.5}]}>Variation</Text>
-                  <Text style={[styles.tableCell, {flex: 1.5}]}>Variant Value</Text>
-                  <Text style={[styles.tableCell, {flex: 1}]}>SKU</Text>
-                  <Text style={[styles.tableCell, {flex: 1.2}]}>Quantity</Text>
-                  <Text style={[styles.tableCell, {flex: 1.5}]}>Price</Text>
-                  <Text style={[styles.tableCell, {flex: 0.8}]}></Text>
-                </View>
-                
-                {variants.map((item, index) => (
-                  <View style={styles.tableRow} key={`variant-row-${item.id}-${index}`}>
-                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.variation} onChangeText={(val: string) => handleUpdateVariant(item.id, 'variation', val)} /></View>
-                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.value} onChangeText={(val: string) => handleUpdateVariant(item.id, 'value', val)} /></View>
-                    <View style={[styles.tableCell, {flex: 1}]}><AppInput containerStyle={{marginBottom: 0}} value={item.sku} onChangeText={(val: string) => handleUpdateVariant(item.id, 'sku', val)} /></View>
-                    
-                    <View style={[styles.tableCell, {flex: 1.2}]}>
-                      <View style={styles.qtyControl}>
-                        <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', Math.max(0, item.qty - 1))}>
-                          <Minus size={14} color={TEXT_MAIN} />
-                        </TouchableOpacity>
-                        <Text style={{marginHorizontal: 8}}>{item.qty}</Text>
-                        <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', item.qty + 1)}>
-                          <Plus size={14} color={TEXT_MAIN} />
-                        </TouchableOpacity>
+              <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+                <View style={[styles.variantTable, { minWidth: 580 }]}>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableCell, {flex: 1.5}]}>Variation</Text>
+                    <Text style={[styles.tableCell, {flex: 1.5}]}>Variant Value</Text>
+                    <Text style={[styles.tableCell, {flex: 1}]}>SKU</Text>
+                    <Text style={[styles.tableCell, {flex: 1.2}]}>Quantity</Text>
+                    <Text style={[styles.tableCell, {flex: 1.5}]}>Price</Text>
+                    <Text style={[styles.tableCell, {flex: 0.8}]}></Text>
+                  </View>
+                  
+                  {variants.map((item, index) => (
+                    <View style={styles.tableRow} key={`variant-row-${item.id}-${index}`}>
+                      <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.variation} onChangeText={(val: string) => handleUpdateVariant(item.id, 'variation', val)} /></View>
+                      <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.value} onChangeText={(val: string) => handleUpdateVariant(item.id, 'value', val)} /></View>
+                      <View style={[styles.tableCell, {flex: 1}]}><AppInput containerStyle={{marginBottom: 0}} value={item.sku} onChangeText={(val: string) => handleUpdateVariant(item.id, 'sku', val)} /></View>
+                      
+                      <View style={[styles.tableCell, {flex: 1.2}]}>
+                        <View style={styles.qtyControl}>
+                          <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', Math.max(0, item.qty - 1))}>
+                            <Minus size={14} color={TEXT_MAIN} />
+                          </TouchableOpacity>
+                          <Text style={{marginHorizontal: 8}}>{item.qty}</Text>
+                          <TouchableOpacity onPress={() => handleUpdateVariant(item.id, 'qty', item.qty + 1)}>
+                            <Plus size={14} color={TEXT_MAIN} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      
+                      <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.price} onChangeText={(val: string) => handleUpdateVariant(item.id, 'price', val)} /></View>
+                      
+                      <View style={[styles.tableCell, {flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 8}]}>
+                        <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddVariant}><Plus size={14} color={TEXT_MAIN} /></TouchableOpacity>
+                        <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveVariant(item.id)}><Trash2 size={14} color={TEXT_MAIN} /></TouchableOpacity>
                       </View>
                     </View>
-                    
-                    <View style={[styles.tableCell, {flex: 1.5}]}><AppInput containerStyle={{marginBottom: 0}} value={item.price} onChangeText={(val: string) => handleUpdateVariant(item.id, 'price', val)} /></View>
-                    
-                    <View style={[styles.tableCell, {flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 8}]}>
-                      <TouchableOpacity style={styles.iconBoxOutline} onPress={handleAddVariant}><Plus size={14} color={TEXT_MAIN} /></TouchableOpacity>
-                      <TouchableOpacity style={styles.iconBoxOutline} onPress={() => handleRemoveVariant(item.id)}><Trash2 size={14} color={TEXT_MAIN} /></TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              </ScrollView>
             </View>
           )}
         </Card>
@@ -1328,18 +1346,18 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         </Card>
 
         {/* SUBMIT / ACTIONS ROW */}
-        <View style={styles.submitRow}>
+        <View style={[styles.submitRow, isMobile && styles.submitRowMobile]}>
           <AppButton 
             title={isSaving ? "Saving..." : (productId ? "Update Product" : "Save Product")} 
             onPress={handleSaveProduct} 
             isLoading={isSaving}
-            style={styles.saveBtn}
+            style={[styles.saveBtn, isMobile && styles.btnFullMobile]}
           />
           <AppButton 
             title="Cancel" 
             variant="outline" 
             onPress={() => onNavigate('list')} 
-            style={styles.cancelBtn}
+            style={[styles.cancelBtn, isMobile && styles.btnFullMobile]}
           />
         </View>
 
@@ -1418,6 +1436,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 'auto',
     width: '100%',
   },
+  scrollContentMobile: {
+    padding: 12,
+    paddingBottom: 40,
+  },
   card: {
     backgroundColor: 'white',
     borderRadius: 8,
@@ -1439,6 +1461,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
   },
+  cardHeaderMobile: {
+    padding: 12,
+  },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1451,6 +1476,9 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     padding: 20,
+  },
+  cardBodyMobile: {
+    padding: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1596,6 +1624,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
   },
+  subUnitPriceCardMobile: {
+    marginHorizontal: 0,
+    padding: 12,
+  },
   subUnitPriceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1627,6 +1659,9 @@ const styles = StyleSheet.create({
     gap: 12,
     flexWrap: 'wrap',
   },
+  subUnitPriceGridMobile: {
+    flexDirection: 'column',
+  },
   priceStatBox: {
     flex: 1,
     minWidth: 130,
@@ -1635,6 +1670,10 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 6,
     padding: 12,
+  },
+  priceStatBoxMobile: {
+    width: '100%',
+    minWidth: '100%',
   },
   priceStatBoxWholesale: {
     borderColor: '#BAE6FD',
@@ -1721,6 +1760,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 0,
   },
+  submitRowMobile: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+  },
   saveBtn: {
     backgroundColor: ORANGE,
     borderRadius: 6,
@@ -1731,5 +1775,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 20,
     height: 44,
+  },
+  btnFullMobile: {
+    flex: 1,
+    paddingHorizontal: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   }
 });

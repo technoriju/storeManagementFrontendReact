@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
-import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { ProductScreenType } from '../ProductsModule';
+import { UnitListScreen } from '../../units/screens/UnitListScreen';
+import { ArrowLeft } from 'lucide-react-native';
 
 interface Props {
   onNavigate: (screen: ProductScreenType) => void;
@@ -13,22 +14,33 @@ export const UnitsScreen: React.FC<Props> = ({ onNavigate }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>Units & Conversions</Text>
-        <AppButton title="Back" onPress={() => onNavigate('list')} variant="outline" />
+      <View style={[styles.backBar, { borderBottomColor: theme.colors.border }]}>
+        <TouchableOpacity style={styles.backButton} onPress={() => onNavigate('list')}>
+          <ArrowLeft size={18} color={theme.colors.text} />
+          <Text style={[styles.backText, { color: theme.colors.text }]}>Back to Products</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.content}>
-        <Text style={{ color: theme.colors.textSecondary }}>Unit Conversions coming soon...</Text>
-      </View>
+      <UnitListScreen />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  backBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
 
 

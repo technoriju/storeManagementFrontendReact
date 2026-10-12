@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { FileText, FileSpreadsheet, Printer, Download, Check, X } from 'lucide-react-native';
 
 interface ReportExportModalProps {
@@ -19,6 +20,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   dateRangeLabel = 'Current Period',
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'excel' | 'csv' | 'print'>('pdf');
   const [isExporting, setIsExporting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -44,7 +46,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, isMobile && { padding: 12 }]}>
         <View style={[styles.modalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           
           {/* Header */}
@@ -99,9 +101,17 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
           </View>
 
           {/* Footer actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.divider }]}>
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.divider },
+            isMobile && { flexDirection: 'column-reverse', gap: 8, paddingHorizontal: 16, paddingVertical: 12 }
+          ]}>
             <Pressable
-              style={[styles.cancelBtn, { borderColor: theme.colors.border }]}
+              style={[
+                styles.cancelBtn,
+                { borderColor: theme.colors.border },
+                isMobile && { width: '100%', alignItems: 'center', justifyContent: 'center' }
+              ]}
               onPress={onClose}
               disabled={isExporting}
             >
@@ -112,7 +122,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
               style={[
                 styles.submitBtn,
                 { backgroundColor: theme.colors.primary },
-                (isExporting || isSuccess) && { opacity: 0.9 }
+                (isExporting || isSuccess) && { opacity: 0.9 },
+                isMobile && { width: '100%', alignItems: 'center', justifyContent: 'center' }
               ]}
               onPress={handleExport}
               disabled={isExporting || isSuccess}

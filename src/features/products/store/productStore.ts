@@ -198,7 +198,24 @@ export const useProductStore = create<ProductState>((set, get) => ({
       // Handle wrapped or unwrapped array (unpaginated backend response): slice by page & limit
       const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
       if (Array.isArray(list)) {
-        const sortedList = [...list].sort((a: any, b: any) => {
+        let filtered = list;
+        if (params.categoryId) {
+          filtered = filtered.filter((p: any) => Number(p.categoryId) === Number(params.categoryId));
+        }
+        if (params.brandId) {
+          filtered = filtered.filter((p: any) => Number(p.brandId) === Number(params.brandId));
+        }
+        if (search.trim()) {
+          const s = search.trim().toLowerCase();
+          filtered = filtered.filter((p: any) =>
+            p.name?.toLowerCase().includes(s) ||
+            p.sku?.toLowerCase().includes(s) ||
+            p.barcode?.toLowerCase().includes(s) ||
+            p.categoryName?.toLowerCase().includes(s) ||
+            p.brandName?.toLowerCase().includes(s)
+          );
+        }
+        const sortedList = [...filtered].sort((a: any, b: any) => {
           const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
           const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
           if (timeB !== timeA) return timeB - timeA;
@@ -221,6 +238,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
       page,
       limit,
       search,
+      categoryId: params.categoryId,
+      brandId: params.brandId,
     });
     return localResult as PaginatedProductsResponse;
   },

@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -32,6 +33,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   onSuccess,
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const { products, fetchProducts } = useProductStore();
   const addStockMutation = useAddStock();
 
@@ -125,7 +127,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
@@ -266,17 +268,21 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
               </ScrollView>
 
               {/* Footer */}
-              <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+              <View style={[
+                styles.footer,
+                { borderTopColor: theme.colors.border },
+                isMobile && { flexDirection: 'column-reverse', gap: 8 }
+              ]}>
                 <AppButton
                   title="Cancel"
                   onPress={onClose}
-                  style={styles.cancelBtn}
+                  style={[styles.cancelBtn, isMobile && { width: '100%' }]}
                   textStyle={{ color: '#FFF' }}
                 />
                 <AppButton
                   title="Add Stock"
                   onPress={handleSubmit}
-                  style={styles.submitBtn}
+                  style={[styles.submitBtn, isMobile && { width: '100%' }]}
                   disabled={addStockMutation.isPending}
                   isLoading={addStockMutation.isPending}
                 />

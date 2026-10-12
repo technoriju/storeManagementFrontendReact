@@ -132,7 +132,7 @@ export const SweetConfirmModal: React.FC<SweetConfirmModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, isMobile && { padding: 12 }]}>
         <View
           style={[
             styles.dialogContainer,
@@ -234,6 +234,7 @@ export const SweetConfirmModal: React.FC<SweetConfirmModalProps> = ({
                       borderColor: theme.colors.border || '#D1D5DB',
                       backgroundColor: theme.colors.surface || '#FFFFFF',
                     },
+                    isMobile && { width: '100%', flex: 0 },
                   ]}
                   onPress={onClose}
                   disabled={isConfirming}
@@ -249,6 +250,7 @@ export const SweetConfirmModal: React.FC<SweetConfirmModalProps> = ({
                     styles.confirmButton,
                     { backgroundColor: iconConfig.buttonColor },
                     isConfirming && { opacity: 0.75 },
+                    isMobile && { width: '100%', flex: 0 },
                   ]}
                   onPress={onConfirm}
                   disabled={isConfirming}

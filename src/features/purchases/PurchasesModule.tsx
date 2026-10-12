@@ -19,7 +19,7 @@ export const PurchasesModule: React.FC<Props> = ({ initialScreen }) => {
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   React.useEffect(() => {
-    if (initialScreen === 'purchases') setCurrentScreen('list');
+    if (initialScreen === 'purchases' || initialScreen === 'purchase') setCurrentScreen('list');
     else if (initialScreen === 'purchase_order') setCurrentScreen('orders');
     else if (initialScreen === 'purchase_return') setCurrentScreen('return');
   }, [initialScreen]);

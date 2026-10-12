@@ -38,7 +38,7 @@ const menuSections: MenuSection[] = [
     title: 'Inventory',
     items: [
       { id: 'products', label: 'Products', icon: 'box' },
-      { id: 'create_product', label: 'Create Product', icon: 'plus-square' },
+      { id: 'add_product', label: 'Add Product', icon: 'plus-square' },
       { id: 'expired_products', label: 'Expired Products', icon: 'alert-circle' },
       { id: 'low_stocks', label: 'Low Stocks', icon: 'trending-down' },
       { id: 'category', label: 'Category', icon: 'list' },
@@ -192,8 +192,9 @@ const CUSTOM_COLORS = {
 const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: MenuItem, activeItem: string, onItemPress: (id: string) => void, theme: any }) => {
   const hasSubItems = item.subItems && item.subItems.length > 0;
   const hasChevron = item.hasChevron || hasSubItems;
-  // Check if this item is active, or if any of its subitems is active
-  const isDirectActive = activeItem === item.id;
+  const isDirectActive = activeItem === item.id ||
+    (item.id === 'add_product' && activeItem === 'create_product') ||
+    (item.id === 'create_product' && activeItem === 'add_product');
   const isSubActive = hasSubItems && item.subItems!.some(sub => sub.id === activeItem);
   const isActiveGroup = isDirectActive || isSubActive;
   
