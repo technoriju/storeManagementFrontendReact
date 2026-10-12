@@ -77,7 +77,7 @@ const AuthenticatedApp = () => {
     if (activeTab === 'products' || activeTab === 'create_product' || activeTab === 'add_product') {
       return <ProductsModule initialScreen={activeTab} onNavigateTab={setActiveTab} />;
     }
-    if (activeTab === 'purchases' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
+    if (activeTab === 'purchases' || activeTab === 'purchase' || activeTab === 'purchase_order' || activeTab === 'purchase_return') {
       return <PurchasesModule initialScreen={activeTab} />;
     }
     if (

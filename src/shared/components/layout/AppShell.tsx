@@ -18,6 +18,7 @@ type TabItem = {
 const TABS: TabItem[] = [
   { id: 'dashboard', label: 'Home', icon: 'home' },
   { id: 'pos', label: 'POS', icon: 'cart' },
+  { id: 'purchases', label: 'Purchase', icon: 'shopping-bag' },
   { id: 'products', label: 'Products', icon: 'box' },
   { id: 'customers', label: 'Customers', icon: 'users' },
   { id: 'suppliers', label: 'Suppliers', icon: 'truck' },
@@ -29,6 +30,12 @@ const TABS: TabItem[] = [
 const isTabActive = (tabId: string, currentTab: string) => {
   if (tabId === currentTab) return true;
   if (tabId === 'dashboard' && currentTab === 'dashboard') return true;
+  if ((tabId === 'purchases' || tabId === 'purchase') && (
+    currentTab === 'purchases' || 
+    currentTab === 'purchase' || 
+    currentTab === 'purchase_order' || 
+    currentTab === 'purchase_return'
+  )) return true;
   if (tabId === 'products' && (
     currentTab === 'products' || 
     currentTab === 'create_product' || 
