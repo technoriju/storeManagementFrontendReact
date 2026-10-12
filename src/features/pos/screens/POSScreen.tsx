@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { usePOSStore } from '../store/posStore';
 import { useKeyboardShortcut } from '../../../shared/hooks/useKeyboardShortcut';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { Product } from '../../products/types';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale } from '../api/useSales';
@@ -38,7 +39,9 @@ export const POSScreen = () => {
 
   const { products, fetchProducts } = useProductStore();
   const createSaleMutation = useCreateSale();
+  const { isMobile, isTablet, isDesktop } = useResponsive();
 
+  const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isReturnMode, setIsReturnMode] = useState(false);
@@ -46,6 +49,10 @@ export const POSScreen = () => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+
+  const totalCartCount = useMemo(() => {
+    return cart.reduce((sum, item) => sum + (parseFloat(String(item.quantity)) || 0), 0);
+  }, [cart]);
 
   useEffect(() => {
     if (searchQuery) {
@@ -219,11 +226,11 @@ export const POSScreen = () => {
 
     return (
       <TouchableOpacity
-        style={styles.productCard}
+        style={[styles.productCard, isMobile && { padding: 10, margin: 4, minWidth: 130 }]}
         onPress={() => addToCart(item, isReturnMode ? -1 : 1)}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <Text style={[styles.productName, { flex: 1, marginRight: 6 }]} numberOfLines={1}>{item.name}</Text>
+          <Text style={[styles.productName, isMobile && { fontSize: 14, marginBottom: 4 }, { flex: 1, marginRight: 6 }]} numberOfLines={1}>{item.name}</Text>
           <View
             style={{
               backgroundColor: priceType === 'wholesale' ? '#DCFCE7' : '#DBEAFE',
@@ -243,15 +250,15 @@ export const POSScreen = () => {
             </Text>
           </View>
         </View>
-        <Text style={styles.productPrice}>
+        <Text style={[styles.productPrice, isMobile && { fontSize: 13 }]}>
           ₹{activePrice.toFixed(2)} / {baseUnitName}
         </Text>
         {hasSubUnit && (
-          <Text style={{ fontSize: 11, color: '#0284C7', marginBottom: 2 }}>
+          <Text style={{ fontSize: isMobile ? 10 : 11, color: '#0284C7', marginBottom: 2 }}>
             ₹{subPrice} / {subUnitName}
           </Text>
         )}
-        <Text style={styles.productStock}>
+        <Text style={[styles.productStock, isMobile && { fontSize: 11 }]}>
           Stock: {Number(Number(item.stockQuantity || 0).toFixed(4))} {baseUnitName}
           {hasSubUnit ? ` (${Number((Number(item.stockQuantity || 0) * cRate).toFixed(2))} ${subUnitName})` : ''}
         </Text>
@@ -260,9 +267,9 @@ export const POSScreen = () => {
   };
 
   const renderCartItem = ({ item }: { item: any; index: number }) => (
-    <View style={styles.cartItem}>
+    <View style={[styles.cartItem, isMobile && { padding: 10 }]}>
       <View style={styles.cartItemInfo}>
-        <Text style={styles.cartItemName}>{item.product.name}</Text>
+        <Text style={[styles.cartItemName, isMobile && { fontSize: 14 }]} numberOfLines={2}>{item.product.name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6 }}>
           <Text style={styles.cartItemPrice}>
             ₹{item.price.toFixed(2)}
@@ -287,7 +294,7 @@ export const POSScreen = () => {
           </Text>
         ) : null}
       </View>
-      <View style={styles.cartItemControls}>
+      <View style={[styles.cartItemControls, isMobile && { marginHorizontal: 6 }]}>
         <TouchableOpacity
           style={styles.qtyBtn}
           onPress={() => {
@@ -305,7 +312,7 @@ export const POSScreen = () => {
           style={[
             styles.qtyText,
             {
-              minWidth: 40,
+              minWidth: 36,
               height: 28,
               textAlign: 'center',
               borderWidth: 1,
@@ -317,6 +324,7 @@ export const POSScreen = () => {
               backgroundColor: '#FFFFFF',
               fontSize: 13,
               fontWeight: '600',
+              marginHorizontal: 4,
             },
           ]}
           keyboardType="decimal-pad"
@@ -348,7 +356,7 @@ export const POSScreen = () => {
           <Text style={styles.qtyBtnText}>+</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.cartItemTotal}>
+      <Text style={[styles.cartItemTotal, isMobile && { width: 68, fontSize: 14 }]}>
         ₹{(((Number(item.price) || 0) * (parseFloat(String(item.quantity)) || 0)) - (Number(item.discount) || 0)).toFixed(2)}
       </Text>
     </View>
@@ -356,132 +364,210 @@ export const POSScreen = () => {
 
 
   return (
-    <View style={styles.container}>
-      {/* Left side: Products */}
-      <View style={styles.productsSection}>
-        {/* Wholesale vs Retailer Mode Switcher */}
-        <View style={styles.priceTypeSelectorRow}>
-          <Text style={styles.priceTypeLabel}>Pricing Mode:</Text>
-          <View style={styles.priceTypeGroup}>
-            <TouchableOpacity
-              style={[
-                styles.priceTypeBtn,
-                priceType === 'wholesale' && styles.priceTypeBtnActiveWholesale,
-              ]}
-              onPress={() => setPriceType('wholesale')}
-            >
-              <Text
-                style={[
-                  styles.priceTypeBtnText,
-                  priceType === 'wholesale' && styles.priceTypeBtnTextActive,
-                ]}
-              >
-                Wholesale (Default)
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.priceTypeBtn,
-                priceType === 'retail' && styles.priceTypeBtnActiveRetail,
-              ]}
-              onPress={() => setPriceType('retail')}
-            >
-              <Text
-                style={[
-                  styles.priceTypeBtnText,
-                  priceType === 'retail' && styles.priceTypeBtnTextActive,
-                ]}
-              >
-                Retailer
-              </Text>
-            </TouchableOpacity>
-          </View>
+    <View style={[styles.container, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+      {/* Mobile/Tablet Tab Switcher */}
+      {!isDesktop && (
+        <View style={styles.mobileTabBar}>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'products' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('products')}
+          >
+            <Text style={[styles.mobileTabBtnText, mobileTab === 'products' && styles.mobileTabBtnTextActive]}>
+              Products ({filteredProducts.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('cart')}
+          >
+            <Text style={[styles.mobileTabBtnText, mobileTab === 'cart' && styles.mobileTabBtnTextActive]}>
+              Cart ({totalCartCount}) • ₹{getGrandTotal().toFixed(2)}
+            </Text>
+          </TouchableOpacity>
         </View>
+      )}
 
-        <View style={styles.searchContainer}>
-          <TextInput
-            ref={searchInputRef}
-            style={styles.searchInput}
-            placeholder={`Search product (${priceType} price) or scan barcode...`}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearchSubmit}
-            autoFocus
+      {/* Left side: Products (visible on desktop or when mobileTab === 'products') */}
+      {(isDesktop || mobileTab === 'products') && (
+        <View style={[styles.productsSection, { padding: isMobile ? 8 : 16 }]}>
+          {/* Wholesale vs Retailer Mode Switcher */}
+          <View style={styles.priceTypeSelectorRow}>
+            <Text style={styles.priceTypeLabel}>Pricing Mode:</Text>
+            <View style={styles.priceTypeGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.priceTypeBtn,
+                  priceType === 'wholesale' && styles.priceTypeBtnActiveWholesale,
+                ]}
+                onPress={() => setPriceType('wholesale')}
+              >
+                <Text
+                  style={[
+                    styles.priceTypeBtnText,
+                    priceType === 'wholesale' && styles.priceTypeBtnTextActive,
+                  ]}
+                >
+                  Wholesale (Default)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.priceTypeBtn,
+                  priceType === 'retail' && styles.priceTypeBtnActiveRetail,
+                ]}
+                onPress={() => setPriceType('retail')}
+              >
+                <Text
+                  style={[
+                    styles.priceTypeBtnText,
+                    priceType === 'retail' && styles.priceTypeBtnTextActive,
+                  ]}
+                >
+                  Retailer
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={[styles.searchContainer, isMobile && { marginBottom: 8 }]}>
+            <TextInput
+              ref={searchInputRef}
+              style={[styles.searchInput, isMobile && { padding: 10, fontSize: 14 }]}
+              placeholder={`Search product (${priceType} price) or scan barcode...`}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearchSubmit}
+              autoFocus
+            />
+          </View>
+          <FlatList
+            key={isDesktop ? 'desktop-grid-4' : isTablet ? 'tablet-grid-3' : 'mobile-grid-2'}
+            data={filteredProducts}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderProduct}
+            numColumns={isDesktop ? 4 : isTablet ? 3 : 2}
+            contentContainerStyle={styles.productList}
           />
-        </View>
-        <FlatList
-          data={filteredProducts}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderProduct}
-          numColumns={Platform.OS === 'web' ? 4 : 2}
-          contentContainerStyle={styles.productList}
-        />
-      </View>
 
-      {/* Right side: Cart */}
-      <View style={styles.cartSection}>
-        <View style={styles.cartHeader}>
-          <Text style={styles.cartTitle}>Current Sale {isReturnMode && '(RETURN)'}</Text>
-          <View style={styles.cartActions}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => setIsReturnMode(!isReturnMode)}>
-              <Text style={styles.actionBtnText}>Return</Text>
+          {/* Quick Floating Cart Bar on Mobile when on Products tab */}
+          {!isDesktop && cart.length > 0 && (
+            <TouchableOpacity
+              style={styles.mobileFloatingCartBtn}
+              onPress={() => setMobileTab('cart')}
+              activeOpacity={0.9}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.cartCountPill}>
+                  <Text style={styles.cartCountPillText}>{totalCartCount}</Text>
+                </View>
+                <Text style={styles.mobileFloatingCartText}>View Cart</Text>
+              </View>
+              <Text style={styles.mobileFloatingCartTotal}>
+                ₹{getGrandTotal().toFixed(2)} →
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => holdCurrentSale()}>
-              <Text style={styles.actionBtnText}>Hold</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => clearCart()}>
-              <Text style={styles.actionBtnText}>Clear</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
+      )}
 
-        <FlatList
-          data={cart}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderCartItem}
-          style={styles.cartList}
-        />
-
-        <View style={styles.totalsContainer}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>₹{getSubtotal().toFixed(2)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Discount</Text>
-            <Text style={styles.totalValue}>-₹{getTotalDiscount().toFixed(2)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>GST</Text>
-            <Text style={styles.totalValue}>₹{getTotalGST().toFixed(2)}</Text>
-          </View>
-          <View style={[styles.totalRow, styles.grandTotalRow]}>
-            <Text style={styles.grandTotalLabel}>TOTAL</Text>
-            <Text style={styles.grandTotalValue}>₹{getGrandTotal().toFixed(2)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.shortcutsContainer}>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutText}>F2 Customer</Text>
-            <Text style={styles.shortcutText}>F4 Discount</Text>
-          </View>
-          <View style={styles.shortcutRow}>
-            <Text style={styles.shortcutText}>F8 Payment</Text>
-            <Text style={styles.shortcutText}>F12 Complete</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.checkoutBtn, (isSubmitting || createSaleMutation.isPending) && { opacity: 0.6 }]}
-          onPress={handleCompleteSale}
-          disabled={isSubmitting || createSaleMutation.isPending}
+      {/* Right side: Cart (visible on desktop or when mobileTab === 'cart') */}
+      {(isDesktop || mobileTab === 'cart') && (
+        <View
+          style={[
+            styles.cartSection,
+            {
+              width: isDesktop ? 380 : '100%',
+              flex: isDesktop ? undefined : 1,
+              borderLeftWidth: isDesktop ? 1 : 0,
+              borderTopWidth: isDesktop ? 0 : 1,
+            },
+          ]}
         >
-          <Text style={styles.checkoutBtnText}>
-            {isSubmitting || createSaleMutation.isPending ? 'Processing...' : 'Checkout (F12)'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <View style={[styles.cartHeader, isMobile && { padding: 10 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {!isDesktop && (
+                <TouchableOpacity
+                  style={styles.backToProductsBtn}
+                  onPress={() => setMobileTab('products')}
+                >
+                  <Text style={styles.backToProductsBtnText}>←</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={[styles.cartTitle, isMobile && { fontSize: 16 }]}>
+                Current Sale {isReturnMode && '(RETURN)'}
+              </Text>
+            </View>
+            <View style={styles.cartActions}>
+              <TouchableOpacity style={[styles.actionBtn, isMobile && { padding: 6, marginLeft: 4 }]} onPress={() => setIsReturnMode(!isReturnMode)}>
+                <Text style={[styles.actionBtnText, isMobile && { fontSize: 12 }]}>Return</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, isMobile && { padding: 6, marginLeft: 4 }]} onPress={() => holdCurrentSale()}>
+                <Text style={[styles.actionBtnText, isMobile && { fontSize: 12 }]}>Hold</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actionBtn, isMobile && { padding: 6, marginLeft: 4 }]} onPress={() => clearCart()}>
+                <Text style={[styles.actionBtnText, isMobile && { fontSize: 12 }]}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <FlatList
+            data={cart}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderCartItem}
+            style={styles.cartList}
+          />
+
+          <View style={[styles.totalsContainer, isMobile && { padding: 10 }]}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal</Text>
+              <Text style={styles.totalValue}>₹{getSubtotal().toFixed(2)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Discount</Text>
+              <Text style={styles.totalValue}>-₹{getTotalDiscount().toFixed(2)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>GST</Text>
+              <Text style={styles.totalValue}>₹{getTotalGST().toFixed(2)}</Text>
+            </View>
+            <View style={[styles.totalRow, styles.grandTotalRow]}>
+              <Text style={styles.grandTotalLabel}>TOTAL</Text>
+              <Text style={styles.grandTotalValue}>₹{getGrandTotal().toFixed(2)}</Text>
+            </View>
+          </View>
+
+          {isDesktop && (
+            <View style={styles.shortcutsContainer}>
+              <View style={styles.shortcutRow}>
+                <Text style={styles.shortcutText}>F2 Customer</Text>
+                <Text style={styles.shortcutText}>F4 Discount</Text>
+              </View>
+              <View style={styles.shortcutRow}>
+                <Text style={styles.shortcutText}>F8 Payment</Text>
+                <Text style={styles.shortcutText}>F12 Complete</Text>
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.checkoutBtn,
+              isMobile && { padding: 14 },
+              (isSubmitting || createSaleMutation.isPending) && { opacity: 0.6 },
+            ]}
+            onPress={handleCompleteSale}
+            disabled={isSubmitting || createSaleMutation.isPending}
+          >
+            <Text style={[styles.checkoutBtnText, isMobile && { fontSize: 16 }]}>
+              {isSubmitting || createSaleMutation.isPending
+                ? 'Processing...'
+                : isDesktop
+                ? 'Checkout (F12)'
+                : `Checkout (₹${getGrandTotal().toFixed(2)})`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ReceiptPrintPreviewModal
         visible={showPrintModal}
@@ -498,7 +584,6 @@ export const POSScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     backgroundColor: '#f5f5f5',
   },
   productsSection: {
@@ -591,9 +676,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   cartSection: {
-    width: Platform.OS === 'web' ? 400 : '100%',
     backgroundColor: '#fff',
-    borderLeftWidth: 1,
     borderColor: '#ddd',
     flexDirection: 'column',
   },
@@ -731,6 +814,81 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  mobileTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  mobileTabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  mobileTabBtnActive: {
+    borderBottomColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  mobileTabBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mobileTabBtnTextActive: {
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+  mobileFloatingCartBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  cartCountPill: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  cartCountPillText: {
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mobileFloatingCartText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mobileFloatingCartTotal: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  backToProductsBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#EEF2F6',
+    borderRadius: 6,
+    marginRight: 4,
+  },
+  backToProductsBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#334155',
   },
 });
 

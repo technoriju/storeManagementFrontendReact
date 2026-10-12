@@ -23,7 +23,7 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
 
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)', padding: isMobile ? 8 : 20 }]}>
         <View style={[
           styles.dialog,
           { backgroundColor: theme.colors.surface, borderRadius: theme.borderRadius.lg },
@@ -105,9 +105,23 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
           </ScrollView>
 
           {/* Footer */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
-            <AppButton title="Cancel" variant="outline" onPress={onClose} style={{ backgroundColor: '#0F172A' }} textStyle={{ color: 'white' }} />
-            <AppButton title="Submit" onPress={() => {}} style={{ backgroundColor: '#F97316', borderWidth: 0 }} />
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border },
+            isMobile && { flexDirection: 'column-reverse', gap: 8 }
+          ]}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={onClose}
+              style={[{ backgroundColor: '#0F172A' }, isMobile && { width: '100%' }]}
+              textStyle={{ color: 'white' }}
+            />
+            <AppButton
+              title="Submit"
+              onPress={() => {}}
+              style={[{ backgroundColor: '#F97316', borderWidth: 0 }, isMobile && { width: '100%' }]}
+            />
           </View>
         </View>
       </View>

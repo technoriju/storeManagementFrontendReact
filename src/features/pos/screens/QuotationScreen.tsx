@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, StyleSheet, Text, Pressable, Alert, Modal, ScrollView, Platform } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { PosScreenType } from '../POSModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
 import { AddQuotationModal } from '../components/AddQuotationModal';
@@ -24,6 +25,7 @@ interface Props {
 
 export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewItem, setViewItem] = useState<any | null>(null);
@@ -185,44 +187,105 @@ export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
     }
   ];
 
+  const isSmallMobile = isMobile && windowWidth < 380;
+  const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
+  const addBtnLabel = !isMobile ? 'Add Quotation' : (windowWidth >= 480 ? 'Add Quote' : 'Add');
+
+  const headerActions = (
+    <View style={[
+      styles.headerActionsWrapper,
+      isMobile && styles.headerActionsWrapperMobile,
+      isSmallMobile && styles.headerActionsWrapperSmall,
+    ]}>
+      <Pressable 
+        style={[
+          styles.iconButton, 
+          isMobile && styles.iconButtonMobile,
+          isSmallMobile && styles.iconButtonSmall,
+          { borderColor: theme.colors.border }
+        ]}
+        onPress={() => refetch()}
+      >
+        <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
+      </Pressable>
+
+      <Pressable 
+        style={[
+          styles.addButton, 
+          { backgroundColor: theme.colors.primary },
+          isMobile && styles.addButtonMobile,
+          isSmallMobile && styles.addButtonSmall,
+        ]}
+        onPress={() => setShowAddModal(true)}
+      >
+        <PlusCircle size={actionIconSize} color="white" />
+        <Text style={[
+          styles.addButtonText,
+          isMobile && styles.addButtonTextMobile,
+          isSmallMobile && styles.addButtonTextSmall,
+        ]}>{addBtnLabel}</Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderQuotationCard = (item: any) => {
+    const statusColors = getStatusColor(item.status);
+    return (
+      <View style={[styles.mobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.quotationNumber}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <User size={12} color={theme.colors.textSecondary} />
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                {item.customerName}
+              </Text>
+            </View>
+          </View>
+          <SyncBadge status={item.syncStatus} />
+        </View>
+
+        <View style={styles.cardInfoRow}>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Date: {item.date}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: statusColors.text }]}>{item.status}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.cardFooter, { borderTopColor: theme.colors.divider }]}>
+          <View>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Total Amount</Text>
+            <Text style={[styles.cardPrice, { color: theme.colors.primary }]}>₹{item.grandTotal?.toFixed(2) || '0.00'}</Text>
+          </View>
+          <View style={styles.cardActions}>
+            <Pressable onPress={() => setViewItem(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Eye size={15} color={theme.colors.textSecondary} />
+            </Pressable>
+            <Pressable onPress={() => handleDelete(item)} style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
+              <Trash2 size={15} color="#EF4444" />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header bar */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: theme.colors.text }]}>Quotations</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Manage price quotes and estimates</Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <Pressable 
-            style={[styles.iconButton, { borderColor: theme.colors.border }]}
-            onPress={() => refetch()}
-          >
-            <RefreshCw size={16} color={theme.colors.textSecondary} />
-          </Pressable>
-
-          <Pressable 
-            style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setShowAddModal(true)}
-          >
-            <PlusCircle size={16} color="white" />
-            <Text style={styles.addButtonText}>Add Quotation</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Advanced Table */}
-      <View style={styles.tableCard}>
-        <AdvancedTable
-          data={filteredData}
-          columns={columns}
-          onSearch={setSearchQuery}
-          searchPlaceholder="Search quotation no, customer, status..."
-          isLoading={isLoading}
-          hasCheckbox={false}
-        />
-      </View>
+    <View style={[styles.container, { backgroundColor: theme.colors.background, padding: isMobile ? 8 : 16 }]}>
+      <AdvancedTable
+        title="Quotations"
+        subtitle="Manage price quotes and estimates"
+        headerActions={headerActions}
+        data={filteredData}
+        columns={columns}
+        onSearch={setSearchQuery}
+        searchPlaceholder="Search quotation no, customer, status..."
+        isLoading={isLoading}
+        hasCheckbox={false}
+        renderMobileCard={renderQuotationCard}
+      />
 
       {/* Add Quotation Modal */}
       <AddQuotationModal
@@ -233,22 +296,22 @@ export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
       {/* View Quotation Details Modal */}
       {viewItem && (
         <Modal visible={!!viewItem} transparent animationType="fade">
-          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)', padding: isMobile ? 8 : 16 }]}>
+            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, width: isMobile ? '96%' : '90%' }]}>
               <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-                <View>
-                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Quotation #{viewItem.quotationNumber}</Text>
-                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Customer: {viewItem.customerName}</Text>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]} numberOfLines={1}>Quotation #{viewItem.quotationNumber}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }} numberOfLines={1}>Customer: {viewItem.customerName}</Text>
                 </View>
                 <Pressable onPress={() => setViewItem(null)}>
                   <X size={20} color={theme.colors.textSecondary} />
                 </Pressable>
               </View>
 
-              <ScrollView style={{ padding: 16, maxHeight: 400 }}>
+              <ScrollView style={{ padding: isMobile ? 12 : 16, maxHeight: 420 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <Text style={{ color: theme.colors.textSecondary }}>Date: {viewItem.date}</Text>
-                  <Text style={{ color: theme.colors.textSecondary }}>Status: {viewItem.status}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Date: {viewItem.date}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Status: {viewItem.status}</Text>
                 </View>
 
                 {viewItem.items && viewItem.items.length > 0 && (
@@ -292,16 +355,113 @@ export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  iconButton: { padding: 8, borderWidth: 1, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  addButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  container: { flex: 1 },
+  headerActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'nowrap',
+  },
+  headerActionsWrapperMobile: {
+    gap: 6,
+  },
+  headerActionsWrapperSmall: {
+    gap: 4,
+  },
+  iconButton: {
+    padding: 8,
+    borderWidth: 1,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  iconButtonMobile: {
+    padding: 6,
+  },
+  iconButtonSmall: {
+    padding: 4,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  addButtonMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  addButtonSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    gap: 3,
+  },
   addButtonText: { color: 'white', fontWeight: '600', fontSize: 13 },
-  tableCard: { flex: 1 },
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
-  modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  addButtonTextMobile: { fontSize: 12 },
+  addButtonTextSmall: { fontSize: 11 },
+  mobileCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardSubtitle: {
+    fontSize: 12,
+  },
+  cardInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 8,
+  },
+  cardPrice: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionBtn: {
+    padding: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    backgroundColor: 'white',
+  },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  modalBox: { maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 16, fontWeight: 'bold' },
 });

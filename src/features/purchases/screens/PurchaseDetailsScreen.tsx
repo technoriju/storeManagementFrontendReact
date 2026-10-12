@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { usePurchase } from '../api/usePurchases';
 import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit } from 'lucide-react-native';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
@@ -8,31 +9,39 @@ import { AddPurchaseModal } from '../components/AddPurchaseModal';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
+  const { isMobile, windowWidth } = useResponsive();
   const numericId = entityId ? parseInt(String(entityId), 10) : null;
   const { data: purchase, isLoading } = usePurchase(numericId);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  const backLabel = !isMobile ? 'Back to Purchases' : (windowWidth >= 400 ? 'Purchases' : 'Back');
+  const editLabel = !isMobile ? 'Edit Purchase' : (windowWidth >= 400 ? 'Edit' : '');
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Top Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+      <View style={[styles.header, { borderBottomColor: theme.colors.border, backgroundColor: theme.colors.surface, paddingHorizontal: isMobile ? 12 : 20 }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => onNavigate('list')}>
           <ArrowLeft size={18} color={theme.colors.text} />
-          <Text style={{ color: theme.colors.text, fontWeight: '600', marginLeft: 6 }}>Back to Purchases</Text>
+          <Text style={{ color: theme.colors.text, fontWeight: '600', marginLeft: 6 }}>{backLabel}</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.colors.text, flex: 1 }]}>Purchase Details</Text>
+        <Text style={[styles.title, { color: theme.colors.text, flex: 1, fontSize: isMobile ? 16 : 18 }]} numberOfLines={1}>
+          Purchase Details
+        </Text>
         {purchase && (
           <TouchableOpacity
-            style={[styles.editBtn, { backgroundColor: '#F97316' }]}
+            style={[styles.editBtn, { backgroundColor: '#F97316', paddingHorizontal: editLabel ? 12 : 8 }]}
             onPress={() => setShowEditModal(true)}
           >
             <Edit size={16} color="white" />
-            <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>Edit Purchase</Text>
+            {editLabel ? (
+              <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>{editLabel}</Text>
+            ) : null}
           </TouchableOpacity>
         )}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <ScrollView contentContainerStyle={{ padding: isMobile ? 12 : 20 }}>
         {isLoading ? (
           <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', marginTop: 40 }}>Loading purchase details...</Text>
         ) : !purchase ? (
@@ -146,7 +155,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
             </View>
 
             {/* Financial Summary */}
-            <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, maxWidth: 400, alignSelf: 'flex-end', width: '100%' }]}>
+            <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, maxWidth: isMobile ? '100%' : 400, alignSelf: isMobile ? 'stretch' : 'flex-end', width: '100%' }]}>
               <Text style={{ color: theme.colors.text, fontSize: 15, fontWeight: '700', marginBottom: 10 }}>Summary</Text>
               <View style={styles.summaryLine}>
                 <Text style={styles.label}>Subtotal</Text>
@@ -235,11 +244,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 16,
   },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  gridItem: { minWidth: 140 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  gridItem: { minWidth: 120, flex: 1 },
   label: { fontSize: 12, color: '#64748B', marginBottom: 2 },
   val: { fontSize: 14, fontWeight: '500' },
   tableHeader: { flexDirection: 'row', paddingVertical: 8, backgroundColor: '#F1F5F9', paddingHorizontal: 8, borderRadius: 4 },

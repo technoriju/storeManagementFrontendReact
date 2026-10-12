@@ -1803,36 +1803,49 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
       <View style={styles.modalBackdrop}>
         <View style={[styles.modalCard, { width: isMobile ? '98%' : '94%', height: isMobile ? '96%' : '92%' }]}>
           {/* Header Action Bar */}
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10, paddingHorizontal: 12, paddingVertical: 10 }]}>
             <View style={styles.titleGroup}>
               <View style={styles.printerIconBadge}>
                 <Printer size={18} color="#2563EB" />
               </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <Text style={styles.modalTitle}>Receipt Print Preview</Text>
                   <View style={styles.invoiceBadge}>
                     <Text style={styles.invoiceBadgeText}>{invNumber}</Text>
                   </View>
                 </View>
-                <Text style={styles.modalSubtitle}>
+                <Text style={styles.modalSubtitle} numberOfLines={1}>
                   Preview before sending to {isThermal ? '80mm Thermal Printer' : 'Half A4 Landscape Sheet'}
                 </Text>
               </View>
+              {isMobile && (
+                <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
+                  <X size={20} color="#64748B" />
+                </TouchableOpacity>
+              )}
             </View>
 
-            <View style={styles.topActions}>
-              <TouchableOpacity style={[styles.printButton, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
+            <View style={[styles.topActions, isMobile && { width: '100%', gap: 8 }]}>
+              <TouchableOpacity
+                style={[styles.printButton, { backgroundColor: '#10B981' }, isMobile && { flex: 1, justifyContent: 'center' }]}
+                onPress={() => setShowShareModal(true)}
+              >
                 <Share2 size={16} color="#FFFFFF" />
                 <Text style={styles.printButtonText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.printButton} onPress={handlePrint}>
+              <TouchableOpacity
+                style={[styles.printButton, isMobile && { flex: 1, justifyContent: 'center' }]}
+                onPress={handlePrint}
+              >
                 <Printer size={16} color="#FFFFFF" />
-                <Text style={styles.printButtonText}>Print Receipt</Text>
+                <Text style={styles.printButtonText}>Print</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
-                <X size={20} color="#64748B" />
-              </TouchableOpacity>
+              {!isMobile && (
+                <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
+                  <X size={20} color="#64748B" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -2643,28 +2656,45 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
           </View>
 
           {/* Footer Controls */}
-          <View style={styles.bottomBar}>
-            <View style={styles.bottomInfoGroup}>
-              <Text style={styles.bottomPaperSizeText}>
-                Active Sheet:{' '}
-                <Text style={{ fontWeight: '700', color: '#1E293B' }}>
-                  {isThermal ? '80 mm Thermal Roll' : 'Half of A4 Page (Landscape / 210x148.5mm)'}
+          <View style={[
+            styles.bottomBar,
+            isMobile && { flexDirection: 'column-reverse', gap: 10, paddingHorizontal: 12, paddingVertical: 10 }
+          ]}>
+            {!isMobile && (
+              <View style={styles.bottomInfoGroup}>
+                <Text style={styles.bottomPaperSizeText}>
+                  Active Sheet:{' '}
+                  <Text style={{ fontWeight: '700', color: '#1E293B' }}>
+                    {isThermal ? '80 mm Thermal Roll' : 'Half of A4 Page (Landscape / 210x148.5mm)'}
+                  </Text>
                 </Text>
-              </Text>
-              <Text style={styles.bottomFormatBadge}>
-                {isWholesale ? '🏢 Wholesale Format' : '🛒 Retail Format'}
-              </Text>
-            </View>
+                <Text style={styles.bottomFormatBadge}>
+                  {isWholesale ? '🏢 Wholesale Format' : '🛒 Retail Format'}
+                </Text>
+              </View>
+            )}
 
-            <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={onClose}>
+            <View style={[
+              styles.bottomActions,
+              isMobile && { width: '100%', flexDirection: 'column-reverse', gap: 8 }
+            ]}>
+              <TouchableOpacity
+                style={[styles.secondaryBtn, isMobile && { width: '100%', alignItems: 'center', justifyContent: 'center' }]}
+                onPress={onClose}
+              >
                 <Text style={styles.secondaryBtnText}>Close</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryPrintBtn, { backgroundColor: '#10B981' }]} onPress={() => setShowShareModal(true)}>
+              <TouchableOpacity
+                style={[styles.primaryPrintBtn, { backgroundColor: '#10B981' }, isMobile && { width: '100%', justifyContent: 'center' }]}
+                onPress={() => setShowShareModal(true)}
+              >
                 <Share2 size={16} color="#FFFFFF" />
                 <Text style={styles.primaryPrintBtnText}>Share</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryPrintBtn} onPress={handlePrint}>
+              <TouchableOpacity
+                style={[styles.primaryPrintBtn, isMobile && { width: '100%', justifyContent: 'center' }]}
+                onPress={handlePrint}
+              >
                 <Printer size={16} color="#FFFFFF" />
                 <Text style={styles.primaryPrintBtnText}>Print Invoice</Text>
               </TouchableOpacity>

@@ -1751,12 +1751,16 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           </ScrollView>
 
           {/* Footer Actions */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 16 }]}>
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 16 },
+            isMobile && { flexDirection: 'column-reverse', gap: 8, alignItems: 'stretch' },
+          ]}>
             <AppButton
               title="Cancel"
               variant="outline"
               onPress={onClose}
-              style={{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 100 }}
+              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 100 }, isMobile && { width: '100%' }]}
               textStyle={{ color: 'white' }}
             />
             <AppButton
@@ -1769,7 +1773,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               }
               onPress={handleSubmit}
               disabled={isSubmitting || createSaleMutation.isPending || updateSaleMutation.isPending}
-              style={{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }}
+              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }, isMobile && { width: '100%' }]}
             />
           </View>
         </View>
@@ -1855,11 +1859,15 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
             </View>
 
             {/* Action Buttons */}
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+            <View style={[
+              { flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 },
+              isMobile && { width: '100%', alignItems: 'stretch' }
+            ]}>
               <TouchableOpacity
                 style={[
                   styles.modalCancelBtn,
                   { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                  isMobile && { width: '100%' },
                 ]}
                 onPress={() => {
                   setShowAddCustomerModal(false);
@@ -1878,6 +1886,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   styles.modalSaveBtn,
                   { backgroundColor: '#F97316' },
                   isSavingCustomer && { opacity: 0.7 },
+                  isMobile && { width: '100%' },
                 ]}
                 onPress={handleQuickAddCustomer}
                 disabled={isSavingCustomer}

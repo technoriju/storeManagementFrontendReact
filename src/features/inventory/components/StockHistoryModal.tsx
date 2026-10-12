@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { X, History, ArrowUpRight, ArrowDownLeft, RefreshCw } from 'lucide-react-native';
 import { useStockTransactions } from '../api/useStock';
@@ -28,6 +29,7 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
   productName,
 }) => {
   const theme = useTheme();
+  const { isMobile } = useResponsive();
   const { data: transactions = [], isLoading, refetch } = useStockTransactions(productId || undefined);
 
   const getTypeStyle = (type: string) => {
@@ -54,7 +56,7 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable onPress={(e) => e?.stopPropagation?.()}>
+        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
@@ -151,9 +153,13 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
               </View>
 
               {/* Footer */}
-              <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+              <View style={[
+                styles.footer,
+                { borderTopColor: theme.colors.border },
+                isMobile && { flexDirection: 'column-reverse', gap: 8 }
+              ]}>
                 <TouchableOpacity
-                  style={[styles.refreshBtn, { borderColor: theme.colors.border }]}
+                  style={[styles.refreshBtn, { borderColor: theme.colors.border }, isMobile && { width: '100%', justifyContent: 'center' }]}
                   onPress={() => refetch()}
                 >
                   <RefreshCw size={14} color={theme.colors.textSecondary} />
@@ -162,7 +168,7 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
                 <AppButton
                   title="Close"
                   onPress={onClose}
-                  style={styles.closeBtn}
+                  style={[styles.closeBtn, isMobile && { width: '100%' }]}
                   textStyle={{ color: '#FFF' }}
                 />
               </View>

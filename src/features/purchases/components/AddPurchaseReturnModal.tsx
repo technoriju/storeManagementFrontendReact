@@ -355,83 +355,85 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                   <Text style={{ color: theme.colors.textSecondary }}>No products added yet</Text>
                 </View>
               ) : (
-                <View style={[styles.tableContainer, { borderColor: theme.colors.border }]}>
-                  <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
-                    <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Cost (₹)</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
-                    <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Debit Total (₹)</Text>
-                    <Text style={[styles.th, { width: 40 }]}></Text>
-                  </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={[styles.tableContainer, { borderColor: theme.colors.border, minWidth: isMobile ? 480 : '100%' }]}>
+                    <View style={[styles.tableHeader, { backgroundColor: theme.colors.background }]}>
+                      <Text style={[styles.th, { flex: 2, color: theme.colors.text }]}>Product</Text>
+                      <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Unit Cost (₹)</Text>
+                      <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Return Qty</Text>
+                      <Text style={[styles.th, { flex: 1, color: theme.colors.text }]}>Debit Total (₹)</Text>
+                      <Text style={[styles.th, { width: 40 }]}></Text>
+                    </View>
 
-                  {items.map((row, idx) => (
-                    <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
-                      <Text style={{ flex: 2, color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
-                      <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
-                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => {
-                            const current = parseFloat(String(row.quantity)) || 1;
-                            const next = Math.max(0.001, Number((current - 1).toFixed(4)));
-                            handleUpdateQuantity(idx, next);
-                          }}
-                        >
-                          <Text style={{ color: theme.colors.text }}>-</Text>
-                        </TouchableOpacity>
-                        <TextInput
-                          style={{
-                            minWidth: 44,
-                            height: 28,
-                            textAlign: 'center',
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            borderRadius: 4,
-                            color: theme.colors.text,
-                            backgroundColor: theme.colors.surface,
-                            paddingVertical: 0,
-                            paddingHorizontal: 4,
-                            fontWeight: '600',
-                            fontSize: 13,
-                          }}
-                          keyboardType="decimal-pad"
-                          selectTextOnFocus
-                          value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
-                          placeholder="1"
-                          placeholderTextColor={theme.colors.textSecondary}
-                          onChangeText={(v) => {
-                            const clean = v.replace(/[^0-9.]/g, '');
-                            const parts = clean.split('.');
-                            const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
-                            handleUpdateQuantityRaw(idx, sanitized);
-                          }}
-                          onBlur={() => {
-                            const parsed = parseFloat(String(row.quantity));
-                            if (isNaN(parsed) || parsed <= 0) {
-                              handleUpdateQuantity(idx, 1);
-                            } else {
-                              handleUpdateQuantity(idx, parsed);
-                            }
-                          }}
-                        />
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
-                          onPress={() => {
-                            const current = parseFloat(String(row.quantity)) || 0;
-                            const next = Number((current + 1).toFixed(4));
-                            handleUpdateQuantity(idx, next);
-                          }}
-                        >
-                          <Text style={{ color: theme.colors.text }}>+</Text>
+                    {items.map((row, idx) => (
+                      <View key={idx} style={[styles.tableRow, { borderBottomColor: theme.colors.border }]}>
+                        <Text style={{ flex: 2, color: theme.colors.text, fontWeight: '500' }}>{row.productName}</Text>
+                        <Text style={{ flex: 1, color: theme.colors.textSecondary }}>₹{row.unitPrice.toFixed(2)}</Text>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <TouchableOpacity
+                            style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                            onPress={() => {
+                              const current = parseFloat(String(row.quantity)) || 1;
+                              const next = Math.max(0.001, Number((current - 1).toFixed(4)));
+                              handleUpdateQuantity(idx, next);
+                            }}
+                          >
+                            <Text style={{ color: theme.colors.text }}>-</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            style={{
+                              minWidth: 44,
+                              height: 28,
+                              textAlign: 'center',
+                              borderWidth: 1,
+                              borderColor: theme.colors.border,
+                              borderRadius: 4,
+                              color: theme.colors.text,
+                              backgroundColor: theme.colors.surface,
+                              paddingVertical: 0,
+                              paddingHorizontal: 4,
+                              fontWeight: '600',
+                              fontSize: 13,
+                            }}
+                            keyboardType="decimal-pad"
+                            selectTextOnFocus
+                            value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
+                            placeholder="1"
+                            placeholderTextColor={theme.colors.textSecondary}
+                            onChangeText={(v) => {
+                              const clean = v.replace(/[^0-9.]/g, '');
+                              const parts = clean.split('.');
+                              const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+                              handleUpdateQuantityRaw(idx, sanitized);
+                            }}
+                            onBlur={() => {
+                              const parsed = parseFloat(String(row.quantity));
+                              if (isNaN(parsed) || parsed <= 0) {
+                                handleUpdateQuantity(idx, 1);
+                              } else {
+                                handleUpdateQuantity(idx, parsed);
+                              }
+                            }}
+                          />
+                          <TouchableOpacity
+                            style={[styles.qtyBtn, { borderColor: theme.colors.border }]}
+                            onPress={() => {
+                              const current = parseFloat(String(row.quantity)) || 0;
+                              const next = Number((current + 1).toFixed(4));
+                              handleUpdateQuantity(idx, next);
+                            }}
+                          >
+                            <Text style={{ color: theme.colors.text }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
+                        <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
+                          <Trash2 size={16} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
-                      <Text style={{ flex: 1, color: theme.colors.text, fontWeight: '600' }}>₹{row.total.toFixed(2)}</Text>
-                      <TouchableOpacity style={{ width: 40 }} onPress={() => handleRemoveItem(idx)}>
-                        <Trash2 size={16} color="#EF4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
+                    ))}
+                  </View>
+                </ScrollView>
               )}
             </View>
 
@@ -447,18 +449,18 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
           </ScrollView>
 
           {/* Footer */}
-          <View style={[styles.footer, { borderTopColor: theme.colors.border }]}>
+          <View style={[styles.footer, { borderTopColor: theme.colors.border }, isMobile && { flexDirection: 'column-reverse', gap: 8 }]}>
             <AppButton
               title="Cancel"
               variant="outline"
               onPress={onClose}
-              style={{ minWidth: 100 }}
+              style={[{ minWidth: 100 }, isMobile && { width: '100%' }]}
             />
             <AppButton
               title={createPurchaseReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
               onPress={handleSubmit}
               disabled={createPurchaseReturnMutation.isPending}
-              style={{ minWidth: 140, backgroundColor: '#F97316' }}
+              style={[{ minWidth: 140, backgroundColor: '#F97316' }, isMobile && { width: '100%' }]}
             />
           </View>
         </View>
