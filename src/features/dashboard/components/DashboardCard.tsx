@@ -83,45 +83,18 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
           style,
         ]}
       >
-        <View style={styles.compactTopRow}>
-          <View style={[styles.compactIconWrapper, { backgroundColor: iconBg }]}>
-            {icon}
-          </View>
-          {trend && (
-            <View
-              style={[
-                styles.compactTrendBadge,
-                { backgroundColor: trendUp ? '#E6F9F4' : '#FEECEE' },
-              ]}
-            >
-              {trendUp ? (
-                <ArrowUpRight size={11} color="#00C49F" />
-              ) : (
-                <ArrowDownRight size={11} color="#FF4560" />
-              )}
-              <Text
-                style={[
-                  styles.compactTrendText,
-                  { color: trendUp ? '#00C49F' : '#FF4560' },
-                ]}
-              >
-                {trend}
-              </Text>
-            </View>
-          )}
-        </View>
-
         <Text style={[styles.compactValue, { color: theme.colors.text }]} numberOfLines={1}>
           {value}
         </Text>
-        <Text style={[styles.compactTitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={[styles.compactSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            {subtitle}
+
+        <View style={styles.compactBottomRow}>
+          <View style={[styles.compactIconWrapper, { backgroundColor: iconBg }]}>
+            {icon}
+          </View>
+          <Text style={[styles.compactTitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {title}
           </Text>
-        )}
+        </View>
       </TouchableOpacity>
     );
   }
@@ -258,11 +231,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Compact Variant (Mobile 2x2 Grid - reduced height)
+  // Compact Variant (Mobile 2x2 Grid - Amount top, Icon+Text bottom)
   compactContainer: {
     borderRadius: 11,
     paddingHorizontal: 11,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -270,45 +243,28 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  compactTopRow: {
+  compactValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    marginBottom: 6,
+  },
+  compactBottomRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 6,
   },
   compactIconWrapper: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  compactTrendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  compactTrendText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    marginLeft: 2,
-  },
-  compactValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 18,
-    marginBottom: 1,
-  },
   compactTitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    lineHeight: 14,
-  },
-  compactSubtitle: {
-    fontSize: 9.5,
-    marginTop: 1,
+    fontSize: 11.5,
+    fontWeight: '600',
+    flexShrink: 1,
   },
 
   // Primary Variant (Desktop)
