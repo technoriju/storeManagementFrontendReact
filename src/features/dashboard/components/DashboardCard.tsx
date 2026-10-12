@@ -258,29 +258,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Compact Variant (Mobile 2x2 Grid - reduced size)
+  // Compact Variant (Mobile 2x2 Grid - reduced height)
   compactContainer: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    borderRadius: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     borderWidth: 1,
-    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 3,
+    shadowRadius: 2,
     elevation: 1,
   },
   compactTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   compactIconWrapper: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -299,11 +298,13 @@ const styles = StyleSheet.create({
   compactValue: {
     fontSize: 15,
     fontWeight: '700',
+    lineHeight: 18,
     marginBottom: 1,
   },
   compactTitle: {
     fontSize: 11,
     fontWeight: '500',
+    lineHeight: 14,
   },
   compactSubtitle: {
     fontSize: 9.5,

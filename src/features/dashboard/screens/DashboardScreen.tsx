@@ -268,19 +268,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           </View>
         </View>
 
-        {/* Hero Financial Highlight Card - 1/3 reduced height on mobile */}
-        <DashboardCard
-          variant="hero"
-          title="Today's Total Sales"
-          value={formatCurrency(metrics.todaySales, 48988)}
-          icon={<FileText size={18} color="#fff" />}
-          trend="+22%"
-          trendUp={true}
-          color="#1C2E46"
-          subtitle={`${todayOrders} orders processed | Est. Profit: ${formatCurrency(profitVal, 8458)}`}
-          onViewAll={() => onNavigateTab?.('pos')}
-        />
-
         {/* Low Stock Contextual Banner */}
         {metrics.lowStockCount > 0 && (
           <TouchableOpacity
@@ -296,51 +283,44 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           </TouchableOpacity>
         )}
 
-        {/* 2x2 Modern Financial KPI Grid - Reduced card size */}
+        {/* 2x2 Financial KPI Grid - 4 Cards of Equal Size (No percentage hike) */}
         <View style={styles.kpiGrid}>
           <View style={styles.kpiRow}>
+            <DashboardCard
+              variant="compact"
+              title="Total Sales"
+              value={formatCurrency(metrics.todaySales, 48988)}
+              icon={<FileText size={15} color="#F89B29" />}
+              color="#F89B29"
+              style={styles.kpiGridCard}
+              onViewAll={() => onNavigateTab?.('pos')}
+            />
             <DashboardCard
               variant="compact"
               title="Total Purchase"
               value={formatCurrency(purchasesVal, 24145)}
               icon={<Gift size={15} color="#1E9B85" />}
-              trend="+18%"
-              trendUp={true}
               color="#1E9B85"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('purchases')}
-            />
-            <DashboardCard
-              variant="compact"
-              title="Invoice Due"
-              value={formatCurrency(outstandingVal, 4898878)}
-              icon={<Clock size={15} color="#FF4560" />}
-              trend="Due"
-              trendUp={false}
-              color="#FF4560"
-              style={styles.kpiGridCard}
-              onViewAll={() => onNavigateTab?.('customers')}
             />
           </View>
 
           <View style={styles.kpiRow}>
             <DashboardCard
               variant="compact"
-              title="Expenses"
-              value={formatCurrency(expensesVal, 8980)}
-              icon={<Target size={15} color="#F89B29" />}
-              trend="-5%"
-              trendUp={true}
-              color="#F89B29"
+              title="Invoice Due"
+              value={formatCurrency(outstandingVal, 4898878)}
+              icon={<Clock size={15} color="#FF4560" />}
+              color="#FF4560"
               style={styles.kpiGridCard}
+              onViewAll={() => onNavigateTab?.('customers')}
             />
             <DashboardCard
               variant="compact"
               title="Stock Value"
               value={formatCurrency(stockVal, 18458747)}
               icon={<Layers size={15} color="#2664FF" />}
-              trend="+12%"
-              trendUp={true}
               color="#2664FF"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('inventory')}
