@@ -780,53 +780,6 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         console.warn('Repository save warning:', repoErr);
       }
 
-      // Direct API update for sync
-      try {
-        const apiPayload: any = {
-          name: productData.name,
-          sku: productData.sku,
-          productCode: productData.sku,
-          baseUnitId: productData.baseUnitId || (productData.unitId ? Number(productData.unitId) : 1),
-          subUnitId: productData.subUnitId ? Number(productData.subUnitId) : null,
-          subunitId: productData.subUnitId ? Number(productData.subUnitId) : null,
-          conversionRate: productData.conversionRate ? Number(productData.conversionRate) : 1,
-          categoryId: productData.categoryId ? Number(productData.categoryId) : null,
-          subCategoryId: productData.subCategoryId ? Number(productData.subCategoryId) : null,
-          brandId: productData.brandId ? Number(productData.brandId) : null,
-          purchasePrice: productData.purchasePrice !== undefined ? Number(productData.purchasePrice) : null,
-          wholesalePrice: productData.wholesalePrice !== undefined ? Number(productData.wholesalePrice) : null,
-          retailPrice: productData.retailPrice !== undefined ? Number(productData.retailPrice) : null,
-          barcode: productData.barcode || null,
-          description: productData.description || null,
-          lowStockLevel: productData.lowStockThreshold !== undefined ? Number(productData.lowStockThreshold) : null,
-          openingStock: productData.stockQuantity,
-          stockQuantity: productData.stockQuantity,
-        };
-        if (productId) {
-          const res = await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
-          const serverData = res.data?.data || res.data;
-          if (serverData) {
-            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
-            productData.syncStatus = 'synced';
-            await productRepository.update(productData as any);
-            updateProduct(productData);
-          }
-        } else {
-          const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
-          const serverData = res.data?.data || res.data;
-          if (serverData?.id) {
-            productData.id = Number(serverData.id);
-            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
-            if (serverData.createdAt) productData.createdAt = serverData.createdAt;
-            productData.syncStatus = 'synced';
-            await productRepository.update(productData as any);
-            addProduct(productData);
-          }
-        }
-      } catch (apiErr) {
-        console.warn('API sync warning:', apiErr);
-      }
-
       fetchProducts(true).catch(() => {});
 
       Alert.alert('Success', `Product ${productId ? 'updated' : 'added'} successfully!`);
@@ -1388,18 +1341,6 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             } catch (e) {
               console.warn('Failed to insert brand locally:', e);
             }
-            try {
-              const res = await apiClient.post(API_ENDPOINTS.BRANDS.BASE, { name, status: 'Active' });
-              const created = res.data?.data || res.data;
-              if (created?.id) {
-                brandItem.id = Number(created.id);
-                brandItem.syncStatus = 'synced';
-                await brandRepository.update(brandItem, false).catch(() => {});
-              }
-            } catch (e) {
-              console.warn('Failed to sync brand to API:', e);
-            }
-
             const val = String(brandItem.id);
             setBrands(prev => dedupeOptions([...prev, { label: name, value: val }]));
             setSelectedBrand(val);

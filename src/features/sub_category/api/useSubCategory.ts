@@ -10,18 +10,8 @@ export const useSubCategories = () => {
   return useQuery({
     queryKey: SUBCATEGORY_QUERY_KEY,
     queryFn: async () => {
-      const localItems = await subCategoryRepository.getAll();
-
-      // Render local data first. Pull server data in background.
-      void subCategoryRepository.fetchFromApi().then(async (serverItems) => {
-        const latestLocalItems = await subCategoryRepository.getAll();
-        queryClient.setQueryData(
-          SUBCATEGORY_QUERY_KEY,
-          latestLocalItems.length > 0 ? latestLocalItems : serverItems,
-        );
-      });
-
-      return localItems;
+      try { await subCategoryRepository.fetchFromApi(); } catch (_) {}
+      return subCategoryRepository.getAll();
     },
   });
 };

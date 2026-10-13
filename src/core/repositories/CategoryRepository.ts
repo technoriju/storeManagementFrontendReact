@@ -37,16 +37,19 @@ export class CategoryRepository extends BaseRepository<Category> {
     }
   }
 
-  async delete(id: number, shouldSync = true): Promise<void> {
-    const entity = await this.getById(id);
-    if (!entity) return;
+  async delete(categoryOrId: number | Category, shouldSync = true): Promise<void> {
+    const id = typeof categoryOrId === 'number' ? categoryOrId : categoryOrId.id;
+    const entity = typeof categoryOrId === 'number'
+      ? await this.getById(id)
+      : categoryOrId;
+    const syncEntity = entity || ({ id, backendId: id } as Category);
     await db.execute(`DELETE FROM categories WHERE id = ?`, [id]);
     if (shouldSync) {
       await tombstoneRepo.add('categories', id);
       // Cancel older CREATE/UPDATE jobs for deleted local records.
       await outboxRepo.removeForEntity('categories', id);
       if (!/^\d+$/.test(String(id))) return;
-      await outboxRepo.add('categories', id, 'DELETE', entity);
+      await outboxRepo.add('categories', id, 'DELETE', syncEntity);
       this.requestSync();
     }
   }
@@ -181,6 +184,9 @@ export class CategoryRepository extends BaseRepository<Category> {
           const found = findItems(payload[key]);
           if (found.length > 0) return found;
         }
+        for (const value of Object.values(payload)) {
+          if (Array.isArray(value)) return value;
+        }
         return [];
       };
 
@@ -210,8 +216,31 @@ export class CategoryRepository extends BaseRepository<Category> {
           const existing = await super.getById(item.id);
           if (existing) {
             await super.update(item, false);
+            const duplicateResult = await db.execute(
+              `SELECT id FROM categories WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
+              [item.name, item.id],
+            );
+            const duplicateRow = Array.isArray(duplicateResult.rows) ? duplicateResult.rows[0] : undefined;
+            if (duplicateRow) {
+              await db.execute(`DELETE FROM categories WHERE id = ?`, [duplicateRow.id]);
+              await outboxRepo.removeForEntity('categories', Number(duplicateRow.id));
+            }
           } else {
-            await this.insert(item, false);
+            const pendingResult = await db.execute(
+              `SELECT id FROM categories WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
+              [item.name],
+            );
+            const pendingRow = Array.isArray(pendingResult.rows) ? pendingResult.rows[0] : undefined;
+            if (pendingRow && String(pendingRow.id) !== String(item.id)) {
+              await db.execute(`DELETE FROM categories WHERE id = ?`, [item.id]);
+              await db.execute(
+                `UPDATE categories SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
+                [item.id, item.id, pendingRow.id],
+              );
+              await outboxRepo.rebaseEntity('categories', Number(pendingRow.id), Number(item.id), Number(item.id));
+            } else {
+              await this.insert(item, false);
+            }
           }
 
           normalizedItems.push(item as Category);

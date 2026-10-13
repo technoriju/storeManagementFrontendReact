@@ -123,8 +123,36 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
       if (raw.deletedAt) continue;
       const item = this.config.normalize(raw);
       const existing = await super.getById(item.id);
-      if (existing) await super.update(item, false);
-      else await this.insert(item, false);
+      if (existing) {
+        await super.update(item, false);
+        const duplicateResult = await db.execute(
+          `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
+          [(item as any).name, item.id],
+        );
+        const duplicateRow = Array.isArray(duplicateResult.rows) ? duplicateResult.rows[0] : undefined;
+        if (duplicateRow) {
+          await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [duplicateRow.id]);
+          await outboxRepo.removeForEntity(this.config.entityType, Number(duplicateRow.id));
+        }
+      } else {
+        // API returns server ID, local pending row may still use temporary ID.
+        // Reuse pending row so pull cannot show one record twice.
+        const pendingResult = await db.execute(
+          `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
+          [(item as any).name],
+        );
+        const pendingRow = Array.isArray(pendingResult.rows) ? pendingResult.rows[0] : undefined;
+        if (pendingRow && String(pendingRow.id) !== String(item.id)) {
+          await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id]);
+          await db.execute(
+            `UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
+            [item.id, item.id, pendingRow.id],
+          );
+          await outboxRepo.rebaseEntity(this.config.entityType, Number(pendingRow.id), Number(item.id), Number(item.id));
+        } else {
+          await this.insert(item, false);
+        }
+      }
       normalized.push(item);
     }
     const ids = normalized.map(item => item.id);
