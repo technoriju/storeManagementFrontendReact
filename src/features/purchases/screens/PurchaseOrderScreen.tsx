@@ -37,13 +37,6 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const fallbackOrders = useMemo(() => [
-    { id: 1, orderNumber: 'PO-001', supplierName: 'Electro Mart', orderDate: '2024-12-24', status: 'Ordered', grandTotal: 1000, subtotal: 900, taxTotal: 100, syncStatus: 'synced' },
-    { id: 2, orderNumber: 'PO-002', supplierName: 'Quantum Gadgets', orderDate: '2024-12-10', status: 'Pending', grandTotal: 1500, subtotal: 1400, taxTotal: 100, syncStatus: 'synced' },
-    { id: 3, orderNumber: 'PO-003', supplierName: 'Prime Bazaar', orderDate: '2024-11-27', status: 'Received', grandTotal: 1500, subtotal: 1500, taxTotal: 0, syncStatus: 'synced' },
-    { id: 4, orderNumber: 'PO-004', supplierName: 'Gadget World', orderDate: '2024-11-18', status: 'Ordered', grandTotal: 2000, subtotal: 1800, taxTotal: 200, syncStatus: 'synced' },
-  ], []);
-
   const allOrders = useMemo(() => {
     if (dbOrders && dbOrders.length > 0) {
       return dbOrders.map((o) => ({
@@ -63,8 +56,8 @@ export const PurchaseOrderScreen: React.FC<Props> = ({ onNavigate }) => {
         items: o.items || [],
       }));
     }
-    return fallbackOrders;
-  }, [dbOrders, fallbackOrders]);
+    return [];
+  }, [dbOrders]);
 
   const filteredData = useMemo(() => {
     if (!searchQuery.trim()) return allOrders;
