@@ -86,15 +86,6 @@ export const AppSelect = ({
   const handleInputLayout = (event: any) => {
     const { x, y, width, height } = event.nativeEvent.layout;
     containerLayoutRef.current = { x, y, width, height };
-
-    // Pre-measure window coordinates in background as soon as component renders
-    if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
-      selectRef.current.measureInWindow((winX: number, winY: number, winW: number, winH: number) => {
-        if (winW > 0 || winH > 0) {
-          cachedLayoutRef.current = computeDropdownLayout(winX, winY, winW || width, winH || height);
-        }
-      });
-    }
   };
 
   const openModal = () => {
@@ -105,39 +96,34 @@ export const AppSelect = ({
     if (Platform.OS === 'web' && selectRef.current && typeof selectRef.current.getBoundingClientRect === 'function') {
       const rect = selectRef.current.getBoundingClientRect();
       const layout = computeDropdownLayout(rect.left, rect.top, rect.width, rect.height);
-      cachedLayoutRef.current = layout;
       setDropdownLayout(layout);
       setModalVisible(true);
       return;
     }
 
-    // 2. Prepare layout instantly with zero delay
-    let initialLayout = cachedLayoutRef.current;
-    if (!initialLayout) {
-      const w = containerLayoutRef.current?.width || (screenWidth - 24);
-      const h = containerLayoutRef.current?.height || 40;
-      initialLayout = computeDropdownLayout(12, 120, w, h);
-    }
-
-    // Immediately open modal - never wait for bridge callback
-    setDropdownLayout(initialLayout);
-    setModalVisible(true);
-
-    // 3. Concurrently get fresh coordinates (e.g. if page has scrolled)
+    // 2. Mobile: measure position if available, with immediate safe fallback
     if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
       selectRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
         if (width > 0 && height > 0) {
           const freshLayout = computeDropdownLayout(x, y, width, height);
-          cachedLayoutRef.current = freshLayout;
           setDropdownLayout(freshLayout);
+        } else {
+          const w = containerLayoutRef.current?.width || (screenWidth - 24);
+          const h = containerLayoutRef.current?.height || 40;
+          setDropdownLayout(computeDropdownLayout(12, 120, w, h));
         }
       });
+    } else {
+      const w = containerLayoutRef.current?.width || (screenWidth - 24);
+      const h = containerLayoutRef.current?.height || 40;
+      setDropdownLayout(computeDropdownLayout(12, 120, w, h));
     }
+
+    setModalVisible(true);
   };
 
   useEffect(() => {
     if (modalVisible && searchable) {
-      // Delay ensures the native Modal is fully mounted before requesting keyboard focus
       const timer = setTimeout(() => {
         if (searchInputRef.current && typeof searchInputRef.current.focus === 'function') {
           searchInputRef.current.focus();
