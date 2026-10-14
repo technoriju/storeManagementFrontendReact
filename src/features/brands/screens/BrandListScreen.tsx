@@ -109,7 +109,9 @@ export const BrandListScreen = () => {
           isSmallMobile && styles.iconButtonSmall,
           { borderColor: theme.colors.border }
         ]} 
-        onPress={() => refetch()}
+        onPress={() => {
+          import('../../../core/sync/SyncEngine').then((m) => m.syncEngine.syncNow().then(() => refetch()));
+        }}
       >
         <RefreshCw size={actionIconSize} color={theme.colors.textSecondary} />
       </Pressable>
@@ -160,7 +162,13 @@ export const BrandListScreen = () => {
   );
 
   const handleDelete = (item: any) => {
-    const remove = () => deleteMutation.mutate(item.id);
+    const remove = () => {
+      deleteMutation.mutate(item, {
+        onError: (err: any) => {
+          Alert.alert('Error', err?.message || 'Failed to delete brand');
+        },
+      });
+    };
     if (Platform.OS === 'web') {
       if ((globalThis as any).confirm(`Delete ${item.name}?`)) remove();
       return;
@@ -252,10 +260,12 @@ export const BrandListScreen = () => {
     }
   };
 
-  const filteredBrands = brands.filter(b => {
-    const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredBrands = brands.filter((b) => {
+    if (!b) return false;
+    const name = String(b.name || '');
+    const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
     if (statusFilter === 'All') return matchesSearch;
-    return matchesSearch && (b.status?.toLowerCase() === statusFilter.toLowerCase());
+    return matchesSearch && (String(b.status || '').toLowerCase() === statusFilter.toLowerCase());
   });
 
   return (

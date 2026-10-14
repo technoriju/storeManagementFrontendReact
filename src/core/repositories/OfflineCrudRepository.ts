@@ -61,16 +61,16 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     }
   }
 
-  async delete(entityOrId: number | T, shouldSync = true) {
-    const id = typeof entityOrId === 'number' ? entityOrId : entityOrId.id;
-    const entity = typeof entityOrId === 'number' ? await this.getById(id) : entityOrId;
-    if (!entity) return;
+  async delete(entityOrId: number | string | T, shouldSync = true) {
+    const id = typeof entityOrId === 'object' && entityOrId !== null ? (entityOrId as any).id : entityOrId;
+    const entity = typeof entityOrId === 'object' && entityOrId !== null ? entityOrId : await this.getById(Number(id));
+    const syncEntity = entity || ({ id: Number(id), backendId: Number(id) } as any);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (!shouldSync) return;
-    await tombstoneRepo.add(this.config.entityType, id);
-    await outboxRepo.removeForEntity(this.config.entityType, id);
-    if (/^\d+$/.test(String((entity as any).backendId || entity.id))) {
-      await outboxRepo.add(this.config.entityType, id, 'DELETE', entity);
+    await tombstoneRepo.add(this.config.entityType, Number(id));
+    await outboxRepo.removeForEntity(this.config.entityType, Number(id));
+    if (/^\d+$/.test(String((syncEntity as any).backendId || syncEntity.id))) {
+      await outboxRepo.add(this.config.entityType, Number(id), 'DELETE', syncEntity);
       this.requestSync();
     }
   }
@@ -128,43 +128,58 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
       }
       return [];
     };
+
+    const extractFirstRow = (res: any) => {
+      if (!res) return undefined;
+      const rows = res.rows;
+      if (Array.isArray(rows)) return rows[0];
+      if (rows && Array.isArray((rows as any)._array)) return (rows as any)._array[0];
+      if (typeof rows?.item === 'function' && rows.length > 0) return rows.item(0);
+      if (Array.isArray(res)) return res[0];
+      return undefined;
+    };
+
     const normalized: T[] = [];
     for (const raw of findItems(response.data)) {
       if (raw.deletedAt) continue;
-      const item = this.config.normalize(raw);
-      const existing = await super.getById(item.id);
-      if (existing) {
-        // Pull must not overwrite local insert/update waiting in outbox.
-        if (existing.syncStatus === 'synced') await super.update(item, false);
-        const duplicateResult = await db.execute(
-          `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
-          [(item as any).name, item.id],
-        );
-        const duplicateRow = Array.isArray(duplicateResult.rows) ? duplicateResult.rows[0] : undefined;
-        if (duplicateRow) {
-          await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [duplicateRow.id]);
-          await outboxRepo.removeForEntity(this.config.entityType, Number(duplicateRow.id));
-        }
-      } else {
-        // API returns server ID, local pending row may still use temporary ID.
-        // Reuse pending row so pull cannot show one record twice.
-        const pendingResult = await db.execute(
-          `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
-          [(item as any).name],
-        );
-        const pendingRow = Array.isArray(pendingResult.rows) ? pendingResult.rows[0] : undefined;
-        if (pendingRow && String(pendingRow.id) !== String(item.id)) {
-          await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id]);
-          await db.execute(
-            `UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
-            [item.id, item.id, pendingRow.id],
+      try {
+        const item = this.config.normalize(raw);
+        const existing = await super.getById(item.id);
+        if (existing) {
+          // Pull must not overwrite local insert/update waiting in outbox.
+          if (existing.syncStatus === 'synced') await super.update(item, false);
+          const duplicateResult = await db.execute(
+            `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
+            [(item as any).name, item.id],
           );
-          await outboxRepo.rebaseEntity(this.config.entityType, Number(pendingRow.id), Number(item.id), Number(item.id));
+          const duplicateRow = extractFirstRow(duplicateResult);
+          if (duplicateRow) {
+            await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [duplicateRow.id]);
+            await outboxRepo.removeForEntity(this.config.entityType, Number(duplicateRow.id));
+          }
         } else {
-          await this.insert(item, false);
+          // API returns server ID, local pending row may still use temporary ID.
+          // Reuse pending row so pull cannot show one record twice.
+          const pendingResult = await db.execute(
+            `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
+            [(item as any).name],
+          );
+          const pendingRow = extractFirstRow(pendingResult);
+          if (pendingRow && String(pendingRow.id) !== String(item.id)) {
+            await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id]);
+            await db.execute(
+              `UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
+              [item.id, item.id, pendingRow.id],
+            );
+            await outboxRepo.rebaseEntity(this.config.entityType, Number(pendingRow.id), Number(item.id), Number(item.id));
+          } else {
+            await this.insert(item, false);
+          }
         }
+        normalized.push(item);
+      } catch (err) {
+        console.error(`[OfflineCrudRepository] Error processing item for ${this.tableName}:`, raw, err);
       }
-      normalized.push(item);
     }
     const ids = normalized.map(item => item.id);
     if (ids.length) await db.execute(`DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${ids.map(() => '?').join(',')})`, ids);
