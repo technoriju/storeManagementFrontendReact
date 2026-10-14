@@ -37,13 +37,6 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const fallbackReturns = useMemo(() => [
-    { id: 1, returnNumber: 'SRT-001', customerName: 'Carl Evans', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Defective speaker', syncStatus: 'synced' },
-    { id: 2, returnNumber: 'SRT-002', customerName: 'Minerva Rameriz', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong color', syncStatus: 'synced' },
-    { id: 3, returnNumber: 'SRT-003', customerName: 'Robert Lamon', date: '2024-11-20', status: 'Received', totalAmount: 2000, reason: 'Customer changed mind', syncStatus: 'synced' },
-    { id: 4, returnNumber: 'SRT-004', customerName: 'Mark Joslyn', date: '2024-11-15', status: 'Received', totalAmount: 800, reason: 'Damaged packaging', syncStatus: 'synced' },
-  ], []);
-
   const allReturns = useMemo(() => {
     if (dbReturns && dbReturns.length > 0) {
       return dbReturns.map((r) => ({
@@ -58,8 +51,8 @@ export const SalesReturnScreen: React.FC<Props> = ({ onNavigate }) => {
         items: r.items || [],
       }));
     }
-    return fallbackReturns;
-  }, [dbReturns, fallbackReturns]);
+    return [];
+  }, [dbReturns]);
 
   const filteredData = useMemo(() => {
     if (!searchQuery.trim()) return allReturns;

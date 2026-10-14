@@ -56,14 +56,6 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
   const deleteSaleMutation = useDeleteSale();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
 
-  const fallbackInvoices = useMemo(() => [
-    { id: 1, invoiceNumber: 'INV001', customerName: 'Carl Evans', date: '2024-12-24', total: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
-    { id: 2, invoiceNumber: 'INV002', customerName: 'Minerva Rameriz', date: '2024-12-10', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
-    { id: 3, invoiceNumber: 'INV003', customerName: 'Robert Lamon', date: '2024-11-20', total: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', syncStatus: 'synced' },
-    { id: 4, invoiceNumber: 'INV004', customerName: 'Patricia Lewis', date: '2024-11-15', total: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', syncStatus: 'synced' },
-    { id: 5, invoiceNumber: 'INV005', customerName: 'Mark Joslyn', date: '2024-10-30', total: 800, paid: 800, due: 0, paymentStatus: 'Paid', syncStatus: 'synced' },
-  ], []);
-
   const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
     setIsLoadingData(true);
     try {
@@ -123,18 +115,16 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
         setTotalItems(res.total);
         setTotalPages(res.totalPages);
       } else {
-        const filtered = fallbackInvoices.filter((item) => !dismissedInvoiceIds.includes(item.id));
-        const paginated = filtered.slice((targetPage - 1) * targetLimit, targetPage * targetLimit);
-        setTableInvoices(paginated);
-        setTotalItems(filtered.length);
-        setTotalPages(Math.ceil(filtered.length / targetLimit) || 1);
+        setTableInvoices([]);
+        setTotalItems(0);
+        setTotalPages(1);
       }
     } catch (e) {
       console.warn('Failed to load paginated sales for invoices:', e);
     } finally {
       setIsLoadingData(false);
     }
-  }, [dismissedInvoiceIds, fallbackInvoices]);
+  }, [dismissedInvoiceIds]);
 
   useEffect(() => {
     loadData(page, rowsPerPage, searchQuery);

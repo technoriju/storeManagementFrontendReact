@@ -37,13 +37,6 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const fallbackReturns = useMemo(() => [
-    { id: 1, returnNumber: 'PRT-001', supplierName: 'Electro Mart', date: '2024-12-24', status: 'Received', totalAmount: 1000, reason: 'Damaged motherboards', syncStatus: 'synced' },
-    { id: 2, returnNumber: 'PRT-002', supplierName: 'Quantum Gadgets', date: '2024-12-10', status: 'Pending', totalAmount: 1500, reason: 'Wrong specification', syncStatus: 'synced' },
-    { id: 3, returnNumber: 'PRT-003', supplierName: 'Prime Bazaar', date: '2024-11-27', status: 'Received', totalAmount: 1500, reason: 'Over-supplied batch', syncStatus: 'synced' },
-    { id: 4, returnNumber: 'PRT-004', supplierName: 'Gadget World', date: '2024-11-18', status: 'Received', totalAmount: 2000, reason: 'Defective screen units', syncStatus: 'synced' },
-  ], []);
-
   const allReturns = useMemo(() => {
     if (dbReturns && dbReturns.length > 0) {
       return dbReturns.map((r) => ({
@@ -58,8 +51,8 @@ export const PurchaseReturnScreen: React.FC<Props> = ({ onNavigate }) => {
         items: r.items || [],
       }));
     }
-    return fallbackReturns;
-  }, [dbReturns, fallbackReturns]);
+    return [];
+  }, [dbReturns]);
 
   const filteredData = useMemo(() => {
     if (!searchQuery.trim()) return allReturns;

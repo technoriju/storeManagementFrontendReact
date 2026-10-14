@@ -38,14 +38,6 @@ export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
     refetch();
   }, [lastSyncedAt, refetch]);
 
-  const fallbackQuotations = useMemo(() => [
-    { id: 1, quotationNumber: 'QT-001', customerName: 'Carl Evans', date: '2024-12-24', status: 'Sent', grandTotal: 550, subtotal: 500, discount: 0, taxTotal: 50, syncStatus: 'synced' },
-    { id: 2, quotationNumber: 'QT-002', customerName: 'Minerva Rameriz', date: '2024-12-10', status: 'Ordered', grandTotal: 430, subtotal: 400, discount: 10, taxTotal: 40, syncStatus: 'synced' },
-    { id: 3, quotationNumber: 'QT-003', customerName: 'Robert Lamon', date: '2024-11-20', status: 'Pending', grandTotal: 260, subtotal: 250, discount: 0, taxTotal: 10, syncStatus: 'synced' },
-    { id: 4, quotationNumber: 'QT-004', customerName: 'Mark Joslyn', date: '2024-11-15', status: 'Sent', grandTotal: 470, subtotal: 450, discount: 20, taxTotal: 40, syncStatus: 'synced' },
-    { id: 5, quotationNumber: 'QT-005', customerName: 'Patricia Lewis', date: '2024-10-30', status: 'Pending', grandTotal: 380, subtotal: 350, discount: 0, taxTotal: 30, syncStatus: 'synced' },
-  ], []);
-
   const allQuotations = useMemo(() => {
     if (dbQuotations && dbQuotations.length > 0) {
       return dbQuotations.map((q) => ({
@@ -65,8 +57,8 @@ export const QuotationScreen: React.FC<Props> = ({ onNavigate }) => {
         items: q.items || [],
       }));
     }
-    return fallbackQuotations;
-  }, [dbQuotations, fallbackQuotations]);
+    return [];
+  }, [dbQuotations]);
 
   const filteredData = useMemo(() => {
     if (!searchQuery.trim()) return allQuotations;

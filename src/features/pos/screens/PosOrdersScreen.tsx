@@ -282,15 +282,6 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
     setShowShareModal(true);
   };
 
-  // Initial demo orders if DB has no sales yet
-  const fallbackOrders = useMemo(() => [
-    { id: '1', customerName: 'Carl Evans', avatar: 'https://i.pravatar.cc/150?u=1', reference: 'SL001', date: '2024-12-24', status: 'Completed', grandTotal: 1000, paid: 1000, due: 0, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
-    { id: '2', customerName: 'Minerva Rameriz', avatar: 'https://i.pravatar.cc/150?u=2', reference: 'SL002', date: '2024-12-10', status: 'Pending', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Unpaid', biller: 'Admin', syncStatus: 'synced' },
-    { id: '3', customerName: 'Robert Lamon', avatar: 'https://i.pravatar.cc/150?u=3', reference: 'SL003', date: '2023-02-08', status: 'Completed', grandTotal: 1500, paid: 0, due: 1500, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
-    { id: '4', customerName: 'Patricia Lewis', avatar: 'https://i.pravatar.cc/150?u=4', reference: 'SL004', date: '2023-02-12', status: 'Completed', grandTotal: 2000, paid: 1000, due: 1000, paymentStatus: 'Overdue', biller: 'Admin', syncStatus: 'synced' },
-    { id: '5', customerName: 'Mark Joslyn', avatar: 'https://i.pravatar.cc/150?u=5', reference: 'SL005', date: '2023-03-17', status: 'Completed', grandTotal: 800, paid: 800, due: 0, paymentStatus: 'Paid', biller: 'Admin', syncStatus: 'synced' },
-  ], []);
-
   const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
     setIsLoadingData(true);
     try {
@@ -340,18 +331,16 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
         setTotalItems(res.total);
         setTotalPages(res.totalPages);
       } else {
-        const filtered = fallbackOrders.filter((item) => !dismissedOrderIds.includes(String(item.id)));
-        const paginated = filtered.slice((targetPage - 1) * targetLimit, targetPage * targetLimit);
-        setTableOrders(paginated);
-        setTotalItems(filtered.length);
-        setTotalPages(Math.ceil(filtered.length / targetLimit) || 1);
+        setTableOrders([]);
+        setTotalItems(0);
+        setTotalPages(1);
       }
     } catch (e) {
       console.warn('Failed to load paginated orders:', e);
     } finally {
       setIsLoadingData(false);
     }
-  }, [dismissedOrderIds, fallbackOrders]);
+  }, [dismissedOrderIds]);
 
   useEffect(() => {
     loadData(page, rowsPerPage, searchQuery);
