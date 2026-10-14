@@ -12,11 +12,12 @@ import {
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
-import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { ProductSearchSelect } from '../../../shared/components/inputs/ProductSearchSelect';
 import { X, SlidersHorizontal, AlertCircle, ArrowRight } from 'lucide-react-native';
 import { useProductStore } from '../../products/store/productStore';
 import { useAdjustStock } from '../api/useStock';
+import { Product } from '../../products/types';
 
 interface AdjustStockModalProps {
   visible: boolean;
@@ -35,10 +36,11 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
 }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
-  const { products, fetchProducts } = useProductStore();
+  const { fetchProductById } = useProductStore();
   const adjustStockMutation = useAdjustStock();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [adjustmentType, setAdjustmentType] = useState<AdjustmentType>('SET');
   const [quantity, setQuantity] = useState<string>('');
   const [reason, setReason] = useState<string>('Physical Inventory Recount');
@@ -47,22 +49,22 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      if (products.length === 0) {
-        fetchProducts().catch(() => {});
+      const pid = preselectedProductId ? String(preselectedProductId) : '';
+      setSelectedProductId(pid);
+      if (pid) {
+        fetchProductById(pid).then((p) => {
+          if (p) setSelectedProduct(p);
+        }).catch(() => {});
+      } else {
+        setSelectedProduct(null);
       }
-      setSelectedProductId(preselectedProductId ? String(preselectedProductId) : '');
       setAdjustmentType('SET');
       setQuantity('');
       setReason('Physical Inventory Recount');
       setNotes('');
       setErrorMessage(null);
     }
-  }, [visible, preselectedProductId, products.length, fetchProducts]);
-
-  const selectedProduct = useMemo(() => {
-    if (!selectedProductId) return null;
-    return products.find((p) => String(p.id) === String(selectedProductId)) || null;
-  }, [selectedProductId, products]);
+  }, [visible, preselectedProductId, fetchProductById]);
 
   const currentStock = Number(
     selectedProduct?.stockQuantity ?? selectedProduct?.openingStock ?? 0,
@@ -84,13 +86,6 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
     targetStock = Math.max(0, currentStock - parsedQty);
     delta = -Math.min(currentStock, parsedQty);
   }
-
-  const productOptions = useMemo(() => {
-    return products.map((p) => ({
-      label: `${p.name} (${p.sku || p.productCode || 'No SKU'})`,
-      value: String(p.id),
-    }));
-  }, [products]);
 
   const reasonPresets = [
     'Physical Inventory Recount',
@@ -160,18 +155,20 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
 
                 {/* Product Select */}
                 <View style={{ marginBottom: 16 }}>
-                  <AppSelect
-                    label={
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.label, { color: theme.colors.text }]}>Select Product</Text>
-                        <Text style={styles.required}> *</Text>
-                      </View>
-                    }
-                    placeholder="Choose product to adjust..."
-                    options={productOptions}
-                    value={selectedProductId}
-                    onSelect={(val) => setSelectedProductId(String(val))}
-                    searchable
+                  <ProductSearchSelect
+                    mode="select"
+                    label="Select Product *"
+                    placeholder="Search product to adjust..."
+                    selectedProductId={selectedProductId}
+                    selectedProduct={selectedProduct}
+                    onSelectProduct={(p) => {
+                      setSelectedProductId(String(p.id));
+                      setSelectedProduct(p);
+                    }}
+                    onClearSelection={() => {
+                      setSelectedProductId('');
+                      setSelectedProduct(null);
+                    }}
                   />
                 </View>
 
@@ -342,12 +339,14 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
               ]}>
                 <AppButton
                   title="Cancel"
+                  size="small"
                   onPress={onClose}
                   style={[styles.cancelBtn, isMobile && { width: '100%' }]}
                   textStyle={{ color: '#FFF' }}
                 />
                 <AppButton
                   title="Apply Adjustment"
+                  size="small"
                   onPress={handleSubmit}
                   style={[styles.submitBtn, isMobile && { width: '100%' }]}
                   disabled={adjustStockMutation.isPending}
@@ -506,21 +505,21 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    gap: 12,
+    gap: 10,
   },
   cancelBtn: {
     backgroundColor: '#0F2847',
     borderRadius: 6,
-    height: 40,
-    paddingHorizontal: 20,
+    height: 34,
+    paddingHorizontal: 16,
   },
   submitBtn: {
     backgroundColor: '#1E3A8A',
     borderRadius: 6,
-    height: 40,
-    paddingHorizontal: 22,
+    height: 34,
+    paddingHorizontal: 18,
   },
 });

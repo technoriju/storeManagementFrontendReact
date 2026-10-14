@@ -75,8 +75,8 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
   const [isChangingSelection, setIsChangingSelection] = useState(false);
   const [internalSelectedProduct, setInternalSelectedProduct] = useState<Product | null>(null);
 
-  const inputRef = useRef<TextInput>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<any>(null);
+  const debounceTimerRef = useRef<any>(null);
 
   // Sync internal product with props
   const activeProduct = propSelectedProduct || internalSelectedProduct;

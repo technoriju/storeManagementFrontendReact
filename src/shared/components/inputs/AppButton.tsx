@@ -66,10 +66,37 @@ export const AppButton: React.FC<ButtonProps> = ({
     return theme.colors.background; // Usually white for filled buttons
   };
 
+  const isDesktopEnv = isMouse || Platform.OS === 'web';
+
   const getHeight = () => {
+    if (isDesktopEnv) {
+      if (size === 'small') return 30;
+      if (size === 'large') return 42;
+      return 36; // medium desktop
+    }
     if (size === 'small') return moderateScale(32);
     if (size === 'large') return moderateScale(48);
     return moderateScale(40); // medium
+  };
+
+  const getFontSize = () => {
+    if (isDesktopEnv) {
+      if (size === 'small') return 12;
+      if (size === 'large') return 14;
+      return 13;
+    }
+    if (size === 'small') return 13;
+    if (size === 'large') return 16;
+    return 14;
+  };
+
+  const getPaddingHorizontal = () => {
+    if (isDesktopEnv) {
+      if (size === 'small') return 10;
+      if (size === 'large') return 18;
+      return 14;
+    }
+    return 16;
   };
 
   // onHoverIn and onHoverOut are supported by react-native-web and react-native-windows
@@ -83,6 +110,7 @@ export const AppButton: React.FC<ButtonProps> = ({
         {
           backgroundColor: getBackgroundColor(pressed, isHovered),
           height: getHeight(),
+          paddingHorizontal: getPaddingHorizontal(),
           borderColor: variant === 'outline' ? theme.colors.primary : 'transparent',
           borderWidth: variant === 'outline' ? 1 : 0,
         },
@@ -92,14 +120,14 @@ export const AppButton: React.FC<ButtonProps> = ({
     >
       {({ pressed }) => (
         isLoading ? (
-          <ActivityIndicator color={getTextColor()} />
+          <ActivityIndicator size="small" color={getTextColor()} />
         ) : (
           <Text
             style={[
               styles.text,
               {
                 color: getTextColor(),
-                fontSize: theme.typography.sizes.md,
+                fontSize: getFontSize(),
                 fontWeight: theme.typography.weights.medium as any,
                 opacity: pressed && !isMouse ? 0.7 : 1, // Touch opacity feedback on mobile
               },

@@ -51,7 +51,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
   }
 
   async update(entity: T, shouldSync = true) {
-    const local = { ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' } as T;
+    // Keep fields omitted by edit forms, especially backendId and createdAt.
+    const existing = await this.getById(entity.id);
+    const local = { ...(existing || {}), ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' } as T;
     await super.update(local, false);
     if (shouldSync) {
       await outboxRepo.add(this.config.entityType, local.id, 'UPDATE', local);
@@ -59,8 +61,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     }
   }
 
-  async delete(id: number, shouldSync = true) {
-    const entity = await this.getById(id);
+  async delete(entityOrId: number | T, shouldSync = true) {
+    const id = typeof entityOrId === 'number' ? entityOrId : entityOrId.id;
+    const entity = typeof entityOrId === 'number' ? await this.getById(id) : entityOrId;
     if (!entity) return;
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (!shouldSync) return;
@@ -73,25 +76,32 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
   }
 
   protected async syncWithApi(entity: T, operation: Operation) {
-    const payload = this.config.payload(entity);
-    const serverId = Number((entity as any).backendId || entity.id);
-    let response: any;
-    if (operation === 'insert') response = await apiClient.post(this.config.endpoint.BASE, payload);
-    if (operation === 'update') response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
-    if (operation === 'delete') response = await apiClient.delete(this.config.endpoint.BY_ID(serverId));
+    try {
+      const payload = this.config.payload(entity);
+      const serverId = Number((entity as any).backendId || entity.id);
+      let response: any;
+      if (operation === 'insert') response = await apiClient.post(this.config.endpoint.BASE, payload);
+      if (operation === 'update') response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
+      if (operation === 'delete') response = await apiClient.delete(this.config.endpoint.BY_ID(serverId));
 
-    if (operation === 'insert') {
-      const body = response?.data?.data || response?.data || {};
-      const entityName = this.config.tableName.slice(0, -1);
-      const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-      const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`];
-      if (returnedId && String(returnedId) !== String(entity.id)) {
-        await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
-        await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
-        return;
+      if (operation === 'insert') {
+        const body = response?.data?.data || response?.data || {};
+        const entityName = this.config.tableName.slice(0, -1);
+        const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`];
+        if (returnedId && String(returnedId) !== String(entity.id)) {
+          await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
+          await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
+          return;
+        }
       }
+      if (operation !== 'delete') await super.update({ ...entity, syncStatus: 'synced' } as T, false);
+    } catch (error: any) {
+      const status = error?.response?.status ?? error?.response?.data?.statusCode ?? error?.status;
+      // DELETE is idempotent. Missing server row is already deleted.
+      if (operation === 'delete' && status >= 400 && status < 500) return;
+      throw error;
     }
-    if (operation !== 'delete') await super.update({ ...entity, syncStatus: 'synced' } as T, false);
   }
 
   async syncOutboxItem(item: OutboxItem) {
@@ -124,7 +134,8 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
       const item = this.config.normalize(raw);
       const existing = await super.getById(item.id);
       if (existing) {
-        await super.update(item, false);
+        // Pull must not overwrite local insert/update waiting in outbox.
+        if (existing.syncStatus === 'synced') await super.update(item, false);
         const duplicateResult = await db.execute(
           `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
           [(item as any).name, item.id],

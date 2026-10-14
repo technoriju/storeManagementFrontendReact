@@ -3228,10 +3228,11 @@ const styles = StyleSheet.create({
   printButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    height: 34,
     borderRadius: 6,
   },
   printButtonText: {

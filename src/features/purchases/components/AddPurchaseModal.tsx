@@ -15,6 +15,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { ProductSearchSelect } from '../../../shared/components/inputs/ProductSearchSelect';
 import {
   X,
   Plus,
@@ -111,9 +112,6 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
 
   useEffect(() => {
     if (visible) {
-      if (products.length === 0) {
-        fetchProducts().catch(() => {});
-      }
       setErrorMessage(null);
       setShowAddSupplierModal(false);
       setNewSupplierName('');
@@ -925,101 +923,12 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
 
               {/* Row 2: Live Product Search */}
               <View style={{ zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
-                <Text style={{ color: theme.colors.text, marginBottom: 6, fontWeight: '500' }}>
-                  Search & Add Product *
-                </Text>
-                <View
-                  style={[
-                    styles.searchBar,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.background,
-                    },
-                  ]}
-                >
-                  <Search size={18} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={[styles.searchInput, { color: theme.colors.text }]}
-                    placeholder="Search by product name, SKU or barcode..."
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={(q) => {
-                      setSearchQuery(q);
-                      setIsSearching(true);
-                    }}
-                    onFocus={() => setIsSearching(true)}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <X size={16} color={theme.colors.textSecondary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Product Search Results Dropdown */}
-                {isSearching && filteredProducts.length > 0 && (
-                  <View
-                    style={[
-                      styles.searchResultsDropdown,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <ScrollView
-                      nestedScrollEnabled={true}
-                      keyboardShouldPersistTaps="handled"
-                      style={{ maxHeight: 260 }}
-                      showsVerticalScrollIndicator={true}
-                    >
-                      {filteredProducts.map((p) => {
-                        const cost = p.purchasePrice || p.cost || p.price || 0;
-                        return (
-                          <TouchableOpacity
-                            key={p.id}
-                            style={[
-                              styles.searchResultItem,
-                              { borderBottomColor: theme.colors.border },
-                            ]}
-                            onPress={() => handleAddProduct(p)}
-                          >
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
-                                {p.name}
-                              </Text>
-                              <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                                Brand: {getBrandName(p)} | Stock: {p.stockQuantity ?? 0} | Tax: {p.gst || 0}% | SKU: {p.sku || 'N/A'}
-                              </Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                              <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
-                                ₹{Number(cost).toFixed(2)}
-                              </Text>
-                              <Text style={{ color: '#10B981', fontSize: 11 }}>+ Add Item</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-                {isSearching && searchQuery.trim().length > 0 && filteredProducts.length === 0 && (
-                  <View
-                    style={[
-                      styles.searchResultsDropdown,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                        padding: 12,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', fontSize: 12 }}>
-                      No matching products found.
-                    </Text>
-                  </View>
-                )}
+                <ProductSearchSelect
+                  label="Search & Add Product *"
+                  priceType="purchase"
+                  placeholder="Search by product name, SKU or barcode..."
+                  onSelectProduct={handleAddProduct}
+                />
               </View>
 
               {/* Table Area: Added Products List */}
@@ -1456,15 +1365,16 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
           {/* Footer Actions */}
           <View style={[
             styles.footer,
-            { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 16 },
+            { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 14 },
             isMobile && { flexDirection: 'column-reverse', gap: 8, alignItems: 'stretch' },
           ]}>
             <AppButton
               title="Cancel"
               variant="outline"
+              size="small"
               onPress={onClose}
-              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 100 }, isMobile && { width: '100%' }]}
-              textStyle={{ color: 'white' }}
+              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 80, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ color: 'white', fontSize: 13 }}
             />
             <AppButton
               title={
@@ -1474,9 +1384,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   ? 'Update Purchase'
                   : 'Submit Purchase'
               }
+              size="small"
               onPress={handleSubmit}
               disabled={createPurchaseMutation.isPending || updatePurchaseMutation.isPending}
-              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }, isMobile && { width: '100%' }]}
+              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 120, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ fontSize: 13 }}
             />
           </View>
         </View>
@@ -1730,9 +1642,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
-    gap: 12,
+    gap: 10,
     flexShrink: 0,
   },
   balanceCard: {
@@ -1843,17 +1756,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   modalCancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalSaveBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 6,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },

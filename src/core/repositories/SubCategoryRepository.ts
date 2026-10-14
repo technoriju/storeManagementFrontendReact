@@ -37,8 +37,9 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     }
   }
 
-  async delete(id: number, shouldSync = true): Promise<void> {
-    const entity = await this.getById(id);
+  async delete(entityOrId: number | SubCategory, shouldSync = true): Promise<void> {
+    const id = typeof entityOrId === 'number' ? entityOrId : entityOrId.id;
+    const entity = typeof entityOrId === 'number' ? await this.getById(id) : entityOrId;
     if (!entity) return;
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
@@ -110,7 +111,10 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       
       // Send only fields accepted by the subcategory API.
       // Ensure categoryId is a valid number for NestJS validator.
-      const numericCategoryId = Number(categoryId) || 1;
+      const numericCategoryId = Number(categoryId);
+      if (!Number.isFinite(numericCategoryId) || numericCategoryId <= 0) {
+        throw new Error('Sub category requires valid categoryId');
+      }
       const apiPayload = { name, description, categoryId: numericCategoryId, status: status || 'active' };
       
       let syncSuccess = false;
