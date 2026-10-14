@@ -874,6 +874,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 containerStyle={{ marginBottom: 0 }} 
                 value={selectedCategory}
                 onSelect={handleSelectCategory}
+                searchable
               />
             </FormGroup>
 
@@ -885,6 +886,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                   containerStyle={{ marginBottom: 0 }} 
                   value={selectedSubCategory}
                   onSelect={setSelectedSubCategory}
+                  searchable
                 />
               </FormGroup>
             )}
@@ -905,6 +907,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 containerStyle={{ marginBottom: 0 }} 
                 value={selectedBrand}
                 onSelect={setSelectedBrand}
+                searchable
               />
             </FormGroup>
 
@@ -919,6 +922,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                 value={barcodeSymbology}
                 onSelect={setBarcodeSymbology}
                 containerStyle={{ marginBottom: 0 }} 
+                searchable
               />
             </FormGroup>
 
@@ -1010,6 +1014,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     containerStyle={{ marginBottom: 0 }} 
                     value={selectedUnit}
                     onSelect={setSelectedUnit}
+                    searchable
                   />
                 </FormGroup>
 
@@ -1020,6 +1025,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     containerStyle={{ marginBottom: 0 }} 
                     value={selectedSubUnit}
                     onSelect={handleSelectSubUnit}
+                    searchable
                   />
                 </FormGroup>
 
@@ -1110,6 +1116,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                                 containerStyle={{ marginBottom: 0 }} 
                                 value={item.unit}
                                 onSelect={(val: string) => handleUpdateSubUnit(item.id, 'unit', val)}
+                                searchable
                               />
                             </View>
                             <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
@@ -1193,6 +1200,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     value={taxType}
                     onSelect={setTaxType}
                     containerStyle={{ marginBottom: 0 }} 
+                    searchable
                   />
                 </FormGroup>
                 
@@ -1216,6 +1224,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
                     value={discountType}
                     onSelect={setDiscountType}
                     containerStyle={{ marginBottom: 0 }} 
+                    searchable
                   />
                 </FormGroup>
 
@@ -1235,7 +1244,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
               <FormGroup label="Variant Attribute">
                 <View style={{flexDirection: 'row', alignItems: 'center'}}>
                   <View style={{flex: 1}}>
-                    <AppSelect options={[{label: 'Color', value: 'color'}, {label: 'Size', value: 'size'}]} placeholder="Choose" containerStyle={{ marginBottom: 0 }} />
+                    <AppSelect options={[{label: 'Color', value: 'color'}, {label: 'Size', value: 'size'}]} placeholder="Choose" containerStyle={{ marginBottom: 0 }} searchable />
                   </View>
                   <TouchableOpacity style={styles.addVariantBtn} onPress={handleAddVariant}>
                     <Plus size={16} color="white" />
