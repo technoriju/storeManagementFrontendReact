@@ -21,6 +21,41 @@ export interface AppSelectProps {
   clearable?: boolean;
 }
 
+const computeDropdownLayout = (x?: number, y?: number, width?: number, height?: number) => {
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const measuredWidth = width && width > 0 ? width : screenWidth - 32;
+  const measuredHeight = height && height > 0 ? height : 40;
+  const maxDropdownHeight = 300;
+  const safeY = typeof y === 'number' && !isNaN(y) && y > 0 ? y : 120;
+  const safeX = typeof x === 'number' && !isNaN(x) && x > 0 ? x : 12;
+
+  let dropWidth = Math.max(measuredWidth, 180);
+  if (dropWidth > screenWidth - 24) {
+    dropWidth = screenWidth - 24;
+  }
+
+  let dropLeft = safeX;
+  if (dropLeft + dropWidth > screenWidth - 12) {
+    dropLeft = Math.max(12, screenWidth - dropWidth - 12);
+  }
+
+  const spaceBelow = screenHeight - safeY - measuredHeight;
+  const spaceAbove = safeY;
+
+  const layout: { left: number; width: number; top?: number; bottom?: number } = {
+    left: dropLeft,
+    width: dropWidth,
+  };
+
+  if (spaceBelow < maxDropdownHeight && spaceAbove > spaceBelow) {
+    layout.bottom = Math.max(10, screenHeight - safeY + 4);
+  } else {
+    layout.top = Math.max(10, safeY + measuredHeight + 4);
+  }
+
+  return layout;
+};
+
 export const AppSelect = ({ 
   label, 
   value, 
@@ -39,47 +74,64 @@ export const AppSelect = ({
   const [searchQuery, setSearchQuery] = useState('');
   const selectRef = useRef<any>(null);
   const searchInputRef = useRef<any>(null);
-  const [dropdownLayout, setDropdownLayout] = useState<any>({ left: 0, top: 0, width: 0 });
+  const [dropdownLayout, setDropdownLayout] = useState<any>({ left: 12, top: 120, width: 200 });
+
+  const cachedLayoutRef = useRef<{ left: number; top?: number; bottom?: number; width: number } | null>(null);
+  const containerLayoutRef = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
 
   useEffect(() => {
     setInternalValue(isMulti ? (Array.isArray(value) ? value : []) : value);
   }, [value, isMulti]);
 
+  const handleInputLayout = (event: any) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    containerLayoutRef.current = { x, y, width, height };
+
+    // Pre-measure window coordinates in background as soon as component renders
+    if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
+      selectRef.current.measureInWindow((winX: number, winY: number, winW: number, winH: number) => {
+        if (winW > 0 || winH > 0) {
+          cachedLayoutRef.current = computeDropdownLayout(winX, winY, winW || width, winH || height);
+        }
+      });
+    }
+  };
+
   const openModal = () => {
     setSearchQuery('');
     const screenWidth = Dimensions.get('window').width;
-    const screenHeight = Dimensions.get('window').height;
 
+    // 1. Web: measure synchronously using standard DOM API
+    if (Platform.OS === 'web' && selectRef.current && typeof selectRef.current.getBoundingClientRect === 'function') {
+      const rect = selectRef.current.getBoundingClientRect();
+      const layout = computeDropdownLayout(rect.left, rect.top, rect.width, rect.height);
+      cachedLayoutRef.current = layout;
+      setDropdownLayout(layout);
+      setModalVisible(true);
+      return;
+    }
+
+    // 2. Prepare layout instantly with zero delay
+    let initialLayout = cachedLayoutRef.current;
+    if (!initialLayout) {
+      const w = containerLayoutRef.current?.width || (screenWidth - 24);
+      const h = containerLayoutRef.current?.height || 40;
+      initialLayout = computeDropdownLayout(12, 120, w, h);
+    }
+
+    // Immediately open modal - never wait for bridge callback
+    setDropdownLayout(initialLayout);
+    setModalVisible(true);
+
+    // 3. Concurrently get fresh coordinates (e.g. if page has scrolled)
     if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
       selectRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
-        const measuredWidth = width && width > 0 ? width : screenWidth - 32;
-        const measuredHeight = height && height > 0 ? height : 40;
-        const maxDropdownHeight = 300;
-        const spaceBelow = screenHeight - y - measuredHeight;
-
-        let dropWidth = Math.max(measuredWidth, 180);
-        if (dropWidth > screenWidth - 24) {
-          dropWidth = screenWidth - 24;
+        if (width > 0 && height > 0) {
+          const freshLayout = computeDropdownLayout(x, y, width, height);
+          cachedLayoutRef.current = freshLayout;
+          setDropdownLayout(freshLayout);
         }
-
-        let dropLeft = x || 12;
-        if (dropLeft + dropWidth > screenWidth - 12) {
-          dropLeft = Math.max(12, screenWidth - dropWidth - 12);
-        }
-
-        const layout: any = { left: dropLeft, width: dropWidth };
-        if (spaceBelow < maxDropdownHeight && y > spaceBelow) {
-          layout.bottom = Math.max(10, screenHeight - y + 4);
-        } else {
-          layout.top = Math.max(10, (y || 80) + measuredHeight + 4);
-        }
-
-        setDropdownLayout(layout);
-        setModalVisible(true);
       });
-    } else {
-      setDropdownLayout({ left: 16, width: screenWidth - 32, top: 120 });
-      setModalVisible(true);
     }
   };
 
@@ -184,6 +236,8 @@ export const AppSelect = ({
       
       <TouchableOpacity
         ref={selectRef}
+        onLayout={handleInputLayout}
+        delayPressIn={0}
         style={[
           styles.input, 
           { 
@@ -218,6 +272,7 @@ export const AppSelect = ({
                     onPress={(e) => { e.stopPropagation(); removeMultiItem(val); }} 
                     style={styles.chipRemove}
                     hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+                    delayPressIn={0}
                   >
                     <X size={12} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
@@ -240,6 +295,7 @@ export const AppSelect = ({
                 }
               }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              delayPressIn={0}
             >
               <X size={14} color={theme.colors.textSecondary} />
             </TouchableOpacity>
@@ -251,7 +307,12 @@ export const AppSelect = ({
       {error && <Text style={{ color: theme.colors.error, fontSize: theme.typography.sizes.xs, marginTop: theme.spacing.xs }}>{error}</Text>}
 
       {/* Dropdown Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade">
+      <Modal 
+        visible={modalVisible} 
+        transparent 
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
@@ -263,17 +324,16 @@ export const AppSelect = ({
             onPress={closeModal} 
           />
           
-          <Pressable onPress={(e) => e?.stopPropagation?.()}>
-            <View 
-              style={[styles.dropdownContainer, {
-                left: dropdownLayout.left,
-                width: dropdownLayout.width,
-                ...(dropdownLayout.top ? { top: dropdownLayout.top } : {}),
-                ...(dropdownLayout.bottom ? { bottom: dropdownLayout.bottom } : {}),
-              }]}
-            >
-              
-              {searchable && (
+          <View 
+            style={[styles.dropdownContainer, {
+              left: dropdownLayout.left,
+              width: dropdownLayout.width,
+              ...(dropdownLayout.top !== undefined ? { top: dropdownLayout.top } : {}),
+              ...(dropdownLayout.bottom !== undefined ? { bottom: dropdownLayout.bottom } : {}),
+            }]}
+            onStartShouldSetResponder={() => true}
+          >
+            {searchable && (
               <View style={[styles.searchContainer, { borderBottomColor: theme.colors.border || '#f0f0f0' }]}>
                 <Search size={16} color={theme.colors.textSecondary} style={styles.searchIcon} />
                 <TextInput
@@ -313,6 +373,7 @@ export const AppSelect = ({
                         isSelected && !isMulti && { backgroundColor: theme.colors.background || '#f9f9f9' }
                       ]} 
                       onPress={() => handleSelect(item)}
+                      delayPressIn={0}
                     >
                       <Text style={[
                         styles.optionText, 
@@ -331,10 +392,12 @@ export const AppSelect = ({
                 bounces={false}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
+                initialNumToRender={20}
+                maxToRenderPerBatch={20}
+                windowSize={5}
               />
             )}
           </View>
-          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
     </View>

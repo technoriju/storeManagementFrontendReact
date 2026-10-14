@@ -134,7 +134,7 @@ export const CategoryListScreen = () => {
 
   const handleDelete = (category: Category) => {
     const deleteCategory = () => {
-      deleteCategoryMutation.mutate(category.id, {
+      deleteCategoryMutation.mutate(category, {
         onError: (e: any) => {
           Alert.alert('Error', e.message || 'Failed to delete category');
         }

@@ -1,4 +1,4 @@
-import { Dimensions, PixelRatio } from 'react-native';
+import { Dimensions, PixelRatio, Platform } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -6,11 +6,27 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const guidelineBaseWidth = 375;
 const guidelineBaseHeight = 812;
 
-export const scale = (size: number) => (SCREEN_WIDTH / guidelineBaseWidth) * size;
-export const verticalScale = (size: number) => (SCREEN_HEIGHT / guidelineBaseHeight) * size;
-export const moderateScale = (size: number, factor = 0.5) => size + (scale(size) - size) * factor;
+export const scale = (size: number) => {
+  const { width } = Dimensions.get('window');
+  if (Platform.OS === 'web' || width >= 768) return size;
+  return (width / guidelineBaseWidth) * size;
+};
+
+export const verticalScale = (size: number) => {
+  const { height } = Dimensions.get('window');
+  if (Platform.OS === 'web' || height >= 1024) return size;
+  return (height / guidelineBaseHeight) * size;
+};
+
+export const moderateScale = (size: number, factor = 0.5) => {
+  const { width } = Dimensions.get('window');
+  if (Platform.OS === 'web' || width >= 768) return size;
+  return size + (scale(size) - size) * factor;
+};
 
 export const normalizeFontSize = (size: number) => {
+  const { width } = Dimensions.get('window');
+  if (Platform.OS === 'web' || width >= 768) return size;
   const newSize = scale(size);
   return Math.round(PixelRatio.roundToNearestPixel(newSize));
 };

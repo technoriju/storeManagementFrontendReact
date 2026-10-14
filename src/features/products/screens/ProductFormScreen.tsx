@@ -133,11 +133,38 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [itemBarcode, setItemBarcode] = useState('');
   const [description, setDescription] = useState('');
 
-  // Dropdown lists
-  const [categories, setCategories] = useState<{label: string, value: string}[]>([]);
+  // Dropdown lists - initialized with store memory for instant rendering without flash
+  const [categories, setCategories] = useState<{label: string, value: string}[]>(() => {
+    const storeCats = useProductStore.getState().categories || [];
+    if (storeCats.length > 0) {
+      return dedupeOptions(storeCats.filter((c: any) => c && c.name).map((c: any) => ({
+        label: c.name,
+        value: String(c.id ?? (c as any).backendId)
+      })));
+    }
+    return [{ label: 'Electronics', value: '1' }, { label: 'Groceries', value: '2' }];
+  });
   const [subCategories, setSubCategories] = useState<{label: string, value: string}[]>([]);
-  const [brands, setBrands] = useState<{label: string, value: string}[]>([]);
-  const [units, setUnits] = useState<{label: string, value: string}[]>([]);
+  const [brands, setBrands] = useState<{label: string, value: string}[]>(() => {
+    const storeBrands = useProductStore.getState().brands || useBrandStore.getState().brands || [];
+    if (storeBrands.length > 0) {
+      return dedupeOptions(storeBrands.filter((b: any) => b && (b.name || (b as any).brandName || (b as any).title)).map((b: any) => ({
+        label: b.name || (b as any).brandName || (b as any).title,
+        value: String(b.id ?? (b as any).backendId)
+      })));
+    }
+    return [];
+  });
+  const [units, setUnits] = useState<{label: string, value: string}[]>(() => {
+    const storeUnits = useProductStore.getState().units || [];
+    if (storeUnits.length > 0) {
+      return dedupeOptions(storeUnits.filter((u: any) => u && (u.name || (u as any).shortName)).map((u: any) => ({
+        label: u.name || (u as any).shortName,
+        value: String(u.id ?? (u as any).backendId)
+      })));
+    }
+    return [{ label: 'Box', value: '1' }, { label: 'Dozen', value: '2' }, { label: 'Kg', value: '3' }, { label: 'Piece', value: '4' }];
+  });
   const [subUnitsList, setSubUnitsList] = useState<{label: string, value: string; multiplier?: number}[]>([]);
   const [rawSubUnits, setRawSubUnits] = useState<any[]>([]);
 
@@ -145,6 +172,14 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
+
+  const categoriesRef = React.useRef(categories);
+  categoriesRef.current = categories;
+
+  const selectedSubCategoryRef = React.useRef(selectedSubCategory);
+  selectedSubCategoryRef.current = selectedSubCategory;
+
+  const selectedSubUnitRef = React.useRef<string>('');
 
   // PRICING (1. Purchase Price, Wholesale Price, Retail Price)
   const [purchasePrice, setPurchasePrice] = useState('');
@@ -154,6 +189,8 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   // UNITS & SUB UNITS (Must be after sales related price!)
   const [selectedUnit, setSelectedUnit] = useState<string>('');
   const [selectedSubUnit, setSelectedSubUnit] = useState<string>('');
+  selectedSubUnitRef.current = selectedSubUnit;
+
   const [conversionRate, setConversionRate] = useState<string>('1');
   const [hasMultipleUnits, setHasMultipleUnits] = useState(false);
   const [subUnits, setSubUnits] = useState<{ id: number; unit: string; value: string }[]>([]);
@@ -175,9 +212,15 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
     { id: Math.floor(Math.random() * -1000000000), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
   ]);
 
+  const hasPopulatedRef = React.useRef<string | number | null>(null);
+
   // Load existing product if editing
   useEffect(() => {
-    if (!productId) return;
+    if (!productId) {
+      hasPopulatedRef.current = null;
+      return;
+    }
+    if (hasPopulatedRef.current === productId) return;
 
     const populateForm = (prod: any) => {
       setProductName(prod.name || '');
@@ -239,6 +282,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       } else if (prod.tax !== undefined && prod.tax !== null) {
         setTax(String(prod.tax));
       }
+      hasPopulatedRef.current = productId;
     };
 
     const found = products.find(p => String(p.id) === String(productId) || (p as any)._id === productId);
@@ -318,7 +362,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         console.warn('Error loading local dropdown data:', localErr);
       }
 
-      // 2. Network fetch & sync
+      // 2. Non-blocking background network fetch & sync
       try {
         const [catRes, brandRes, unitRes] = await Promise.allSettled([
           apiClient.get(API_ENDPOINTS.CATEGORIES.BASE),
@@ -329,106 +373,39 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         if (!isMounted) return;
 
         // Categories
-        let catItems = catRes.status === 'fulfilled' ? extractList(catRes.value.data) : [];
-        let cats = catItems
-          .filter((c: any) => c && c.name)
-          .map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }));
-        if (cats.length === 0) {
-          const localCats = await categoryRepository.getAll().catch(() => []);
-          if (localCats.length > 0) {
-            cats = localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }));
+        const catItems = catRes.status === 'fulfilled' ? extractList(catRes.value.data) : [];
+        if (catItems.length > 0) {
+          const apiCats = catItems
+            .filter((c: any) => c && c.name)
+            .map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }));
+          if (apiCats.length > 0) {
+            setCategories(prev => dedupeOptions([...prev, ...apiCats]));
           }
         }
-        if (cats.length === 0) {
-          cats = [{ label: 'Electronics', value: '1' }, { label: 'Groceries', value: '2' }];
-        }
-        setCategories(dedupeOptions(cats));
 
         // Brands
-        let brandItems = brandRes.status === 'fulfilled' ? extractList(brandRes.value.data) : [];
-        let brnds = brandItems
-          .filter((b: any) => b && (b.name || b.brandName || b.title))
-          .map((b: any) => ({ label: b.name || b.brandName || b.title, value: String(b.id ?? b.backendId) }));
-
-        // Fallback 1: Local SQLite repository
-        if (brnds.length === 0) {
-          const localBrands = await brandRepository.getAll().catch(() => []);
-          if (localBrands.length > 0) {
-            brnds = localBrands
-              .filter((b: any) => b && b.name)
-              .map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) }));
+        const brandItems = brandRes.status === 'fulfilled' ? extractList(brandRes.value.data) : [];
+        if (brandItems.length > 0) {
+          const apiBrands = brandItems
+            .filter((b: any) => b && (b.name || b.brandName || b.title))
+            .map((b: any) => ({ label: b.name || b.brandName || b.title, value: String(b.id ?? b.backendId) }));
+          if (apiBrands.length > 0) {
+            setBrands(prev => dedupeOptions([...prev, ...apiBrands]));
           }
-        }
-
-        // Fallback 2: Product store brands
-        if (brnds.length === 0) {
-          const storeBrands = useProductStore.getState().brands || [];
-          if (storeBrands.length > 0) {
-            brnds = storeBrands
-              .filter((b: any) => b && b.name)
-              .map((b: any) => ({ label: b.name, value: String(b.id) }));
-          }
-        }
-
-        // Fallback 3: Brand store brands
-        if (brnds.length === 0) {
-          const defBrands = useBrandStore.getState().brands || [];
-          if (defBrands.length > 0) {
-            brnds = defBrands
-              .filter((b: any) => b && b.name)
-              .map((b: any) => ({ label: b.name, value: String(b.id) }));
-          }
-        }
-
-        if (brnds.length > 0) {
-          setBrands(prev => {
-            const map = new Map<string, string>();
-            prev.forEach(p => map.set(p.value, p.label));
-            brnds.forEach(b => map.set(b.value, b.label));
-            return dedupeOptions(Array.from(map.entries()).map(([value, label]) => ({ label, value })));
-          });
         }
 
         // Units
-        let unitItems = unitRes.status === 'fulfilled' ? extractList(unitRes.value.data) : [];
-        let unts = unitItems
-          .filter((u: any) => u && (u.name || u.shortName))
-          .map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }));
-        if (unts.length === 0) {
-          const localUnits = await unitRepository.getAll().catch(() => []);
-          if (localUnits.length > 0) {
-            unts = localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }));
+        const unitItems = unitRes.status === 'fulfilled' ? extractList(unitRes.value.data) : [];
+        if (unitItems.length > 0) {
+          const apiUnits = unitItems
+            .filter((u: any) => u && (u.name || u.shortName))
+            .map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }));
+          if (apiUnits.length > 0) {
+            setUnits(prev => dedupeOptions([...prev, ...apiUnits]));
           }
         }
-        if (unts.length === 0) {
-          unts = [{ label: 'Box', value: '1' }, { label: 'Dozen', value: '2' }, { label: 'Kg', value: '3' }, { label: 'Piece', value: '4' }];
-        }
-        setUnits(dedupeOptions(unts));
-
-        // Sync API brands to local repository in background
-        if (brandRes.status === 'fulfilled') {
-          void brandRepository.fetchFromApi().catch(() => {});
-        }
       } catch (error) {
-        console.error("Error fetching form data:", error);
-        if (isMounted) {
-          try {
-            const [localCats, localBrands, localUnits] = await Promise.all([
-              categoryRepository.getAll().catch(() => []),
-              brandRepository.getAll().catch(() => []),
-              unitRepository.getAll().catch(() => []),
-            ]);
-            if (localCats.length > 0) {
-              setCategories(dedupeOptions(localCats.filter((c: any) => c && c.name).map((c: any) => ({ label: c.name, value: String(c.id ?? c.backendId) }))));
-            }
-            if (localBrands.length > 0) {
-              setBrands(dedupeOptions(localBrands.filter((b: any) => b && b.name).map((b: any) => ({ label: b.name, value: String(b.id ?? b.backendId) }))));
-            }
-            if (localUnits.length > 0) {
-              setUnits(dedupeOptions(localUnits.filter((u: any) => u && (u.name || u.shortName)).map((u: any) => ({ label: u.name || u.shortName, value: String(u.id ?? u.backendId) }))));
-            }
-          } catch (_) {}
-        }
+        // Silently catch background network errors
       }
     };
 
@@ -452,19 +429,18 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       return;
     }
 
+    let isCurrent = true;
+
     const fetchSub = async () => {
       let allSubs: any[] = [];
 
-      // 1. Fetch from API
+      // 1. Fast local read: Zustand SubCategory store first
       try {
-        const res = await apiClient.get(`${API_ENDPOINTS.SUBCATEGORIES.BASE}?category_id=${selectedCategory}&categoryId=${selectedCategory}`);
-        const parsed = res.data?.data || res.data?.subcategories || res.data || [];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          allSubs = parsed;
+        const storeSubs = useSubCategoryStore.getState().subCategories;
+        if (Array.isArray(storeSubs) && storeSubs.length > 0) {
+          allSubs = storeSubs;
         }
-      } catch (error) {
-        // Fallback to local DB / Store
-      }
+      } catch (e) {}
 
       // 2. Fallback to local SQLite SubCategory repository
       if (allSubs.length === 0) {
@@ -476,103 +452,117 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         } catch (e) {}
       }
 
-      // 3. Fallback to Zustand SubCategory store
-      if (allSubs.length === 0) {
-        try {
-          const storeSubs = useSubCategoryStore.getState().subCategories;
-          if (Array.isArray(storeSubs) && storeSubs.length > 0) {
-            allSubs = storeSubs;
-          }
-        } catch (e) {}
-      }
-
       // Determine selected category label for name-based matching
-      const currentCat = categories.find(c => String(c.value) === String(selectedCategory));
+      const currentCat = categoriesRef.current.find(c => String(c.value) === String(selectedCategory));
       const currentCatName = (currentCat?.label || '').trim().toLowerCase();
 
-      // STRICT FILTER BY SELECTED CATEGORY ID OR NAME
-      let matched = allSubs.filter((item: any) => {
-        const itemCatId = item.categoryId ?? item.category_id ?? item.parentId ?? item.parent_id ?? 
-          (typeof item.category === 'object' && item.category !== null ? (item.category.id ?? item.category._id) : undefined);
+      const filterSubCats = (subsList: any[]) => {
+        let matched = subsList.filter((item: any) => {
+          const itemCatId = item.categoryId ?? item.category_id ?? item.parentId ?? item.parent_id ?? 
+            (typeof item.category === 'object' && item.category !== null ? (item.category.id ?? item.category._id) : undefined);
 
-        if (itemCatId !== undefined && itemCatId !== null && String(itemCatId).trim() !== '') {
-          if (String(itemCatId).trim() === String(selectedCategory).trim()) {
-            return true;
+          if (itemCatId !== undefined && itemCatId !== null && String(itemCatId).trim() !== '') {
+            if (String(itemCatId).trim() === String(selectedCategory).trim()) {
+              return true;
+            }
+          }
+
+          if (currentCatName) {
+            const itemCatName = (
+              typeof item.category === 'string' ? item.category :
+              (typeof item.category === 'object' && item.category?.name ? item.category.name :
+              item.categoryName || item.category_name || '')
+            ).trim().toLowerCase();
+
+            if (itemCatName && (itemCatName === currentCatName || currentCatName.includes(itemCatName) || itemCatName.includes(currentCatName))) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+
+        // Targeted fallback if category has no subcategories in database
+        if (matched.length === 0) {
+          if (String(selectedCategory) === '1' || currentCatName.includes('elect')) {
+            matched = [
+              { id: '101', name: 'Wearables' },
+              { id: '102', name: 'Speakers' },
+              { id: '103', name: 'Smart Watches' }
+            ];
+          } else if (String(selectedCategory) === '2' || currentCatName.includes('groc')) {
+            matched = [
+              { id: '201', name: 'Fresh Fruits' },
+              { id: '202', name: 'Vegetables' },
+              { id: '203', name: 'Dairy & Eggs' }
+            ];
+          } else if (currentCatName.includes('comp')) {
+            matched = [
+              { id: '301', name: 'Laptops' },
+              { id: '302', name: 'Desktop' }
+            ];
+          } else if (currentCatName.includes('shoe')) {
+            matched = [
+              { id: '401', name: 'Sneakers' },
+              { id: '402', name: 'Formals' }
+            ];
+          } else if (currentCatName.includes('bag')) {
+            matched = [
+              { id: '501', name: 'Handbags' },
+              { id: '502', name: 'Travel' }
+            ];
+          } else if (currentCatName.includes('furn')) {
+            matched = [
+              { id: '601', name: 'Sofa' },
+              { id: '602', name: 'Chair' }
+            ];
           }
         }
 
-        if (currentCatName) {
-          const itemCatName = (
-            typeof item.category === 'string' ? item.category :
-            (typeof item.category === 'object' && item.category?.name ? item.category.name :
-            item.categoryName || item.category_name || '')
-          ).trim().toLowerCase();
+        const subCategoryOptions = matched.map((c: any) => ({
+          label: c.name || c.subCategory || c.sub_category_name || c.title || 'Unnamed SubCategory',
+          value: String(c.id || c.backendId || c.subcategoryId || '')
+        }));
 
-          if (itemCatName && (itemCatName === currentCatName || currentCatName.includes(itemCatName) || itemCatName.includes(currentCatName))) {
-            return true;
+        const curSubVal = selectedSubCategoryRef.current;
+        if (curSubVal && !subCategoryOptions.some(opt => String(opt.value) === String(curSubVal))) {
+          const found = subsList.find((c: any) => String(c.id) === String(curSubVal) || String(c.backendId) === String(curSubVal));
+          if (found) {
+            subCategoryOptions.unshift({
+              label: found.name || 'SubCategory',
+              value: String(found.id || found.backendId)
+            });
           }
         }
 
-        return false;
-      });
+        return dedupeOptions(subCategoryOptions);
+      };
 
-      // Targeted fallback if category has no subcategories in database
-      if (matched.length === 0) {
-        if (String(selectedCategory) === '1' || currentCatName.includes('elect')) {
-          matched = [
-            { id: '101', name: 'Wearables' },
-            { id: '102', name: 'Speakers' },
-            { id: '103', name: 'Smart Watches' }
-          ];
-        } else if (String(selectedCategory) === '2' || currentCatName.includes('groc')) {
-          matched = [
-            { id: '201', name: 'Fresh Fruits' },
-            { id: '202', name: 'Vegetables' },
-            { id: '203', name: 'Dairy & Eggs' }
-          ];
-        } else if (currentCatName.includes('comp')) {
-          matched = [
-            { id: '301', name: 'Laptops' },
-            { id: '302', name: 'Desktop' }
-          ];
-        } else if (currentCatName.includes('shoe')) {
-          matched = [
-            { id: '401', name: 'Sneakers' },
-            { id: '402', name: 'Formals' }
-          ];
-        } else if (currentCatName.includes('bag')) {
-          matched = [
-            { id: '501', name: 'Handbags' },
-            { id: '502', name: 'Travel' }
-          ];
-        } else if (currentCatName.includes('furn')) {
-          matched = [
-            { id: '601', name: 'Sofa' },
-            { id: '602', name: 'Chair' }
-          ];
-        }
+      // Set immediately from local data if available
+      if (allSubs.length > 0 && isCurrent) {
+        setSubCategories(filterSubCats(allSubs));
       }
 
-      const subCategoryOptions = matched.map((c: any) => ({
-        label: c.name || c.subCategory || c.sub_category_name || c.title || 'Unnamed SubCategory',
-        value: String(c.id || c.backendId || c.subcategoryId || '')
-      }));
-
-      if (selectedSubCategory && !subCategoryOptions.some(opt => String(opt.value) === String(selectedSubCategory))) {
-        const found = allSubs.find((c: any) => String(c.id) === String(selectedSubCategory) || String(c.backendId) === String(selectedSubCategory));
-        if (found) {
-          subCategoryOptions.unshift({
-            label: found.name || 'SubCategory',
-            value: String(found.id || found.backendId)
-          });
+      // Background network fetch
+      try {
+        const res = await apiClient.get(`${API_ENDPOINTS.SUBCATEGORIES.BASE}?category_id=${selectedCategory}&categoryId=${selectedCategory}`);
+        const parsed = res.data?.data || res.data?.subcategories || res.data || [];
+        if (Array.isArray(parsed) && parsed.length > 0 && isCurrent) {
+          setSubCategories(filterSubCats(parsed));
+        }
+      } catch (error) {
+        if (allSubs.length === 0 && isCurrent) {
+          setSubCategories(filterSubCats([]));
         }
       }
-
-      setSubCategories(dedupeOptions(subCategoryOptions));
     };
 
     fetchSub();
-  }, [selectedCategory, categories, selectedSubCategory]);
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedCategory]);
 
   // Fetch sub-units when base unit changes
   useEffect(() => {
@@ -581,46 +571,63 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       setRawSubUnits([]);
       return;
     }
+
+    let isCurrent = true;
+
     const fetchSubUnits = async () => {
       let subs: any[] = [];
       try {
-        const res = await apiClient.get(`${API_ENDPOINTS.SUBUNITS.BASE}?unit_id=${selectedUnit}`);
-        subs = res.data?.data || res.data || [];
-      } catch (error) {
-        // Fallback to local subUnitRepository
-        try {
-          const localSubs = await subUnitRepository.getAll();
-          subs = localSubs.filter((u: any) => 
-            String(u.parentUnitId) === String(selectedUnit) || 
-            String(u.backendId) === String(selectedUnit)
-          );
-          if (subs.length === 0) subs = localSubs;
-        } catch (e) {}
-      }
+        const localSubs = await subUnitRepository.getAll();
+        const filtered = localSubs.filter((u: any) => 
+          String(u.parentUnitId) === String(selectedUnit) || 
+          String(u.backendId) === String(selectedUnit)
+        );
+        subs = filtered.length > 0 ? filtered : localSubs;
+      } catch (e) {}
 
-      // Do not inject fake subunit IDs that do not exist in DB
-      setRawSubUnits(subs);
-      const subOptions = subs.map((u: any) => ({ 
-        label: u.name, 
-        value: u.id?.toString(),
-        multiplier: u.multiplier || 1
-      }));
+      const applySubs = (rawList: any[]) => {
+        setRawSubUnits(rawList);
+        const subOptions = rawList.map((u: any) => ({ 
+          label: u.name, 
+          value: u.id?.toString(),
+          multiplier: u.multiplier || 1
+        }));
 
-      if (selectedSubUnit && !subOptions.some(opt => String(opt.value) === String(selectedSubUnit))) {
-        const foundSub = subs.find((u: any) => String(u.id) === String(selectedSubUnit));
-        if (foundSub) {
-          subOptions.unshift({
-            label: foundSub.name,
-            value: String(foundSub.id),
-            multiplier: foundSub.multiplier || 1
-          });
+        const curSubUnit = selectedSubUnitRef.current;
+        if (curSubUnit && !subOptions.some(opt => String(opt.value) === String(curSubUnit))) {
+          const foundSub = rawList.find((u: any) => String(u.id) === String(curSubUnit));
+          if (foundSub) {
+            subOptions.unshift({
+              label: foundSub.name,
+              value: String(foundSub.id),
+              multiplier: foundSub.multiplier || 1
+            });
+          }
         }
+
+        setSubUnitsList(dedupeOptions(subOptions));
+      };
+
+      if (subs.length > 0 && isCurrent) {
+        applySubs(subs);
       }
 
-      setSubUnitsList(dedupeOptions(subOptions));
+      // Background API fetch
+      try {
+        const res = await apiClient.get(`${API_ENDPOINTS.SUBUNITS.BASE}?unit_id=${selectedUnit}`);
+        const apiSubs = res.data?.data || res.data || [];
+        if (Array.isArray(apiSubs) && apiSubs.length > 0 && isCurrent) {
+          applySubs(apiSubs);
+        }
+      } catch (error) {}
     };
+
     fetchSubUnits();
-  }, [selectedUnit, selectedSubUnit]);
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedUnit]);
 
   // Handle SKU Generation
   const handleGenerateSku = () => {
@@ -780,53 +787,6 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         console.warn('Repository save warning:', repoErr);
       }
 
-      // Direct API update for sync
-      try {
-        const apiPayload: any = {
-          name: productData.name,
-          sku: productData.sku,
-          productCode: productData.sku,
-          baseUnitId: productData.baseUnitId || (productData.unitId ? Number(productData.unitId) : 1),
-          subUnitId: productData.subUnitId ? Number(productData.subUnitId) : null,
-          subunitId: productData.subUnitId ? Number(productData.subUnitId) : null,
-          conversionRate: productData.conversionRate ? Number(productData.conversionRate) : 1,
-          categoryId: productData.categoryId ? Number(productData.categoryId) : null,
-          subCategoryId: productData.subCategoryId ? Number(productData.subCategoryId) : null,
-          brandId: productData.brandId ? Number(productData.brandId) : null,
-          purchasePrice: productData.purchasePrice !== undefined ? Number(productData.purchasePrice) : null,
-          wholesalePrice: productData.wholesalePrice !== undefined ? Number(productData.wholesalePrice) : null,
-          retailPrice: productData.retailPrice !== undefined ? Number(productData.retailPrice) : null,
-          barcode: productData.barcode || null,
-          description: productData.description || null,
-          lowStockLevel: productData.lowStockThreshold !== undefined ? Number(productData.lowStockThreshold) : null,
-          openingStock: productData.stockQuantity,
-          stockQuantity: productData.stockQuantity,
-        };
-        if (productId) {
-          const res = await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(productId), apiPayload);
-          const serverData = res.data?.data || res.data;
-          if (serverData) {
-            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
-            productData.syncStatus = 'synced';
-            await productRepository.update(productData as any);
-            updateProduct(productData);
-          }
-        } else {
-          const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, apiPayload);
-          const serverData = res.data?.data || res.data;
-          if (serverData?.id) {
-            productData.id = Number(serverData.id);
-            if (serverData.updatedAt) productData.updatedAt = serverData.updatedAt;
-            if (serverData.createdAt) productData.createdAt = serverData.createdAt;
-            productData.syncStatus = 'synced';
-            await productRepository.update(productData as any);
-            addProduct(productData);
-          }
-        }
-      } catch (apiErr) {
-        console.warn('API sync warning:', apiErr);
-      }
-
       fetchProducts(true).catch(() => {});
 
       Alert.alert('Success', `Product ${productId ? 'updated' : 'added'} successfully!`);
@@ -843,6 +803,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       <ScrollView 
         style={styles.scrollArea} 
         contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled={true}
+        keyboardDismissMode="on-drag"
       >
         
         {/* Back Button */}
@@ -1388,18 +1351,6 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
             } catch (e) {
               console.warn('Failed to insert brand locally:', e);
             }
-            try {
-              const res = await apiClient.post(API_ENDPOINTS.BRANDS.BASE, { name, status: 'Active' });
-              const created = res.data?.data || res.data;
-              if (created?.id) {
-                brandItem.id = Number(created.id);
-                brandItem.syncStatus = 'synced';
-                await brandRepository.update(brandItem, false).catch(() => {});
-              }
-            } catch (e) {
-              console.warn('Failed to sync brand to API:', e);
-            }
-
             const val = String(brandItem.id);
             setBrands(prev => dedupeOptions([...prev, { label: name, value: val }]));
             setSelectedBrand(val);

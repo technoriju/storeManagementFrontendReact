@@ -1190,8 +1190,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
+    height: 34,
+    borderRadius: 6,
   },
   actionBtnText: {
     color: '#FFFFFF',

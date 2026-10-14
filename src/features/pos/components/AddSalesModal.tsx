@@ -15,6 +15,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { ProductSearchSelect } from '../../../shared/components/inputs/ProductSearchSelect';
 import {
   X,
   Plus,
@@ -130,9 +131,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
   useEffect(() => {
     if (visible) {
-      fetchProducts().catch(() => {});
-      setSearchQuery('');
-      setIsSearching(false);
       setErrorMessage(null);
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
@@ -498,19 +496,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     return p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : undefined) || 'N/A';
   };
 
-  // Filtered Products for Live Search
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchName = p.name?.toLowerCase().includes(query);
-      const matchSku = p.sku?.toLowerCase().includes(query);
-      const matchBarcode = p.barcode?.toLowerCase().includes(query);
-      const bName = p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : '') || '';
-      const matchBrand = bName.toLowerCase().includes(query);
-      return matchName || matchSku || matchBarcode || matchBrand;
-    }).slice(0, 10);
-  }, [searchQuery, products, brandsMap]);
+
 
   // Add Product to Table
   const handleAddProduct = (product: Product) => {
@@ -1156,108 +1142,16 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               {/* Row 2: Live Product Search */}
               <View
                 style={{
-                  zIndex: isSearching && (filteredProducts.length > 0 || searchQuery.trim().length > 0) ? 9999 : 100,
-                  elevation: Platform.OS === 'android' ? (isSearching ? 50 : 5) : undefined,
+                  zIndex: 9999,
+                  elevation: Platform.OS === 'android' ? 50 : undefined,
                 }}
               >
-                <Text style={{ color: theme.colors.text, marginBottom: 6, fontWeight: '500' }}>
-                  Search & Add Product * ({priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})
-                </Text>
-                <View
-                  style={[
-                    styles.searchBar,
-                    {
-                      borderColor: theme.colors.border,
-                      backgroundColor: theme.colors.background,
-                    },
-                  ]}
-                >
-                  <Search size={18} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={[styles.searchInput, { color: theme.colors.text }]}
-                    placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={(q) => {
-                      setSearchQuery(q);
-                      setIsSearching(true);
-                    }}
-                    onFocus={() => setIsSearching(true)}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <X size={16} color={theme.colors.textSecondary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Search Results Dropdown */}
-                {isSearching && filteredProducts.length > 0 && (
-                  <View
-                    style={[
-                      styles.searchResultsDropdown,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                      },
-                    ]}
-                  >
-                    <ScrollView
-                      nestedScrollEnabled={true}
-                      keyboardShouldPersistTaps="always"
-                      style={{ maxHeight: 260 }}
-                      showsVerticalScrollIndicator={true}
-                    >
-                      {filteredProducts.map((p) => {
-                        const activePrice = getProductPriceByType(p, priceType);
-                        return (
-                          <TouchableOpacity
-                            key={p.id}
-                            style={[
-                              styles.searchResultItem,
-                              { borderBottomColor: theme.colors.border },
-                            ]}
-                            onPress={() => handleAddProduct(p)}
-                          >
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                              <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
-                                {p.name}
-                              </Text>
-                              <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                                Brand: {getBrandName(p)} | Stock: {p.stockQuantity ?? 0} | Tax: {p.gst || 0}% | SKU: {p.sku || 'N/A'}
-                              </Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                              <Text style={{ color: '#F97316', fontWeight: '700', fontSize: 13 }}>
-                                ₹{Number(activePrice).toFixed(2)}
-                              </Text>
-                              <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>
-                                {priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'}
-                              </Text>
-                              <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '600', marginTop: 2 }}>+ Add Item</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-                {isSearching && searchQuery.trim().length > 0 && filteredProducts.length === 0 && (
-                  <View
-                    style={[
-                      styles.searchResultsDropdown,
-                      {
-                        backgroundColor: theme.colors.surface,
-                        borderColor: theme.colors.border,
-                        padding: 12,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', fontSize: 12 }}>
-                      No matching products found.
-                    </Text>
-                  </View>
-                )}
+                <ProductSearchSelect
+                  label={`Search & Add Product * (${priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})`}
+                  priceType={priceType}
+                  placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
+                  onSelectProduct={handleAddProduct}
+                />
               </View>
 
               {/* Table Area: Added Products List */}
@@ -1753,15 +1647,16 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           {/* Footer Actions */}
           <View style={[
             styles.footer,
-            { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 16 },
+            { borderTopColor: theme.colors.border, padding: isMobile ? 12 : 14 },
             isMobile && { flexDirection: 'column-reverse', gap: 8, alignItems: 'stretch' },
           ]}>
             <AppButton
               title="Cancel"
               variant="outline"
+              size="small"
               onPress={onClose}
-              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 100 }, isMobile && { width: '100%' }]}
-              textStyle={{ color: 'white' }}
+              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 80, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ color: 'white', fontSize: 13 }}
             />
             <AppButton
               title={
@@ -1771,9 +1666,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   ? 'Update Sale'
                   : 'Submit Sale'
               }
+              size="small"
               onPress={handleSubmit}
               disabled={isSubmitting || createSaleMutation.isPending || updateSaleMutation.isPending}
-              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 140 }, isMobile && { width: '100%' }]}
+              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 120, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ fontSize: 13 }}
             />
           </View>
         </View>
@@ -1945,12 +1842,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tierButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#F8FAFC',
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tierButtonActiveWholesale: {
     backgroundColor: '#10B981',
@@ -1961,7 +1861,7 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F6',
   },
   tierButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
@@ -2071,9 +1971,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
-    gap: 12,
+    gap: 10,
     flexShrink: 0,
   },
   qtyStepperBtn: {
@@ -2101,22 +2002,24 @@ const styles = StyleSheet.create({
   customerInput: {
     borderWidth: 1,
     borderRadius: 6,
-    height: 42,
+    height: 40,
     paddingHorizontal: 12,
-    fontSize: 14,
+    fontSize: 13,
   },
   modalCancelBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalSaveBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 6,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },

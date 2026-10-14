@@ -37,8 +37,9 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     }
   }
 
-  async delete(id: number, shouldSync = true): Promise<void> {
-    const entity = await this.getById(id);
+  async delete(entityOrId: number | SubCategory, shouldSync = true): Promise<void> {
+    const id = typeof entityOrId === 'number' ? entityOrId : entityOrId.id;
+    const entity = typeof entityOrId === 'number' ? await this.getById(id) : entityOrId;
     if (!entity) return;
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
@@ -110,7 +111,10 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
       
       // Send only fields accepted by the subcategory API.
       // Ensure categoryId is a valid number for NestJS validator.
-      const numericCategoryId = Number(categoryId) || 1;
+      const numericCategoryId = Number(categoryId);
+      if (!Number.isFinite(numericCategoryId) || numericCategoryId <= 0) {
+        throw new Error('Sub category requires valid categoryId');
+      }
       const apiPayload = { name, description, categoryId: numericCategoryId, status: status || 'active' };
       
       let syncSuccess = false;
@@ -228,9 +232,34 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
           const existing = await super.getById(item.id);
           if (existing) {
             // Never overwrite local pending changes during a background pull.
-            if (existing.syncStatus === 'synced') await super.update(item, false);
+            if (existing.syncStatus === 'synced') {
+              await super.update(item, false);
+              const duplicateResult = await db.execute(
+                `SELECT id FROM sub_categories WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
+                [item.name, item.id],
+              );
+              const duplicateRow = Array.isArray(duplicateResult.rows) ? duplicateResult.rows[0] : undefined;
+              if (duplicateRow) {
+                await db.execute(`DELETE FROM sub_categories WHERE id = ?`, [duplicateRow.id]);
+                await outboxRepo.removeForEntity('sub_categories', Number(duplicateRow.id));
+              }
+            }
           } else {
-            await this.insert(item, false);
+            const pendingResult = await db.execute(
+              `SELECT id FROM sub_categories WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
+              [item.name],
+            );
+            const pendingRow = Array.isArray(pendingResult.rows) ? pendingResult.rows[0] : undefined;
+            if (pendingRow && String(pendingRow.id) !== String(item.id)) {
+              await db.execute(`DELETE FROM sub_categories WHERE id = ?`, [item.id]);
+              await db.execute(
+                `UPDATE sub_categories SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
+                [item.id, item.id, pendingRow.id],
+              );
+              await outboxRepo.rebaseEntity('sub_categories', Number(pendingRow.id), Number(item.id), Number(item.id));
+            } else {
+              await this.insert(item, false);
+            }
           }
 
           normalizedItems.push(item as SubCategory);

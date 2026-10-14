@@ -13,11 +13,12 @@ import {
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
-import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { ProductSearchSelect } from '../../../shared/components/inputs/ProductSearchSelect';
 import { X, Layers, AlertCircle, CheckCircle2 } from 'lucide-react-native';
 import { useProductStore } from '../../products/store/productStore';
 import { useAddStock } from '../api/useStock';
+import { Product } from '../../products/types';
 
 interface AddStockModalProps {
   visible: boolean;
@@ -34,10 +35,11 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
-  const { products, fetchProducts } = useProductStore();
+  const { fetchProductById } = useProductStore();
   const addStockMutation = useAddStock();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState<string>('');
   const [unitCost, setUnitCost] = useState<string>('');
   const [reason, setReason] = useState<string>('Direct Stock In');
@@ -47,38 +49,26 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      if (products.length === 0) {
-        fetchProducts().catch(() => {});
+      const pid = preselectedProductId ? String(preselectedProductId) : '';
+      setSelectedProductId(pid);
+      if (pid) {
+        fetchProductById(pid).then((p) => {
+          if (p) {
+            setSelectedProduct(p);
+            const price = p.purchasePrice ?? p.cost ?? 0;
+            setUnitCost(price > 0 ? String(price) : '');
+          }
+        }).catch(() => {});
+      } else {
+        setSelectedProduct(null);
       }
-      setSelectedProductId(preselectedProductId ? String(preselectedProductId) : '');
       setQuantity('');
       setReason('Direct Stock In');
       setReference(`STK-${Math.floor(100000 + Math.random() * 900000)}`);
       setNotes('');
       setErrorMessage(null);
     }
-  }, [visible, preselectedProductId, products.length, fetchProducts]);
-
-  // Selected product object
-  const selectedProduct = useMemo(() => {
-    if (!selectedProductId) return null;
-    return products.find((p) => String(p.id) === String(selectedProductId)) || null;
-  }, [selectedProductId, products]);
-
-  // When product changes, pre-fill cost
-  useEffect(() => {
-    if (selectedProduct) {
-      const price = selectedProduct.purchasePrice ?? selectedProduct.cost ?? 0;
-      setUnitCost(price > 0 ? String(price) : '');
-    }
-  }, [selectedProduct]);
-
-  const productOptions = useMemo(() => {
-    return products.map((p) => ({
-      label: `${p.name} (${p.sku || p.productCode || 'No SKU'})`,
-      value: String(p.id),
-    }));
-  }, [products]);
+  }, [visible, preselectedProductId, fetchProductById]);
 
   const reasonPresets = [
     'Direct Stock In',
@@ -119,11 +109,6 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
     }
   };
 
-  const currentStock = Number(
-    selectedProduct?.stockQuantity ?? selectedProduct?.openingStock ?? 0,
-  );
-  const unitName = selectedProduct?.unit || 'pcs';
-
   return (
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -153,42 +138,25 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
 
                 {/* Product Select */}
                 <View style={{ marginBottom: 16 }}>
-                  <AppSelect
-                    label={
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={[styles.label, { color: theme.colors.text }]}>Select Product</Text>
-                        <Text style={styles.required}> *</Text>
-                      </View>
-                    }
-                    placeholder="Choose product to restock..."
-                    options={productOptions}
-                    value={selectedProductId}
-                    onSelect={(val) => setSelectedProductId(String(val))}
-                    searchable
+                  <ProductSearchSelect
+                    mode="select"
+                    label="Select Product *"
+                    priceType="purchase"
+                    placeholder="Search product to restock..."
+                    selectedProductId={selectedProductId}
+                    selectedProduct={selectedProduct}
+                    onSelectProduct={(p) => {
+                      setSelectedProductId(String(p.id));
+                      setSelectedProduct(p);
+                      const price = p.purchasePrice ?? p.cost ?? 0;
+                      setUnitCost(price > 0 ? String(price) : '');
+                    }}
+                    onClearSelection={() => {
+                      setSelectedProductId('');
+                      setSelectedProduct(null);
+                      setUnitCost('');
+                    }}
                   />
-
-                  {/* Product Stock Preview Card */}
-                  {selectedProduct && (
-                    <View style={[styles.stockCard, { backgroundColor: theme.colors.background }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.productNameText, { color: theme.colors.text }]}>
-                          {selectedProduct.name}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                          SKU: {selectedProduct.sku || 'N/A'} | Category: {selectedProduct.categoryName || 'General'}
-                        </Text>
-                      </View>
-                      <View style={styles.stockBadgeContainer}>
-                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Current Stock</Text>
-                        <Text style={[
-                          styles.stockBadgeValue,
-                          { color: currentStock > 0 ? '#10B981' : '#EF4444' }
-                        ]}>
-                          {currentStock} {unitName}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
                 </View>
 
                 {/* Quantity and Unit Price row */}
@@ -275,12 +243,14 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
               ]}>
                 <AppButton
                   title="Cancel"
+                  size="small"
                   onPress={onClose}
                   style={[styles.cancelBtn, isMobile && { width: '100%' }]}
                   textStyle={{ color: '#FFF' }}
                 />
                 <AppButton
                   title="Add Stock"
+                  size="small"
                   onPress={handleSubmit}
                   style={[styles.submitBtn, isMobile && { width: '100%' }]}
                   disabled={addStockMutation.isPending}
@@ -314,7 +284,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   headerIcon: {
@@ -364,27 +334,6 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 14,
   },
-  stockCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  productNameText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  stockBadgeContainer: {
-    alignItems: 'flex-end',
-  },
-  stockBadgeValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 2,
-  },
   row: {
     flexDirection: 'row',
     gap: 12,
@@ -402,21 +351,21 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
-    gap: 12,
+    gap: 10,
   },
   cancelBtn: {
     backgroundColor: '#0F2847',
     borderRadius: 6,
-    height: 40,
-    paddingHorizontal: 20,
+    height: 34,
+    paddingHorizontal: 16,
   },
   submitBtn: {
     backgroundColor: '#F97316',
     borderRadius: 6,
-    height: 40,
-    paddingHorizontal: 22,
+    height: 34,
+    paddingHorizontal: 18,
   },
 });

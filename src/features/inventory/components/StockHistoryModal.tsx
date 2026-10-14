@@ -167,6 +167,7 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
                 </TouchableOpacity>
                 <AppButton
                   title="Close"
+                  size="small"
                   onPress={onClose}
                   style={[styles.closeBtn, isMobile && { width: '100%' }]}
                   textStyle={{ color: '#FFF' }}
@@ -289,12 +290,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 12,
-    height: 36,
+    height: 34,
   },
   closeBtn: {
     backgroundColor: '#0F2847',
     borderRadius: 6,
-    height: 36,
-    paddingHorizontal: 20,
+    height: 34,
+    paddingHorizontal: 16,
   },
 });

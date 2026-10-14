@@ -5,15 +5,17 @@ import { Category } from '../../../types/models';
 export const CATEGORY_QUERY_KEY = ['categories'];
 
 export const useCategories = () => {
-  const queryClient = useQueryClient();
   return useQuery({
     queryKey: CATEGORY_QUERY_KEY,
     queryFn: async () => {
-      const localCategories = await categoryRepository.getAll();
-      void categoryRepository.fetchFromApi().then(async () => {
-          queryClient.setQueryData(CATEGORY_QUERY_KEY, await categoryRepository.getAll());
-      });
-      return localCategories;
+      try {
+        // Return full API result. Local DB can lag during multi-row sync.
+        const apiCategories = await categoryRepository.fetchFromApi();
+        if (apiCategories.length > 0) return apiCategories;
+      } catch (_) {
+        // Fall back to local data while offline.
+      }
+      return categoryRepository.getAll();
     },
   });
 };
@@ -38,7 +40,7 @@ export const useAddCategory = () => {
         if (!oldData) return [newCategory];
         return [...oldData, newCategory];
       });
-      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };
@@ -68,7 +70,7 @@ export const useUpdateCategory = () => {
         if (!oldData) return [syncedCategory];
         return oldData.map(c => String(c.id) === String(syncedCategory.id) ? syncedCategory : c);
       });
-      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };
@@ -77,15 +79,16 @@ export const useDeleteCategory = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (id: number) => {
-      await categoryRepository.delete(id);
+    mutationFn: async (category: Category) => {
+      await categoryRepository.delete(category);
+      return category.id;
     },
     onSuccess: (_, deletedId) => {
       queryClient.setQueryData(CATEGORY_QUERY_KEY, (oldData: Category[] | undefined) => {
         if (!oldData) return [];
-        return oldData.filter(c => c.id !== deletedId);
+        return oldData.filter(c => String(c.id) !== String(deletedId));
       });
-      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CATEGORY_QUERY_KEY, refetchType: 'none' });
     },
   });
 };

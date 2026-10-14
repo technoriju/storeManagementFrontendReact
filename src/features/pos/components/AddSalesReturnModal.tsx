@@ -15,16 +15,14 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { ProductSearchSelect } from '../../../shared/components/inputs/ProductSearchSelect';
 import {
   X,
-  Search,
   Trash2,
   RotateCcw,
   AlertCircle,
 } from 'lucide-react-native';
 import { useCustomers } from '../../customers/api/useCustomer';
-import { useProductStore } from '../../products/store/productStore';
-import { useBrands } from '../../brands/api/useBrand';
 import { useCreateSaleReturn } from '../api/useSalesReturns';
 import { useSales } from '../api/useSales';
 import { Product } from '../../products/types';
@@ -50,8 +48,6 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
   const { data: customers = [] } = useCustomers();
   const { data: sales = [] } = useSales();
-  const { products, fetchProducts } = useProductStore();
-  const { data: brandsList = [] } = useBrands();
   const createSaleReturnMutation = useCreateSaleReturn();
 
   const [customerId, setCustomerId] = useState<string>('');
@@ -61,21 +57,16 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
   const [reason, setReason] = useState<string>('');
   const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
 
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isSearching, setIsSearching] = useState<boolean>(false);
   const [items, setItems] = useState<ReturnItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
-      if (products.length === 0) {
-        fetchProducts().catch(() => {});
-      }
       setDate(new Date().toISOString().split('T')[0]);
       setReturnNumber(`SRT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
-  }, [visible, products.length, fetchProducts]);
+  }, [visible]);
 
   const customerOptions = useMemo(() => {
     return customers.map((c) => ({
@@ -99,30 +90,6 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
     { label: 'Received (Restock to inventory)', value: 'Received' },
     { label: 'Pending Inspection', value: 'Pending' },
   ];
-
-  const brandsMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    brandsList.forEach((b: any) => {
-      if (b && b.id && b.name) map[String(b.id)] = b.name;
-    });
-    return map;
-  }, [brandsList]);
-
-  const getBrandName = (p: Product) => {
-    return p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : undefined) || 'N/A';
-  };
-
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const q = searchQuery.toLowerCase().trim();
-    return products.filter((p) => {
-      const matchName = p.name?.toLowerCase().includes(q);
-      const matchSku = p.sku?.toLowerCase().includes(q);
-      const bName = p.brandName || p.brand?.name || (p.brandId ? brandsMap[String(p.brandId)] : '') || '';
-      const matchBrand = bName.toLowerCase().includes(q);
-      return matchName || matchSku || matchBrand;
-    }).slice(0, 10);
-  }, [searchQuery, products, brandsMap]);
 
   const handleSelectProduct = (product: Product) => {
     const existingIndex = items.findIndex((i) => i.productId === product.id);
@@ -149,8 +116,6 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
         },
       ]);
     }
-    setSearchQuery('');
-    setIsSearching(false);
   };
 
   const handleUpdateQuantityRaw = (index: number, val: string) => {
@@ -301,50 +266,12 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
             {/* Product Search */}
             <View style={{ marginTop: 12, zIndex: 100, elevation: Platform.OS === 'android' ? 5 : undefined }}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Add Returned Products *</Text>
-              <View style={[styles.searchWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
-                <Search size={18} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.text }]}
-                  placeholder="Scan barcode or type product name/sku..."
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={searchQuery}
-                  onChangeText={(text) => {
-                    setSearchQuery(text);
-                    setIsSearching(true);
-                  }}
-                  onFocus={() => setIsSearching(true)}
-                />
-              </View>
-
-              {isSearching && filteredProducts.length > 0 && (
-                <View style={[styles.searchDropdown, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  <ScrollView
-                    nestedScrollEnabled={true}
-                    keyboardShouldPersistTaps="handled"
-                    style={{ maxHeight: 260 }}
-                    showsVerticalScrollIndicator={true}
-                  >
-                    {filteredProducts.map((p) => (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={[styles.searchDropdownItem, { borderBottomColor: theme.colors.border }]}
-                        onPress={() => handleSelectProduct(p)}
-                      >
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <Text style={{ color: theme.colors.text, fontWeight: '500' }} numberOfLines={1}>{p.name}</Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                            Brand: {getBrandName(p)} | Stock: {p.stockQuantity ?? 0} | Tax: {p.gst || 0}% | SKU: {p.sku || 'N/A'}
-                          </Text>
-                        </View>
-                        <Text style={{ color: theme.colors.primary, fontWeight: '600', flexShrink: 0 }}>
-                          ₹{Number(p.retailPrice || p.price || 0).toFixed(2)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              <ProductSearchSelect
+                label="Add Returned Products *"
+                priceType="retail"
+                placeholder="Scan barcode or type product name/sku..."
+                onSelectProduct={handleSelectProduct}
+              />
             </View>
 
             {/* Items Table */}
@@ -455,14 +382,16 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
             <AppButton
               title="Cancel"
               variant="outline"
+              size="small"
               onPress={onClose}
-              style={[isMobile && { width: '100%' }, { minWidth: 100 }]}
+              style={[isMobile && { width: '100%' }, { minWidth: 80, height: 34 }]}
             />
             <AppButton
               title={createSaleReturnMutation.isPending ? 'Processing...' : 'Submit Return'}
+              size="small"
               onPress={handleSubmit}
               disabled={createSaleReturnMutation.isPending}
-              style={[isMobile && { width: '100%' }, { minWidth: 140, backgroundColor: '#0EA5E9' }]}
+              style={[isMobile && { width: '100%' }, { minWidth: 120, height: 34, backgroundColor: '#0EA5E9' }]}
             />
           </View>
         </View>
@@ -483,31 +412,6 @@ const styles = StyleSheet.create({
   formRowCol: { flexDirection: 'column', gap: 8 },
   formCol: { flex: 1 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
-  searchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, height: 40 },
-  searchInput: { flex: 1, height: '100%', fontSize: 13 },
-  searchDropdown: {
-    position: 'absolute',
-    top: 68,
-    left: 0,
-    right: 0,
-    borderWidth: 1,
-    borderRadius: 8,
-    elevation: 10,
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    zIndex: 9999,
-    maxHeight: 260,
-    overflow: 'hidden',
-  },
-  searchDropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 52,
-    borderBottomWidth: 1,
-  },
   emptyBox: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, padding: 24, alignItems: 'center' },
   tableContainer: { borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
   tableHeader: { flexDirection: 'row', padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
@@ -515,5 +419,5 @@ const styles = StyleSheet.create({
   tableRow: { flexDirection: 'row', alignItems: 'center', padding: 10, borderBottomWidth: 1 },
   qtyBtn: { width: 24, height: 24, borderWidth: 1, borderRadius: 4, justifyContent: 'center', alignItems: 'center' },
   totalsCard: { borderWidth: 1, borderRadius: 8, padding: 16 },
-  footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, padding: 16, borderTopWidth: 1 },
+  footer: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1 },
 });

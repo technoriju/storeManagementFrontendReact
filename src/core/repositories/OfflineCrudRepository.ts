@@ -51,7 +51,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
   }
 
   async update(entity: T, shouldSync = true) {
-    const local = { ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' } as T;
+    // Keep fields omitted by edit forms, especially backendId and createdAt.
+    const existing = await this.getById(entity.id);
+    const local = { ...(existing || {}), ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' } as T;
     await super.update(local, false);
     if (shouldSync) {
       await outboxRepo.add(this.config.entityType, local.id, 'UPDATE', local);
@@ -59,39 +61,47 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     }
   }
 
-  async delete(id: number, shouldSync = true) {
-    const entity = await this.getById(id);
-    if (!entity) return;
+  async delete(entityOrId: number | string | T, shouldSync = true) {
+    const id = typeof entityOrId === 'object' && entityOrId !== null ? (entityOrId as any).id : entityOrId;
+    const entity = typeof entityOrId === 'object' && entityOrId !== null ? entityOrId : await this.getById(Number(id));
+    const syncEntity = entity || ({ id: Number(id), backendId: Number(id) } as any);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (!shouldSync) return;
-    await tombstoneRepo.add(this.config.entityType, id);
-    await outboxRepo.removeForEntity(this.config.entityType, id);
-    if (/^\d+$/.test(String((entity as any).backendId || entity.id))) {
-      await outboxRepo.add(this.config.entityType, id, 'DELETE', entity);
+    await tombstoneRepo.add(this.config.entityType, Number(id));
+    await outboxRepo.removeForEntity(this.config.entityType, Number(id));
+    if (/^\d+$/.test(String((syncEntity as any).backendId || syncEntity.id))) {
+      await outboxRepo.add(this.config.entityType, Number(id), 'DELETE', syncEntity);
       this.requestSync();
     }
   }
 
   protected async syncWithApi(entity: T, operation: Operation) {
-    const payload = this.config.payload(entity);
-    const serverId = Number((entity as any).backendId || entity.id);
-    let response: any;
-    if (operation === 'insert') response = await apiClient.post(this.config.endpoint.BASE, payload);
-    if (operation === 'update') response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
-    if (operation === 'delete') response = await apiClient.delete(this.config.endpoint.BY_ID(serverId));
+    try {
+      const payload = this.config.payload(entity);
+      const serverId = Number((entity as any).backendId || entity.id);
+      let response: any;
+      if (operation === 'insert') response = await apiClient.post(this.config.endpoint.BASE, payload);
+      if (operation === 'update') response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
+      if (operation === 'delete') response = await apiClient.delete(this.config.endpoint.BY_ID(serverId));
 
-    if (operation === 'insert') {
-      const body = response?.data?.data || response?.data || {};
-      const entityName = this.config.tableName.slice(0, -1);
-      const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-      const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`];
-      if (returnedId && String(returnedId) !== String(entity.id)) {
-        await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
-        await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
-        return;
+      if (operation === 'insert') {
+        const body = response?.data?.data || response?.data || {};
+        const entityName = this.config.tableName.slice(0, -1);
+        const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`];
+        if (returnedId && String(returnedId) !== String(entity.id)) {
+          await db.execute(`UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`, [Number(returnedId), Number(returnedId), entity.id]);
+          await outboxRepo.rebaseEntity(this.config.entityType, entity.id as number, Number(returnedId), Number(returnedId));
+          return;
+        }
       }
+      if (operation !== 'delete') await super.update({ ...entity, syncStatus: 'synced' } as T, false);
+    } catch (error: any) {
+      const status = error?.response?.status ?? error?.response?.data?.statusCode ?? error?.status;
+      // DELETE is idempotent. Missing server row is already deleted.
+      if (operation === 'delete' && status >= 400 && status < 500) return;
+      throw error;
     }
-    if (operation !== 'delete') await super.update({ ...entity, syncStatus: 'synced' } as T, false);
   }
 
   async syncOutboxItem(item: OutboxItem) {
@@ -118,14 +128,58 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
       }
       return [];
     };
+
+    const extractFirstRow = (res: any) => {
+      if (!res) return undefined;
+      const rows = res.rows;
+      if (Array.isArray(rows)) return rows[0];
+      if (rows && Array.isArray((rows as any)._array)) return (rows as any)._array[0];
+      if (typeof rows?.item === 'function' && rows.length > 0) return rows.item(0);
+      if (Array.isArray(res)) return res[0];
+      return undefined;
+    };
+
     const normalized: T[] = [];
     for (const raw of findItems(response.data)) {
       if (raw.deletedAt) continue;
-      const item = this.config.normalize(raw);
-      const existing = await super.getById(item.id);
-      if (existing) await super.update(item, false);
-      else await this.insert(item, false);
-      normalized.push(item);
+      try {
+        const item = this.config.normalize(raw);
+        const existing = await super.getById(item.id);
+        if (existing) {
+          // Pull must not overwrite local insert/update waiting in outbox.
+          if (existing.syncStatus === 'synced') await super.update(item, false);
+          const duplicateResult = await db.execute(
+            `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? AND id != ?`,
+            [(item as any).name, item.id],
+          );
+          const duplicateRow = extractFirstRow(duplicateResult);
+          if (duplicateRow) {
+            await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [duplicateRow.id]);
+            await outboxRepo.removeForEntity(this.config.entityType, Number(duplicateRow.id));
+          }
+        } else {
+          // API returns server ID, local pending row may still use temporary ID.
+          // Reuse pending row so pull cannot show one record twice.
+          const pendingResult = await db.execute(
+            `SELECT id FROM ${this.tableName} WHERE syncStatus = 'pending_insert' AND name = ? LIMIT 1`,
+            [(item as any).name],
+          );
+          const pendingRow = extractFirstRow(pendingResult);
+          if (pendingRow && String(pendingRow.id) !== String(item.id)) {
+            await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [item.id]);
+            await db.execute(
+              `UPDATE ${this.tableName} SET id = ?, backendId = ?, syncStatus = 'synced' WHERE id = ?`,
+              [item.id, item.id, pendingRow.id],
+            );
+            await outboxRepo.rebaseEntity(this.config.entityType, Number(pendingRow.id), Number(item.id), Number(item.id));
+          } else {
+            await this.insert(item, false);
+          }
+        }
+        normalized.push(item);
+      } catch (err) {
+        console.error(`[OfflineCrudRepository] Error processing item for ${this.tableName}:`, raw, err);
+      }
     }
     const ids = normalized.map(item => item.id);
     if (ids.length) await db.execute(`DELETE FROM ${this.tableName} WHERE syncStatus = 'synced' AND id NOT IN (${ids.map(() => '?').join(',')})`, ids);

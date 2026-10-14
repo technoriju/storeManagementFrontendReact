@@ -107,20 +107,23 @@ export const ImportPurchaseModal: React.FC<Props> = ({ visible, onClose }) => {
           {/* Footer */}
           <View style={[
             styles.footer,
-            { borderTopColor: theme.colors.border },
+            { borderTopColor: theme.colors.border, paddingVertical: 12, paddingHorizontal: 16 },
             isMobile && { flexDirection: 'column-reverse', gap: 8 }
           ]}>
             <AppButton
               title="Cancel"
               variant="outline"
+              size="small"
               onPress={onClose}
-              style={[{ backgroundColor: '#0F172A' }, isMobile && { width: '100%' }]}
-              textStyle={{ color: 'white' }}
+              style={[{ backgroundColor: '#0F172A', minWidth: isMobile ? 90 : 80, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ color: 'white', fontSize: 13 }}
             />
             <AppButton
               title="Submit"
+              size="small"
               onPress={() => {}}
-              style={[{ backgroundColor: '#F97316', borderWidth: 0 }, isMobile && { width: '100%' }]}
+              style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 120, height: 34 }, isMobile && { width: '100%' }]}
+              textStyle={{ fontSize: 13 }}
             />
           </View>
         </View>
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   editorToolbar: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1 },
   toolbarDivider: { width: 1, height: 16, backgroundColor: '#E2E8F0', marginHorizontal: 8 },
   toolbarIcon: { marginHorizontal: 8 },
-  footer: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 16, borderTopWidth: 1, gap: 12, flexShrink: 0 }
+  footer: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, gap: 10, flexShrink: 0 }
 });
 
 

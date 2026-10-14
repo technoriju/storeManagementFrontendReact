@@ -57,6 +57,13 @@ export const open = () => {
 
       if (/WHERE id = \?/i.test(sql)) {
         rows = rows.filter((row) => String(row.id) === String(args[0]));
+      } else if (/WHERE syncStatus = 'pending_insert' AND name = \?/i.test(sql)) {
+        rows = rows.filter(
+          (row) =>
+            row.syncStatus === 'pending_insert' &&
+            String(row.name || '').toLowerCase() === String(args[0] || '').toLowerCase() &&
+            (args[1] === undefined || String(row.id) !== String(args[1]))
+        );
       } else if (/WHERE key = \?/i.test(sql)) {
         rows = rows.filter((row) => row.key === args[0]);
       } else if (/WHERE entityType = \? AND entityId = \?/i.test(sql)) {
@@ -128,7 +135,11 @@ export const open = () => {
       const id = String(args[args.length - 1]);
       const row = data[table].find((item) => String(item.id) === id);
       if (row) {
-        if (/SET id = \?, syncStatus =/i.test(sql)) {
+        if (/SET id = \?, backendId = \?, syncStatus = 'synced'/i.test(sql)) {
+          row.id = args[0];
+          row.backendId = args[1];
+          row.syncStatus = 'synced';
+        } else if (/SET id = \?, syncStatus =/i.test(sql)) {
           row.id = args[0];
           row.syncStatus = 'synced';
         } else {
@@ -143,7 +154,12 @@ export const open = () => {
     }
 
     if (/^DELETE/i.test(sql)) {
-      if (/WHERE (?:[a-z_]+\.)?saleId = \?/i.test(sql)) {
+      if (/WHERE syncStatus = 'synced' AND id NOT IN/i.test(sql)) {
+        const idSet = new Set(args.map(String));
+        data[table] = data[table].filter((row) => row.syncStatus !== 'synced' || idSet.has(String(row.id)));
+      } else if (/WHERE syncStatus = 'synced'/i.test(sql)) {
+        data[table] = data[table].filter((row) => row.syncStatus !== 'synced');
+      } else if (/WHERE (?:[a-z_]+\.)?saleId = \?/i.test(sql)) {
         data[table] = data[table].filter((row) => String(row.saleId) !== String(args[0]));
       } else if (/WHERE (?:[a-z_]+\.)?saleId IN/i.test(sql)) {
         const idSet = new Set(args.map(String));

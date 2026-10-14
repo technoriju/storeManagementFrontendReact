@@ -559,13 +559,13 @@ export const POSScreen = () => {
           <TouchableOpacity
             style={[
               styles.checkoutBtn,
-              isMobile && { padding: 14 },
+              isMobile && { paddingVertical: 12, borderRadius: 0 },
               (isSubmitting || createSaleMutation.isPending) && { opacity: 0.6 },
             ]}
             onPress={handleCompleteSale}
             disabled={isSubmitting || createSaleMutation.isPending}
           >
-            <Text style={[styles.checkoutBtnText, isMobile && { fontSize: 16 }]}>
+            <Text style={[styles.checkoutBtnText, isMobile && { fontSize: 15 }]}>
               {isSubmitting || createSaleMutation.isPending
                 ? 'Processing...'
                 : isDesktop
@@ -814,12 +814,15 @@ const styles = StyleSheet.create({
   },
   checkoutBtn: {
     backgroundColor: '#1976d2',
-    padding: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
   },
   checkoutBtnText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   mobileTabBar: {
