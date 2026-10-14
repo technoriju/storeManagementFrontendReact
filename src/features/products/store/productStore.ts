@@ -39,6 +39,7 @@ interface ProductState {
   addUnitConversion: (conversion: UnitConversion) => void;
 
   fetchProducts: (force?: boolean) => Promise<void>;
+  fetchProductById: (id: number | string) => Promise<Product | null>;
   fetchPaginatedProducts: (params: {
     page?: number;
     limit?: number;
@@ -152,6 +153,28 @@ export const useProductStore = create<ProductState>((set, get) => ({
     })();
 
     return inFlightFetchPromise;
+  },
+
+  fetchProductById: async (id: number | string) => {
+    const numId = Number(id);
+    if (!id || isNaN(numId)) return null;
+    const fromState = get().products.find((p) => Number(p.id) === numId);
+    if (fromState) return fromState;
+
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BY_ID(numId));
+      const data = response.data?.data || response.data;
+      if (data && data.id) {
+        return data as Product;
+      }
+    } catch (_) {}
+
+    try {
+      const local = await productRepository.getById(numId);
+      if (local) return local as Product;
+    } catch (_) {}
+
+    return null;
   },
 
   fetchPaginatedProducts: async (params) => {

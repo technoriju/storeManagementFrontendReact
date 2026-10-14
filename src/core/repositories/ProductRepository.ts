@@ -163,9 +163,15 @@ export class ProductRepository extends BaseRepository<Product> {
         const serverData = response.data?.data || response.data;
         const serverId = serverData?.id;
         if (serverId && serverId.toString() !== entity.id.toString()) {
+          const localId = entity.id;
           entity.id = Number(serverId);
           entity.syncStatus = 'synced';
-          await this.update(entity, false);
+          // Replace temporary local row. Updating by new ID leaves old row behind.
+          await db.execute(
+            `UPDATE products SET id = ?, syncStatus = 'synced' WHERE id = ?`,
+            [entity.id, localId],
+          );
+          await outboxRepo.rebaseEntity('products', localId, entity.id, entity.id);
           syncSuccess = true;
         } else if (response.status >= 200 && response.status < 300) {
           syncSuccess = true;
@@ -241,8 +247,31 @@ export class ProductRepository extends BaseRepository<Product> {
       const existing = await this.getById(product.id);
       if (existing) {
         await this.update(product, false);
+        const duplicateResult = await db.execute(
+          `SELECT id FROM products WHERE syncStatus = 'pending_insert' AND (sku = ? OR name = ?) AND id != ?`,
+          [product.sku, product.name, product.id],
+        );
+        const duplicateRow = Array.isArray(duplicateResult.rows) ? duplicateResult.rows[0] : undefined;
+        if (duplicateRow) {
+          await db.execute(`DELETE FROM products WHERE id = ?`, [duplicateRow.id]);
+          await outboxRepo.removeForEntity('products', Number(duplicateRow.id));
+        }
       } else {
-        await this.insert(product, false);
+        const pendingResult = await db.execute(
+          `SELECT id FROM products WHERE syncStatus = 'pending_insert' AND (sku = ? OR name = ?) LIMIT 1`,
+          [product.sku, product.name],
+        );
+        const pendingRow = Array.isArray(pendingResult.rows) ? pendingResult.rows[0] : undefined;
+        if (pendingRow && String(pendingRow.id) !== String(product.id)) {
+          await db.execute(`DELETE FROM products WHERE id = ?`, [product.id]);
+          await db.execute(
+            `UPDATE products SET id = ?, syncStatus = 'synced' WHERE id = ?`,
+            [product.id, pendingRow.id],
+          );
+          await outboxRepo.rebaseEntity('products', Number(pendingRow.id), product.id, product.id);
+        } else {
+          await this.insert(product, false);
+        }
       }
       normalizedProducts.push(product);
     }
