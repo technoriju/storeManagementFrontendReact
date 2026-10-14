@@ -488,6 +488,109 @@ export class ProductRepository extends BaseRepository<Product> {
       };
     }
   }
+
+  public async createDirect(data: Partial<Product>): Promise<Product> {
+    const trimmedName = (data.name || '').trim();
+    const sku = (data.sku || data.productCode || `SKU-${Date.now().toString().slice(-6)}`).trim();
+    const retailPrice = Number(data.retailPrice ?? data.price ?? 0);
+    const wholesalePrice = Number(data.wholesalePrice ?? data.retailPrice ?? data.price ?? 0);
+    const purchasePrice = Number(data.purchasePrice ?? data.cost ?? 0);
+    const unitId = data.unitId ? Number(data.unitId) : (data.baseUnitId ? Number(data.baseUnitId) : undefined);
+    const stockQty = data.stockQuantity !== undefined ? Number(data.stockQuantity) : 10;
+    const cRate = data.conversionRate && Number(data.conversionRate) > 0 ? Number(data.conversionRate) : 1;
+
+    const payload: any = {
+      name: trimmedName,
+      sku,
+      productCode: sku,
+      price: retailPrice,
+      retailPrice,
+      wholesalePrice,
+      cost: purchasePrice,
+      purchasePrice,
+      baseUnitId: unitId,
+      unitId,
+      conversionRate: cRate,
+      stockQuantity: stockQty,
+      openingStock: stockQty,
+    };
+
+    if (data.barcode) payload.barcode = data.barcode;
+    if (data.description) payload.description = data.description;
+    if (data.categoryId) payload.categoryId = Number(data.categoryId);
+    if (data.brandId) payload.brandId = Number(data.brandId);
+    if (data.subUnitId || data.subunitId) {
+      payload.subUnitId = Number(data.subUnitId || data.subunitId);
+    }
+
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, payload);
+      const serverData = response.data?.data || response.data;
+      const serverId = serverData?.id ? Number(serverData.id) : null;
+
+      if (serverId && !isNaN(serverId)) {
+        const entity: Product = {
+          ...data,
+          id: serverId,
+          name: serverData.name || trimmedName,
+          sku: serverData.sku || serverData.productCode || sku,
+          productCode: serverData.productCode || serverData.sku || sku,
+          price: serverData.retailPrice !== undefined ? Number(serverData.retailPrice) : retailPrice,
+          retailPrice: serverData.retailPrice !== undefined ? Number(serverData.retailPrice) : retailPrice,
+          wholesalePrice: serverData.wholesalePrice !== undefined ? Number(serverData.wholesalePrice) : wholesalePrice,
+          cost: serverData.purchasePrice !== undefined ? Number(serverData.purchasePrice) : purchasePrice,
+          purchasePrice: serverData.purchasePrice !== undefined ? Number(serverData.purchasePrice) : purchasePrice,
+          unitId: serverData.baseUnitId ? Number(serverData.baseUnitId) : unitId,
+          baseUnitId: serverData.baseUnitId ? Number(serverData.baseUnitId) : unitId,
+          subUnitId: serverData.subUnitId ? String(serverData.subUnitId) : (data.subUnitId ? String(data.subUnitId) : undefined),
+          subunitId: serverData.subUnitId ? Number(serverData.subUnitId) : (data.subunitId ? Number(data.subunitId) : undefined),
+          conversionRate: serverData.conversionRate ? Number(serverData.conversionRate) : cRate,
+          stockQuantity: serverData.stockQuantity !== undefined ? Number(serverData.stockQuantity) : stockQty,
+          openingStock: serverData.openingStock !== undefined ? Number(serverData.openingStock) : stockQty,
+          categoryName: serverData.category?.name || serverData.categoryName || data.categoryName,
+          brandName: serverData.brand?.name || serverData.brandName || data.brandName,
+          createdAt: serverData.createdAt || new Date().toISOString(),
+          updatedAt: serverData.updatedAt || new Date().toISOString(),
+          syncStatus: 'synced',
+        };
+
+        const existing = await this.getById(serverId);
+        if (existing) {
+          await this.update(entity, false);
+        } else {
+          await this.insert(entity, false);
+        }
+        return entity;
+      }
+    } catch (err: any) {
+      console.warn('[ProductRepository] createDirect API error, fallback to offline:', err?.message);
+    }
+
+    // Offline fallback
+    const now = new Date().toISOString();
+    const fallbackEntity: Product = {
+      id: Math.floor(Math.random() * -1000000000),
+      name: trimmedName,
+      sku,
+      productCode: sku,
+      price: retailPrice,
+      retailPrice,
+      wholesalePrice,
+      cost: purchasePrice,
+      purchasePrice,
+      unitId,
+      baseUnitId: unitId,
+      stockQuantity: stockQty,
+      openingStock: stockQty,
+      conversionRate: cRate,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending_insert',
+    };
+    await this.insert(fallbackEntity, true);
+    return fallbackEntity;
+  }
 }
 
 export const productRepository = new ProductRepository();
+

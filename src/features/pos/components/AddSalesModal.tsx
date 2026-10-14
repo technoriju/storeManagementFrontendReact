@@ -27,11 +27,13 @@ import {
   AlertCircle,
   User,
   Check,
+  Package,
 } from 'lucide-react-native';
 import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
 import { useCustomerStore } from '../../customers/store/customerStore';
 import { Customer } from '../../../types/models';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
+import { productRepository } from '../../../core/repositories/ProductRepository';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
 import { useCreateSale, useUpdateSale } from '../api/useSales';
@@ -108,6 +110,18 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [isSavingCustomer, setIsSavingCustomer] = useState<boolean>(false);
   const [localAddedCustomers, setLocalAddedCustomers] = useState<Customer[]>([]);
 
+  // Quick Add Product State
+  const [showAddProductModal, setShowAddProductModal] = useState<boolean>(false);
+  const [newProductName, setNewProductName] = useState<string>('');
+  const [newProductSku, setNewProductSku] = useState<string>('');
+  const [newProductRetailPrice, setNewProductRetailPrice] = useState<string>('');
+  const [newProductWholesalePrice, setNewProductWholesalePrice] = useState<string>('');
+  const [newProductPurchasePrice, setNewProductPurchasePrice] = useState<string>('');
+  const [newProductUnitId, setNewProductUnitId] = useState<string>('');
+  const [newProductStock, setNewProductStock] = useState<string>('10');
+  const [productModalError, setProductModalError] = useState<string | null>(null);
+  const [isSavingProduct, setIsSavingProduct] = useState<boolean>(false);
+
   // Customer Previous Balance / Advance in Invoice State
   const [showPreviousBalance, setShowPreviousBalance] = useState<boolean>(false);
   const [balanceType, setBalanceType] = useState<'due' | 'advance'>('due');
@@ -136,6 +150,15 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       setShowAddCustomerModal(false);
       setNewCustomerName('');
       setCustomerModalError(null);
+      setShowAddProductModal(false);
+      setNewProductName('');
+      setNewProductSku('');
+      setNewProductRetailPrice('');
+      setNewProductWholesalePrice('');
+      setNewProductPurchasePrice('');
+      setNewProductUnitId('');
+      setNewProductStock('10');
+      setProductModalError(null);
 
       if (editSaleId) {
         const numericId = Number(editSaleId);
@@ -333,6 +356,74 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
     }
   };
 
+  // Quick Add Product Handler
+  const handleQuickAddProduct = async () => {
+    const trimmed = newProductName.trim();
+    if (!trimmed) {
+      setProductModalError('Please enter product name.');
+      return;
+    }
+
+    const retailP = parseFloat(newProductRetailPrice);
+    const wholesaleP = parseFloat(newProductWholesalePrice);
+
+    if ((isNaN(retailP) || retailP <= 0) && (isNaN(wholesaleP) || wholesaleP <= 0)) {
+      setProductModalError('Please enter a valid price (Retailer or Wholesale).');
+      return;
+    }
+
+    try {
+      setIsSavingProduct(true);
+      setProductModalError(null);
+
+      const finalRetail = !isNaN(retailP) && retailP > 0 ? retailP : wholesaleP;
+      const finalWholesale = !isNaN(wholesaleP) && wholesaleP > 0 ? wholesaleP : retailP;
+      const finalPurchase = parseFloat(newProductPurchasePrice) || 0;
+      const finalStock = parseFloat(newProductStock) || 10;
+      const finalSku = newProductSku.trim() || `SKU-${Math.floor(100000 + Math.random() * 900000)}`;
+      const selectedUnit = newProductUnitId || (unitList.length > 0 ? String(unitList[0].id) : undefined);
+
+      const created = await productRepository.createDirect({
+        name: trimmed,
+        sku: finalSku,
+        productCode: finalSku,
+        retailPrice: finalRetail,
+        wholesalePrice: finalWholesale,
+        purchasePrice: finalPurchase,
+        price: finalRetail,
+        cost: finalPurchase,
+        unitId: selectedUnit ? Number(selectedUnit) : undefined,
+        baseUnitId: selectedUnit ? Number(selectedUnit) : undefined,
+        stockQuantity: finalStock,
+        openingStock: finalStock,
+      });
+
+      if (created && created.id) {
+        try {
+          useProductStore.getState().addProduct(created as any);
+        } catch (_) {}
+
+        // Directly add newly created product to the sale items list with proper ID
+        handleAddProduct(created as any);
+      }
+
+      setNewProductName('');
+      setNewProductSku('');
+      setNewProductRetailPrice('');
+      setNewProductWholesalePrice('');
+      setNewProductPurchasePrice('');
+      setNewProductUnitId('');
+      setNewProductStock('10');
+      setProductModalError(null);
+      setShowAddProductModal(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to add product.';
+      setProductModalError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
   // Merged Customer Options
   const allCustomers = useMemo(() => {
     const list = [...customers];
@@ -388,6 +479,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       value: String(s.id),
     }));
   }, [suppliers]);
+
+  const unitOptions = useMemo(() => {
+    return unitList.map((u: any) => ({
+      label: u.name || u.shortName || 'Unit',
+      value: String(u.id ?? u.backendId),
+    }));
+  }, [unitList]);
 
   const selectedCustomer = useMemo(() => {
     return allCustomers.find((c) => String(c.id) === String(customerId));
@@ -1139,19 +1237,41 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                 </View>
               </View>
 
-              {/* Row 2: Live Product Search */}
+              {/* Row 2: Live Product Search & Quick Add Button */}
               <View
                 style={{
                   zIndex: 9999,
                   elevation: Platform.OS === 'android' ? 50 : undefined,
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 8,
                 }}
               >
-                <ProductSearchSelect
-                  label={`Search & Add Product * (${priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})`}
-                  priceType={priceType}
-                  placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
-                  onSelectProduct={handleAddProduct}
-                />
+                <View style={{ flex: 1 }}>
+                  <ProductSearchSelect
+                    label={`Search & Add Product * (${priceType === 'wholesale' ? 'Wholesale Price' : 'Retailer Price'})`}
+                    priceType={priceType}
+                    placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
+                    onSelectProduct={handleAddProduct}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[styles.plusBtn, { marginTop: 24 }]}
+                  onPress={() => {
+                    setNewProductName('');
+                    setNewProductSku(`SKU-${Math.floor(100000 + Math.random() * 900000)}`);
+                    setNewProductRetailPrice('');
+                    setNewProductWholesalePrice('');
+                    setNewProductPurchasePrice('');
+                    setNewProductUnitId(unitList.length > 0 ? String(unitList[0].id) : '');
+                    setNewProductStock('10');
+                    setProductModalError(null);
+                    setShowAddProductModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={18} color="white" />
+                </TouchableOpacity>
               </View>
 
               {/* Table Area: Added Products List */}
@@ -1794,6 +1914,264 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </View>
+    </Modal>
+
+    {/* Quick Add Product Modal */}
+    <Modal
+      visible={showAddProductModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        if (!isSavingProduct) {
+          setShowAddProductModal(false);
+          setProductModalError(null);
+        }
+      }}
+    >
+      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+        <View
+          style={[
+            styles.dialog,
+            styles.quickCustomerModal,
+            {
+              backgroundColor: theme.colors.surface,
+              borderRadius: 12,
+              maxHeight: '92%',
+              width: isMobile ? '94%' : 480,
+            },
+          ]}
+        >
+          {/* Modal Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Package size={18} color="#F97316" />
+              <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>
+                Quick Add Product
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setShowAddProductModal(false);
+                setProductModalError(null);
+              }}
+              style={styles.closeBtn}
+              disabled={isSavingProduct}
+            >
+              <X size={16} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Modal Body */}
+          <ScrollView
+            contentContainerStyle={{ padding: 20, gap: 14 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {productModalError && (
+              <View style={styles.errorBanner}>
+                <AlertCircle size={14} color="#DC2626" />
+                <Text style={[styles.errorText, { fontSize: 12 }]}>{productModalError}</Text>
+              </View>
+            )}
+
+            {/* Product Name */}
+            <View>
+              <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                Product Name *
+              </Text>
+              <TextInput
+                style={[
+                  styles.customerInput,
+                  {
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+                placeholder="e.g. Basmati Rice 1kg"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newProductName}
+                onChangeText={(val) => {
+                  setNewProductName(val);
+                  if (productModalError) setProductModalError(null);
+                }}
+                autoFocus
+              />
+            </View>
+
+            {/* Prices Row: Retail & Wholesale */}
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                  Retailer Price (₹) *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.customerInput,
+                    {
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    },
+                  ]}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={newProductRetailPrice}
+                  onChangeText={(v) => {
+                    const clean = v.replace(/[^0-9.]/g, '');
+                    setNewProductRetailPrice(clean);
+                    if (!newProductWholesalePrice) {
+                      setNewProductWholesalePrice(clean);
+                    }
+                    if (productModalError) setProductModalError(null);
+                  }}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                  Wholesale Price (₹)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.customerInput,
+                    {
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    },
+                  ]}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={newProductWholesalePrice}
+                  onChangeText={(v) => setNewProductWholesalePrice(v.replace(/[^0-9.]/g, ''))}
+                />
+              </View>
+            </View>
+
+            {/* Purchase Cost & Opening Stock Row */}
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                  Purchase Cost (₹)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.customerInput,
+                    {
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    },
+                  ]}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={newProductPurchasePrice}
+                  onChangeText={(v) => setNewProductPurchasePrice(v.replace(/[^0-9.]/g, ''))}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                  Opening Stock Qty
+                </Text>
+                <TextInput
+                  style={[
+                    styles.customerInput,
+                    {
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    },
+                  ]}
+                  placeholder="10"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={newProductStock}
+                  onChangeText={(v) => setNewProductStock(v.replace(/[^0-9.]/g, ''))}
+                />
+              </View>
+            </View>
+
+            {/* SKU & Unit Row */}
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 6 }}>
+                  SKU / Code
+                </Text>
+                <TextInput
+                  style={[
+                    styles.customerInput,
+                    {
+                      borderColor: theme.colors.border,
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.background,
+                    },
+                  ]}
+                  placeholder="Auto-generated"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={newProductSku}
+                  onChangeText={setNewProductSku}
+                />
+              </View>
+
+              {unitOptions.length > 0 && (
+                <View style={{ flex: 1 }}>
+                  <AppSelect
+                    label="Unit"
+                    placeholder="Select Unit"
+                    options={unitOptions}
+                    value={newProductUnitId}
+                    onSelect={(val) => setNewProductUnitId(String(val))}
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Action Buttons */}
+            <View
+              style={[
+                { flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 10, marginTop: 10 },
+                isMobile && { width: '100%', alignItems: 'stretch' },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+                  isMobile && { width: '100%' },
+                ]}
+                onPress={() => {
+                  setShowAddProductModal(false);
+                  setProductModalError(null);
+                }}
+                disabled={isSavingProduct}
+              >
+                <Text style={{ color: theme.colors.textSecondary, fontWeight: '600', fontSize: 13 }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSaveBtn,
+                  { backgroundColor: '#F97316' },
+                  isSavingProduct && { opacity: 0.7 },
+                  isMobile && { width: '100%' },
+                ]}
+                onPress={handleQuickAddProduct}
+                disabled={isSavingProduct}
+              >
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>
+                  {isSavingProduct ? 'Saving...' : 'Add & Select Product'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
