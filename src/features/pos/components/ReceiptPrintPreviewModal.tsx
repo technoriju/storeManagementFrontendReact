@@ -286,11 +286,12 @@ export function getItemHeightMm(item: ReceiptItem, paperFormat: ReceiptPaperForm
   const subUnit = getItemSubUnit(item);
   const conversionRate = getItemConversionRate(item);
   if (brand || subUnit || conversionRate) lines += 1;
+  if (item.unit && subUnit && subUnit !== item.unit) lines = Math.max(lines, 2);
 
   if (paperFormat === 'halfA4Landscape') {
-    return 4.8 + (lines - 1) * 3.2;
+    return 5.5 + (lines - 1) * 3.6;
   }
-  return 4.3 + (lines - 1) * 3.0;
+  return 5.2 + (lines - 1) * 3.4;
 }
 
 export function paginateInvoiceItems({
@@ -318,15 +319,15 @@ export function paginateInvoiceItems({
   }
 
   const isLandscape = paperFormat === 'halfA4Landscape';
-  const pageHeight = isLandscape ? 136.5 : 201;
-  const headerHeight = isLandscape ? 44 : 41;
+  const pageHeight = isLandscape ? 136.5 : 200;
+  const headerHeight = isLandscape ? 48 : 50;
 
-  let footerHeight = isLandscape ? 48 : 52;
-  if (isWholesale && showBankDetails) footerHeight += 11;
-  if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 9;
+  let footerHeight = isLandscape ? 52 : 56;
+  if (isWholesale && showBankDetails) footerHeight += 12;
+  if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 10;
 
   const availWithFooter = pageHeight - headerHeight - footerHeight;
-  const availWithoutFooter = pageHeight - headerHeight - 4;
+  const availWithoutFooter = pageHeight - headerHeight - 6;
 
   const totalItemsHeight = items.reduce((s, it) => s + getItemHeightMm(it, paperFormat), 0);
 
@@ -782,7 +783,7 @@ export function generateReceiptHtml({
       width: 132mm;
       max-width: 132mm;
       margin: 0 auto;
-      padding: 1.5mm 0;
+      padding: 1mm 0;
       box-sizing: border-box;
       page-break-after: always;
       break-after: page;
@@ -796,51 +797,51 @@ export function generateReceiptHtml({
     .header-table {
       width: 100%;
       border-bottom: 2px solid #0f172a;
-      padding-bottom: 4px;
-      margin-bottom: 4px;
+      padding-bottom: 3px;
+      margin-bottom: 3px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .store-name { font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase; }
-    .store-sub { font-size: 8px; color: #334155; line-height: 1.25; }
+    .store-name { font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; line-height: 1.1; }
+    .store-sub { font-size: 7.5px; color: #334155; line-height: 1.2; }
     .inv-badge {
       background: ${colorMode === 'bw' ? '#000000' : (isWholesale ? '#1e293b' : '#047857')};
       color: #fff;
-      padding: 3px 8px;
-      font-size: 9.5px;
+      padding: 2.5px 7px;
+      font-size: 9px;
       font-weight: 800;
       border-radius: 2px;
       display: inline-block;
       text-align: right;
     }
-    .copy-text { font-size: 7.5px; color: #64748b; font-weight: bold; margin-top: 1px; }
+    .copy-text { font-size: 7px; color: #64748b; font-weight: bold; margin-top: 1px; }
     .parties-grid {
       display: flex;
       justify-content: space-between;
       border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 4px;
-      margin-bottom: 4px;
+      padding-bottom: 3px;
+      margin-bottom: 3px;
       gap: 10px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
     .party-col { flex: 1.5; }
     .status-col { flex: 1; text-align: right; }
-    .section-title { font-size: 7.5px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
-    .cust-name { font-size: 11px; font-weight: bold; color: #0f172a; }
-    .party-sub { font-size: 8px; color: #334155; line-height: 1.25; }
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; border: 1px solid #cbd5e1; }
-    .items-table th { background: #f1f5f9; font-size: 8px; font-weight: 700; color: #1e293b; padding: 3px 4px; border: 1px solid #cbd5e1; }
-    .items-table td { font-size: 8px; padding: 2.5px 4px; border: 1px solid #e2e8f0; }
+    .section-title { font-size: 7px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
+    .cust-name { font-size: 10.5px; font-weight: bold; color: #0f172a; line-height: 1.15; }
+    .party-sub { font-size: 7.5px; color: #334155; line-height: 1.2; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; border: 1px solid #cbd5e1; }
+    .items-table th { background: #f1f5f9; font-size: 7.5px; font-weight: 700; color: #1e293b; padding: 2.5px 3px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 7.5px; padding: 2px 3px; border: 1px solid #e2e8f0; line-height: 1.15; }
     .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
     .continuation-note {
       text-align: right;
-      font-size: 8px;
+      font-size: 7.5px;
       font-weight: 600;
       color: #64748b;
-      margin-top: 4px;
-      padding: 2.5px 0;
+      margin-top: 3px;
+      padding: 2px 0;
       border-top: 1px dashed #cbd5e1;
       page-break-inside: avoid;
       break-inside: avoid;
