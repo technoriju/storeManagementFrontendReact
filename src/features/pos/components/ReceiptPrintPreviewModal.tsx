@@ -1044,7 +1044,7 @@ ${pages.map((page, pageIdx) => {
           const metaLine = metaParts.length > 0 ? `<div style="font-size: 8px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
 
           return `
-            <tr class="${idx % 2 === 1 ? 'alt-row' : ''}">
+            <tr>
               <td style="text-align: center;">${globalIdx}</td>
               <td style="font-weight: 600;">
                 <div>${item.productName || 'Item'}</div>
