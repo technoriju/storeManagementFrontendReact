@@ -199,7 +199,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [productType, setProductType] = useState<'single' | 'variable'>('single');
   const [quantity, setQuantity] = useState('0');
   const [quantityAlert, setQuantityAlert] = useState('5');
-  const [taxType, setTaxType] = useState('Exclusive');
+  const [taxType, setTaxType] = useState('Inclusive');
   const [tax, setTax] = useState('');
   const [discountType, setDiscountType] = useState('Percentage');
   const [discountValue, setDiscountValue] = useState('');
