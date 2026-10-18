@@ -1053,7 +1053,6 @@ ${pages.map((page, pageIdx) => {
               ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
               <td style="text-align: center;">
                 ${item.quantity} ${item.unit || ''}
-                ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
               </td>
               <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
               <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
