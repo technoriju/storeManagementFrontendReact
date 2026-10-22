@@ -934,13 +934,22 @@ export class SaleRepository extends BaseRepository<Sale> {
     if (sale.customerId && Number(sale.customerId) > 0) {
       try {
         const cId = Number(sale.customerId);
-        const saleDue = Number(sale.due || 0);
-        const balanceDelta = saleDue + advUsed;
-        if (balanceDelta !== 0) {
+        if (sale.showPreviousBalance) {
+          const anchorPrev = Number(sale.previousDue || 0) - Number(sale.advancePayment || 0);
+          const newBalance = anchorPrev + Number(sale.total || 0) - Number(sale.paid || 0);
           await db.execute(
-            `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
-            [balanceDelta, now, cId]
+            `UPDATE customers SET outstandingBalance = ?, updatedAt = ? WHERE id = ?`,
+            [newBalance, now, cId]
           );
+        } else {
+          const saleDue = Number(sale.due || 0);
+          const balanceDelta = saleDue + advUsed;
+          if (balanceDelta !== 0) {
+            await db.execute(
+              `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+              [balanceDelta, now, cId]
+            );
+          }
         }
       } catch (custErr) {
         console.warn('Failed to update customer balance on sale creation:', custErr);
@@ -1061,16 +1070,31 @@ export class SaleRepository extends BaseRepository<Sale> {
     }
 
     // 2. Adjust Customer balance difference:
-    const oldDue = Number(existingSale?.due || 0);
-    const newDue = Number(saleData.due !== undefined ? saleData.due : oldDue);
-    const dueDiff = newDue - oldDue;
     const custId = saleData.customerId || existingSale?.customerId;
-    if (custId && Number(custId) > 0 && dueDiff !== 0) {
+    if (custId && Number(custId) > 0) {
       try {
-        await db.execute(
-          `UPDATE customers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) + ?), updatedAt = ? WHERE id = ?`,
-          [dueDiff, now, Number(custId)]
-        );
+        const isShowPrev = saleData.showPreviousBalance !== undefined ? saleData.showPreviousBalance : existingSale?.showPreviousBalance;
+        if (isShowPrev) {
+          const pDue = saleData.previousDue !== undefined ? saleData.previousDue : (existingSale?.previousDue || 0);
+          const advP = saleData.advancePayment !== undefined ? saleData.advancePayment : (existingSale?.advancePayment || 0);
+          const tot = saleData.total !== undefined ? saleData.total : (existingSale?.total || 0);
+          const pd = saleData.paid !== undefined ? saleData.paid : (existingSale?.paid || 0);
+          const newBalance = (Number(pDue) - Number(advP)) + Number(tot) - Number(pd);
+          await db.execute(
+            `UPDATE customers SET outstandingBalance = ?, updatedAt = ? WHERE id = ?`,
+            [newBalance, now, Number(custId)]
+          );
+        } else {
+          const oldDue = Number(existingSale?.due || 0);
+          const newDue = Number(saleData.due !== undefined ? saleData.due : oldDue);
+          const dueDiff = newDue - oldDue;
+          if (dueDiff !== 0) {
+            await db.execute(
+              `UPDATE customers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) + ?), updatedAt = ? WHERE id = ?`,
+              [dueDiff, now, Number(custId)]
+            );
+          }
+        }
       } catch (e) {
         console.warn('Customer balance update err:', e);
       }
@@ -1355,73 +1379,129 @@ export class SaleRepository extends BaseRepository<Sale> {
         }
 
         if (whereSaleConditions.length > 0) {
-          let sql = `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status 
+          let sql = `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status, previousDue, advancePayment, showPreviousBalance, createdAt, date 
                      FROM sales 
                      WHERE ${whereSaleConditions.join(' AND ')}
-                     AND (status IS NULL OR LOWER(status) != 'cancelled')`;
+                     AND (status IS NULL OR LOWER(status) != 'cancelled')
+                     ORDER BY createdAt ASC, id ASC`;
 
           if (excludeSaleId) {
             const exIdNum = Number(excludeSaleId);
-            sql += ` AND id != ? AND invoiceNumber != ? AND (reference IS NULL OR reference != ?)`;
+            sql = `SELECT id, invoiceNumber, reference, customerId, customerName, total, paid, due, paymentStatus, status, previousDue, advancePayment, showPreviousBalance, createdAt, date 
+                   FROM sales 
+                   WHERE ${whereSaleConditions.join(' AND ')}
+                   AND (status IS NULL OR LOWER(status) != 'cancelled')
+                   AND id != ? AND invoiceNumber != ? AND (reference IS NULL OR reference != ?)
+                   ORDER BY createdAt ASC, id ASC`;
             saleArgs.push(exIdNum, String(excludeSaleId), String(excludeSaleId));
           }
 
           const salesRes = await db.execute(sql, saleArgs);
           const sRows = this.extractRows(salesRes);
-          for (const row of sRows) {
-            if (!row) continue;
-            const total = Number(row.total || 0);
-            const paid = Number(row.paid || 0);
-            let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
 
-            if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
-              due = total - paid;
-            }
-
-            if (due > 0) {
-              sDue += due;
-              unpaidCount++;
+          // Find the last anchor sale where showPreviousBalance was active
+          let anchorIndex = -1;
+          for (let i = sRows.length - 1; i >= 0; i--) {
+            const row = sRows[i];
+            if (Boolean(row && row.showPreviousBalance)) {
+              anchorIndex = i;
+              break;
             }
           }
+
+          let runningBalance = 0;
+          if (anchorIndex >= 0) {
+            const anchor = sRows[anchorIndex];
+            const anchorPrev = Number(anchor.previousDue || 0) - Number(anchor.advancePayment || 0);
+            const anchorTotal = Number(anchor.total || 0);
+            const anchorPaid = Number(anchor.paid || 0);
+            runningBalance = anchorPrev + anchorTotal - anchorPaid;
+
+            // Subsequent sales occurring after the anchor sale
+            for (let i = anchorIndex + 1; i < sRows.length; i++) {
+              const row = sRows[i];
+              if (!row) continue;
+              const total = Number(row.total || 0);
+              const paid = Number(row.paid || 0);
+              runningBalance += (total - paid);
+            }
+          } else {
+            // No anchor sale found, sum unpaid dues across sales
+            for (const row of sRows) {
+              if (!row) continue;
+              const total = Number(row.total || 0);
+              const paid = Number(row.paid || 0);
+              let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
+              if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
+                due = total - paid;
+              }
+              runningBalance += due;
+            }
+          }
+
+          // Check for standalone payments in SQLite
+          try {
+            const payWhere: string[] = [];
+            const payArgs: any[] = [];
+            if (resolvedLocalId && resolvedLocalId > 0) {
+              payWhere.push('customerId = ?');
+              payArgs.push(resolvedLocalId);
+            }
+            if (resolvedBackendId && resolvedBackendId > 0 && resolvedBackendId !== resolvedLocalId) {
+              payWhere.push('customerId = ?');
+              payArgs.push(resolvedBackendId);
+            }
+            if (payWhere.length > 0) {
+              const paySql = `SELECT id, amount, type, reference, createdAt FROM payments WHERE (${payWhere.join(' OR ')})`;
+              const payRes = await db.execute(paySql, payArgs);
+              const pRows = this.extractRows(payRes);
+              const invNums = new Set(sRows.map((r: any) => String(r.invoiceNumber || '')).filter(Boolean));
+              const anchorTime = anchorIndex >= 0 ? new Date(sRows[anchorIndex].createdAt || sRows[anchorIndex].date || 0).getTime() : 0;
+
+              for (const p of pRows) {
+                if (!p) continue;
+                const pRef = p.reference ? String(p.reference) : '';
+                if (pRef && invNums.has(pRef)) continue;
+
+                const pTime = new Date(p.createdAt || 0).getTime();
+                if (anchorIndex >= 0 && pTime <= anchorTime) continue;
+
+                const amt = Number(p.amount || 0);
+                const t = String(p.type || 'receive').toLowerCase();
+                if (t === 'receive' || t === 'received') {
+                  runningBalance -= amt;
+                } else if (t === 'pay' || t === 'paid') {
+                  runningBalance += amt;
+                }
+              }
+            }
+          } catch (_) {}
+
+          unpaidCount = sRows.filter((r: any) => Number(r.total || 0) > Number(r.paid || 0)).length;
+          if (runningBalance > 0 && unpaidCount === 0) unpaidCount = 1;
+          sDue = Number(runningBalance.toFixed(2));
         }
       } catch (err) {
         console.warn('Failed to query sales for customer balance:', err);
-      }
-
-      // If editing an existing sale and we have a server balance, subtract the excluded sale's due from server balance
-      if (excludeSaleId && custBal !== null && custBal > 0) {
-        try {
-          const exSaleRes = await db.execute(
-            `SELECT total, paid, due, paymentStatus FROM sales WHERE (id = ? OR invoiceNumber = ?) LIMIT 1`,
-            [Number(excludeSaleId), String(excludeSaleId)]
-          );
-          const exRows = this.extractRows(exSaleRes);
-          if (exRows.length > 0 && exRows[0]) {
-            const exTot = Number(exRows[0].total || 0);
-            const exPaid = Number(exRows[0].paid || 0);
-            let exDue = Number(exRows[0].due !== undefined ? exRows[0].due : 0);
-            if (exDue <= 0 && exTot > exPaid && String(exRows[0].paymentStatus || '').toLowerCase() !== 'paid') {
-              exDue = exTot - exPaid;
-            }
-            if (exDue > 0) {
-              custBal = Math.max(0, custBal - exDue);
-            }
-          }
-        } catch (_) {}
       }
 
       // 4. Compute effective total due and advance
       let totalDue = 0;
       let advance = 0;
 
-      if (custBal !== null) {
-        if (custBal > 0) {
-          totalDue = custBal;
-        } else if (custBal < 0) {
-          advance = Math.abs(custBal);
-        }
-      } else if (sDue > 0) {
-        totalDue = sDue;
+      // Prefer local sales-derived balance if sales exist; otherwise fallback to customer record balance
+      const effectiveBal = sDue !== 0 || custBal === null ? sDue : custBal;
+
+      if (effectiveBal > 0) {
+        totalDue = effectiveBal;
+      } else if (effectiveBal < 0) {
+        advance = Math.abs(effectiveBal);
+      }
+
+      if (resolvedLocalId) {
+        try {
+          await db.execute('UPDATE customers SET outstandingBalance = ? WHERE id = ?', [effectiveBal, resolvedLocalId]);
+        } catch (_) {}
       }
 
       return {

@@ -763,6 +763,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       const advPaymentVal = showPreviousBalance && balanceType === 'advance' ? parsedBalanceAmt : 0;
       const adjustedAdvance = Math.min(advPaymentVal, grandTotal);
       const netPayable = Math.max(0, grandTotal - adjustedAdvance);
+      const totalPayableWithDue = prevDueVal > 0 ? grandTotal + prevDueVal : grandTotal;
 
       let finalPaid = grandTotal;
       let finalDue = 0;
@@ -778,9 +779,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       } else if (paymentStatus === 'Partial') {
         const parsed = parseFloat(amountReceived);
         const cashPaid = !isNaN(parsed) && parsed > 0 ? parsed : 0;
-        finalPaid = Math.min(grandTotal, adjustedAdvance + cashPaid);
-        finalDue = Math.max(0, grandTotal - finalPaid);
-        if (finalPaid >= grandTotal) effectivePaymentStatus = 'Paid';
+        finalPaid = Math.min(totalPayableWithDue, adjustedAdvance + cashPaid);
+        finalDue = Math.max(0, grandTotal - Math.min(grandTotal, finalPaid));
+        if (finalPaid >= totalPayableWithDue) effectivePaymentStatus = 'Paid';
         else if (finalPaid > 0) effectivePaymentStatus = 'Partial';
         else effectivePaymentStatus = 'Unpaid';
       } else {
