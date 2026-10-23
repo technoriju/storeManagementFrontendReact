@@ -221,6 +221,7 @@ export interface Sale extends BaseEntity {
   previousDue?: number;
   advancePayment?: number;
   showPreviousBalance?: boolean;
+  balanceAdjustment?: number;
   items?: SaleItem[];
 }
 
