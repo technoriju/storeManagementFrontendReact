@@ -4,6 +4,7 @@ import { Purchase, PurchaseItem } from '../../../types/models';
 import { useProductStore } from '../../products/store/productStore';
 import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
+import { SUPPLIER_QUERY_KEY } from '../../suppliers/api/useSupplier';
 
 export const PURCHASE_QUERY_KEY = ['purchases'] as const;
 
@@ -138,6 +139,7 @@ export const useCreatePurchase = () => {
         return old ? [newPurchase, ...old] : [newPurchase];
       });
       queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
     },
   });
 };
@@ -163,6 +165,7 @@ export const useUpdatePurchase = () => {
         return old.map((item) => (item.id === updatedPurchase.id ? { ...item, ...updatedPurchase } : item));
       });
       queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}
@@ -183,6 +186,7 @@ export const useDeletePurchase = () => {
         return old ? old.filter((item) => item.id !== deletedId) : [];
       });
       queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}
