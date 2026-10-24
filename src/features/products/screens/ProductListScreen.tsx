@@ -373,7 +373,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const filters = (
-    <View style={[styles.filtersWrapper, isMobile && { width: '100%' }]}>
+    <View style={[styles.filtersWrapper, isMobile && styles.filtersWrapperMobile]}>
       <AppSelect
         placeholder="All Categories"
         value={selectedCategory}
@@ -381,6 +381,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         onSelect={handleCategoryChange}
         clearable
         searchable
+        fullWidthDropdown={isMobile}
         containerStyle={[
           styles.filterSelect,
           isMobile ? { flex: 1, minWidth: 0 } : { width: 140 }
@@ -393,6 +394,7 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
         onSelect={handleBrandChange}
         clearable
         searchable
+        fullWidthDropdown={isMobile}
         containerStyle={[
           styles.filterSelect,
           isMobile ? { flex: 1, minWidth: 0 } : { width: 130 }
@@ -400,11 +402,15 @@ export const ProductListScreen: React.FC<Props> = ({ onNavigate }) => {
       />
       {(!!selectedCategory || !!selectedBrand) && (
         <Pressable
-          style={[styles.clearFilterBtn, { borderColor: theme.colors.border }]}
+          style={[
+            styles.clearFilterBtn, 
+            isMobile && styles.clearFilterBtnMobile,
+            { borderColor: theme.colors.border }
+          ]}
           onPress={handleClearFilters}
         >
           <X size={14} color="#EF4444" />
-          <Text style={styles.clearFilterText}>Reset</Text>
+          {!isSmallMobile && <Text style={styles.clearFilterText}>Reset</Text>}
         </Pressable>
       )}
     </View>
@@ -641,6 +647,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  filtersWrapperMobile: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    gap: 6,
+  },
   filterSelect: {
     marginBottom: 0,
   },
@@ -653,6 +666,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     backgroundColor: '#FEF2F2',
+  },
+  clearFilterBtnMobile: {
+    height: 40,
+    paddingHorizontal: 8,
+    flexShrink: 0,
   },
   clearFilterText: {
     fontSize: 12,
