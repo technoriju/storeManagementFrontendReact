@@ -19,24 +19,39 @@ export interface AppSelectProps {
   isMulti?: boolean;
   searchable?: boolean;
   clearable?: boolean;
+  fullWidthDropdown?: boolean;
 }
 
-const computeDropdownLayout = (x?: number, y?: number, width?: number, height?: number) => {
+const computeDropdownLayout = (
+  x?: number, 
+  y?: number, 
+  width?: number, 
+  height?: number,
+  forceFullWidth?: boolean
+) => {
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const measuredWidth = width && width > 0 ? width : screenWidth - 32;
+  const isMobileScreen = screenWidth < 640 || Boolean(forceFullWidth);
+  const measuredWidth = width && width > 0 ? width : screenWidth - 24;
   const measuredHeight = height && height > 0 ? height : 40;
-  const maxDropdownHeight = 300;
+  const maxDropdownHeight = 320;
   const safeY = typeof y === 'number' && !isNaN(y) && y > 0 ? y : 120;
   const safeX = typeof x === 'number' && !isNaN(x) && x > 0 ? x : 12;
 
-  let dropWidth = Math.max(measuredWidth, 180);
-  if (dropWidth > screenWidth - 24) {
-    dropWidth = screenWidth - 24;
-  }
+  let dropWidth: number;
+  let dropLeft: number;
 
-  let dropLeft = safeX;
-  if (dropLeft + dropWidth > screenWidth - 12) {
-    dropLeft = Math.max(12, screenWidth - dropWidth - 12);
+  if (isMobileScreen) {
+    dropWidth = screenWidth - 24;
+    dropLeft = 12;
+  } else {
+    dropWidth = Math.max(measuredWidth, 180);
+    if (dropWidth > screenWidth - 24) {
+      dropWidth = screenWidth - 24;
+    }
+    dropLeft = safeX;
+    if (dropLeft + dropWidth > screenWidth - 12) {
+      dropLeft = Math.max(12, screenWidth - dropWidth - 12);
+    }
   }
 
   const spaceBelow = screenHeight - safeY - measuredHeight;
@@ -66,7 +81,8 @@ export const AppSelect = ({
   containerStyle,
   isMulti = false,
   searchable = false,
-  clearable = false
+  clearable = false,
+  fullWidthDropdown = false
 }: AppSelectProps) => {
   const theme = useTheme();
   const [modalVisible, setModalVisible] = useState(false);
@@ -74,7 +90,10 @@ export const AppSelect = ({
   const [searchQuery, setSearchQuery] = useState('');
   const selectRef = useRef<any>(null);
   const searchInputRef = useRef<any>(null);
-  const [dropdownLayout, setDropdownLayout] = useState<any>({ left: 12, top: 120, width: 200 });
+  const [dropdownLayout, setDropdownLayout] = useState<any>(() => {
+    const sw = Dimensions.get('window').width;
+    return computeDropdownLayout(12, 120, sw - 24, 40, fullWidthDropdown);
+  });
 
   const cachedLayoutRef = useRef<{ left: number; top?: number; bottom?: number; width: number } | null>(null);
   const containerLayoutRef = useRef<{ width: number; height: number; x: number; y: number } | null>(null);
@@ -95,7 +114,7 @@ export const AppSelect = ({
     // 1. Web: measure synchronously using standard DOM API
     if (Platform.OS === 'web' && selectRef.current && typeof selectRef.current.getBoundingClientRect === 'function') {
       const rect = selectRef.current.getBoundingClientRect();
-      const layout = computeDropdownLayout(rect.left, rect.top, rect.width, rect.height);
+      const layout = computeDropdownLayout(rect.left, rect.top, rect.width, rect.height, fullWidthDropdown);
       setDropdownLayout(layout);
       setModalVisible(true);
       return;
@@ -105,18 +124,18 @@ export const AppSelect = ({
     if (selectRef.current && typeof selectRef.current.measureInWindow === 'function') {
       selectRef.current.measureInWindow((x: number, y: number, width: number, height: number) => {
         if (width > 0 && height > 0) {
-          const freshLayout = computeDropdownLayout(x, y, width, height);
+          const freshLayout = computeDropdownLayout(x, y, width, height, fullWidthDropdown);
           setDropdownLayout(freshLayout);
         } else {
           const w = containerLayoutRef.current?.width || (screenWidth - 24);
           const h = containerLayoutRef.current?.height || 40;
-          setDropdownLayout(computeDropdownLayout(12, 120, w, h));
+          setDropdownLayout(computeDropdownLayout(12, 120, w, h, fullWidthDropdown));
         }
       });
     } else {
       const w = containerLayoutRef.current?.width || (screenWidth - 24);
       const h = containerLayoutRef.current?.height || 40;
-      setDropdownLayout(computeDropdownLayout(12, 120, w, h));
+      setDropdownLayout(computeDropdownLayout(12, 120, w, h, fullWidthDropdown));
     }
 
     setModalVisible(true);
@@ -417,6 +436,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
   },
   dropdownContainer: {
     position: 'absolute',
