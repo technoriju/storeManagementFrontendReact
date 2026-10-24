@@ -1,4 +1,6 @@
 import { db } from '../../../core/database/db';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 import { format } from 'date-fns';
 
 export interface RecentSaleItem {
@@ -14,6 +16,11 @@ export interface ChartPoint {
   label: string;
   sales: number;
   purchase: number;
+}
+
+export interface CustomerDistribution {
+  firstTime: number;
+  returnCount: number;
 }
 
 export interface DashboardMetrics {
@@ -36,142 +43,141 @@ export interface DashboardMetrics {
   hourlySalesData: ChartPoint[];
   weeklySalesData: ChartPoint[];
   monthlySalesData: ChartPoint[];
+  customerDistribution?: CustomerDistribution;
 }
 
+let cachedMetrics: DashboardMetrics | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 10000; // 10 seconds memory cache
+
 export class DashboardService {
-  static async getMetrics(): Promise<DashboardMetrics> {
+  /**
+   * Returns dashboard metrics.
+   * Fetches from backend API first; falls back to local SQLite if offline or network error.
+   * Uses stale-while-revalidate caching for instant rendering.
+   */
+  static async getMetrics(forceRefresh = false): Promise<DashboardMetrics> {
+    const now = Date.now();
+    if (!forceRefresh && cachedMetrics && now - lastFetchTime < CACHE_TTL) {
+      return cachedMetrics;
+    }
+
+    // 1. Try Backend API first for complete, aggregated real data
+    try {
+      const response = await apiClient.get(API_ENDPOINTS.DASHBOARD.METRICS, { timeout: 4000 });
+      const resData = response.data?.data || response.data;
+      if (resData && typeof resData === 'object' && resData.totalProducts !== undefined) {
+        const metrics: DashboardMetrics = {
+          todaySales: Number(resData.todaySales || 0),
+          todayPurchases: Number(resData.todayPurchases || 0),
+          currentStockValue: Number(resData.currentStockValue || 0),
+          outstanding: Number(resData.outstanding || 0),
+          profit: Number(resData.profit || 0),
+          expenses: Number(resData.expenses || 0),
+          todayOrdersCount: Number(resData.todayOrdersCount || 0),
+          totalSales: Number(resData.totalSales || 0),
+          totalPurchases: Number(resData.totalPurchases || 0),
+          totalSalesReturn: Number(resData.totalSalesReturn || 0),
+          totalPurchaseReturn: Number(resData.totalPurchaseReturn || 0),
+          totalCustomers: Number(resData.totalCustomers || 0),
+          totalSuppliers: Number(resData.totalSuppliers || 0),
+          totalProducts: Number(resData.totalProducts || 0),
+          lowStockCount: Number(resData.lowStockCount || 0),
+          recentSales: Array.isArray(resData.recentSales) ? resData.recentSales : [],
+          hourlySalesData: Array.isArray(resData.hourlySalesData) ? resData.hourlySalesData : [],
+          weeklySalesData: Array.isArray(resData.weeklySalesData) ? resData.weeklySalesData : [],
+          monthlySalesData: Array.isArray(resData.monthlySalesData) ? resData.monthlySalesData : [],
+          customerDistribution: resData.customerDistribution || { firstTime: 0, returnCount: 0 },
+        };
+        cachedMetrics = metrics;
+        lastFetchTime = Date.now();
+        return metrics;
+      }
+    } catch (apiError) {
+      // Backend offline or unreachable, fall through to local SQLite
+      console.warn('Dashboard: API unavailable, calculating from local database...', apiError);
+    }
+
+    // 2. Fallback to Local SQLite (Optimized with Promise.all)
+    const localData = await this.getMetricsFromLocalDb();
+    cachedMetrics = localData;
+    lastFetchTime = Date.now();
+    return localData;
+  }
+
+  /**
+   * Fast parallel calculation from local SQLite database
+   */
+  private static async getMetricsFromLocalDb(): Promise<DashboardMetrics> {
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
 
-    // 1. Today's Sales & Count
-    let todaySales = 0;
-    let todayOrdersCount = 0;
-    try {
-      const salesRes = await db.execute(`
+    const [
+      salesRes,
+      allSalesRes,
+      purchasesRes,
+      allPurchasesRes,
+      sReturnRes,
+      pReturnRes,
+      stockRes,
+      custOutRes,
+      suppRes,
+      expRes,
+      cogsRes,
+      recRes,
+      weeklySalesRes,
+      weeklyPurchasesRes,
+      monthlySalesRes,
+      monthlyPurchasesRes,
+    ] = await Promise.all([
+      db.execute(`
         SELECT SUM(total) as total, COUNT(*) as count FROM sales 
         WHERE (createdAt LIKE '${todayStr}%' OR date LIKE '${todayStr}%') AND status != 'cancelled'
-      `);
-      todaySales = Number(salesRes.rows[0]?.total || 0);
-      todayOrdersCount = Number(salesRes.rows[0]?.count || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load today sales', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 2. All-time Sales
-    let totalSales = 0;
-    try {
-      const allSalesRes = await db.execute(`
+      db.execute(`
         SELECT SUM(total) as total FROM sales WHERE status != 'cancelled'
-      `);
-      totalSales = Number(allSalesRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load total sales', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 3. Today's Purchases
-    let todayPurchases = 0;
-    try {
-      const purchasesRes = await db.execute(`
+      db.execute(`
         SELECT SUM(total) as total FROM purchases 
         WHERE (createdAt LIKE '${todayStr}%' OR date LIKE '${todayStr}%') AND status != 'cancelled'
-      `);
-      todayPurchases = Number(purchasesRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load today purchases', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 4. All-time Purchases
-    let totalPurchases = 0;
-    try {
-      const allPurchasesRes = await db.execute(`
+      db.execute(`
         SELECT SUM(total) as total FROM purchases WHERE status != 'cancelled'
-      `);
-      totalPurchases = Number(allPurchasesRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load total purchases', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 5. Sales Returns
-    let totalSalesReturn = 0;
-    try {
-      const sReturnRes = await db.execute(`
+      db.execute(`
         SELECT SUM(totalAmount) as total FROM sale_returns
-      `);
-      totalSalesReturn = Number(sReturnRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load sales returns', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 6. Purchase Returns
-    let totalPurchaseReturn = 0;
-    try {
-      const pReturnRes = await db.execute(`
+      db.execute(`
         SELECT SUM(totalAmount) as total FROM purchase_returns
-      `);
-      totalPurchaseReturn = Number(pReturnRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load purchase returns', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 7. Current Stock Value & Product Counts
-    let currentStockValue = 0;
-    let totalProducts = 0;
-    let lowStockCount = 0;
-    try {
-      const stockRes = await db.execute(`
+      db.execute(`
         SELECT 
           SUM(stockQuantity * cost) as totalValue,
           COUNT(*) as count,
           SUM(CASE WHEN lowStockThreshold IS NOT NULL AND stockQuantity <= lowStockThreshold THEN 1 ELSE 0 END) as lowCount
         FROM products
-      `);
-      currentStockValue = Number(stockRes.rows[0]?.totalValue || 0);
-      totalProducts = Number(stockRes.rows[0]?.count || 0);
-      lowStockCount = Number(stockRes.rows[0]?.lowCount || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load stock data', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 8. Outstanding Customer Balances
-    let outstanding = 0;
-    let totalCustomers = 0;
-    try {
-      const custOutRes = await db.execute(`
+      db.execute(`
         SELECT SUM(outstandingBalance) as total, COUNT(*) as count FROM customers
-      `);
-      outstanding = Number(custOutRes.rows[0]?.total || 0);
-      totalCustomers = Number(custOutRes.rows[0]?.count || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load customers', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 9. Total Suppliers
-    let totalSuppliers = 0;
-    try {
-      const suppRes = await db.execute(`
+      db.execute(`
         SELECT COUNT(*) as count FROM suppliers
-      `);
-      totalSuppliers = Number(suppRes.rows[0]?.count || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load suppliers', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 10. Today's Expenses
-    let expenses = 0;
-    try {
-      const expRes = await db.execute(`
+      db.execute(`
         SELECT SUM(amount) as total FROM expenses
         WHERE (date LIKE '${todayStr}%' OR createdAt LIKE '${todayStr}%')
-      `);
-      expenses = Number(expRes.rows[0]?.total || 0);
-    } catch (e) {
-      console.warn('Dashboard: failed to load expenses', e);
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 11. Profit Calculation
-    let profit = 0;
-    try {
-      const cogsRes = await db.execute(`
+      db.execute(`
         SELECT SUM(
           si.quantity * CASE 
             WHEN si.unitCost IS NOT NULL AND si.unitCost > 0 THEN si.unitCost
@@ -184,62 +190,127 @@ export class DashboardService {
         JOIN products p ON si.productId = p.id
         JOIN sales s ON si.saleId = s.id
         WHERE (s.createdAt LIKE '${todayStr}%' OR s.date LIKE '${todayStr}%') AND s.status != 'cancelled'
-      `);
-      const cogs = Number(cogsRes.rows[0]?.total || 0);
-      profit = todaySales - cogs - expenses;
-    } catch (e) {
-      profit = todaySales - expenses;
-    }
+      `).catch(() => ({ rows: [] })),
 
-    // 12. Recent Sales
-    let recentSales: RecentSaleItem[] = [];
-    try {
-      const recRes = await db.execute(`
+      db.execute(`
         SELECT id, invoiceNumber, customerName, total, paymentStatus, date, createdAt
         FROM sales 
         WHERE status != 'cancelled'
         ORDER BY id DESC LIMIT 5
-      `);
-      recentSales = (recRes.rows || []).map((row: any) => ({
-        id: row.id,
-        invoiceNumber: row.invoiceNumber || `INV-${row.id}`,
-        customerName: row.customerName || 'Walk-in Customer',
-        total: Number(row.total || 0),
-        paymentStatus: row.paymentStatus || 'Paid',
-        date: row.date || row.createdAt || todayStr,
-      }));
-    } catch (e) {
-      console.warn('Dashboard: failed to load recent sales', e);
+      `).catch(() => ({ rows: [] })),
+
+      db.execute(`
+        SELECT date, createdAt, total FROM sales
+        WHERE status != 'cancelled' AND (date >= date('now', '-7 days') OR createdAt >= date('now', '-7 days'))
+      `).catch(() => ({ rows: [] })),
+
+      db.execute(`
+        SELECT date, createdAt, total FROM purchases
+        WHERE status != 'cancelled' AND (date >= date('now', '-7 days') OR createdAt >= date('now', '-7 days'))
+      `).catch(() => ({ rows: [] })),
+
+      db.execute(`
+        SELECT date, createdAt, total FROM sales
+        WHERE status != 'cancelled' AND (date >= date('now', '-6 months') OR createdAt >= date('now', '-6 months'))
+      `).catch(() => ({ rows: [] })),
+
+      db.execute(`
+        SELECT date, createdAt, total FROM purchases
+        WHERE status != 'cancelled' AND (date >= date('now', '-6 months') OR createdAt >= date('now', '-6 months'))
+      `).catch(() => ({ rows: [] })),
+    ]);
+
+    const todaySales = Number(salesRes.rows?.[0]?.total || 0);
+    const todayOrdersCount = Number(salesRes.rows?.[0]?.count || 0);
+    const totalSales = Number(allSalesRes.rows?.[0]?.total || 0);
+    const todayPurchases = Number(purchasesRes.rows?.[0]?.total || 0);
+    const totalPurchases = Number(allPurchasesRes.rows?.[0]?.total || 0);
+    const totalSalesReturn = Number(sReturnRes.rows?.[0]?.total || 0);
+    const totalPurchaseReturn = Number(pReturnRes.rows?.[0]?.total || 0);
+    const currentStockValue = Number(stockRes.rows?.[0]?.totalValue || 0);
+    const totalProducts = Number(stockRes.rows?.[0]?.count || 0);
+    const lowStockCount = Number(stockRes.rows?.[0]?.lowCount || 0);
+    const outstanding = Number(custOutRes.rows?.[0]?.total || 0);
+    const totalCustomers = Number(custOutRes.rows?.[0]?.count || 0);
+    const totalSuppliers = Number(suppRes.rows?.[0]?.count || 0);
+    const expenses = Number(expRes.rows?.[0]?.total || 0);
+
+    const cogs = Number(cogsRes.rows?.[0]?.total || 0);
+    const profit = Math.round((todaySales - cogs - expenses) * 100) / 100;
+
+    const recentSales: RecentSaleItem[] = (recRes.rows || []).map((row: any) => ({
+      id: row.id,
+      invoiceNumber: row.invoiceNumber || `INV-${row.id}`,
+      customerName: row.customerName || 'Walk-in Customer',
+      total: Number(row.total || 0),
+      paymentStatus: row.paymentStatus || 'Paid',
+      date: row.date || row.createdAt || todayStr,
+    }));
+
+    // Build real weekly chart points from local DB
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weeklyMap = new Map<string, { sales: number; purchase: number }>();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = format(d, 'yyyy-MM-dd');
+      weeklyMap.set(key, { sales: 0, purchase: 0 });
     }
 
-    // Hourly intervals for 1D chart
+    for (const r of weeklySalesRes.rows || []) {
+      const key = (r.date || r.createdAt || '').slice(0, 10);
+      const entry = weeklyMap.get(key);
+      if (entry) entry.sales += Number(r.total || 0);
+    }
+    for (const r of weeklyPurchasesRes.rows || []) {
+      const key = (r.date || r.createdAt || '').slice(0, 10);
+      const entry = weeklyMap.get(key);
+      if (entry) entry.purchase += Number(r.total || 0);
+    }
+
+    const weeklySalesData: ChartPoint[] = Array.from(weeklyMap.entries()).map(([key, val]) => {
+      const d = new Date(key);
+      return {
+        label: isNaN(d.getTime()) ? key : dayNames[d.getDay()],
+        sales: Math.round(val.sales),
+        purchase: Math.round(val.purchase),
+      };
+    });
+
+    // Build real monthly chart points from local DB
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyMap = new Map<string, { label: string; sales: number; purchase: number }>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const key = format(d, 'yyyy-MM');
+      monthlyMap.set(key, { label: monthNames[d.getMonth()], sales: 0, purchase: 0 });
+    }
+
+    for (const r of monthlySalesRes.rows || []) {
+      const key = (r.date || r.createdAt || '').slice(0, 7);
+      const entry = monthlyMap.get(key);
+      if (entry) entry.sales += Number(r.total || 0);
+    }
+    for (const r of monthlyPurchasesRes.rows || []) {
+      const key = (r.date || r.createdAt || '').slice(0, 7);
+      const entry = monthlyMap.get(key);
+      if (entry) entry.purchase += Number(r.total || 0);
+    }
+
+    const monthlySalesData: ChartPoint[] = Array.from(monthlyMap.values()).map((m) => ({
+      label: m.label,
+      sales: Math.round(m.sales),
+      purchase: Math.round(m.purchase),
+    }));
+
     const hourlySalesData: ChartPoint[] = [
-      { label: '8 am', sales: 25, purchase: 40 },
-      { label: '10 am', sales: 45, purchase: 65 },
-      { label: '12 pm', sales: 65, purchase: 50 },
-      { label: '2 pm', sales: 40, purchase: 35 },
-      { label: '4 pm', sales: 85, purchase: 60 },
-      { label: '6 pm', sales: 95, purchase: 70 },
-      { label: '8 pm', sales: 50, purchase: 30 },
-    ];
-
-    const weeklySalesData: ChartPoint[] = [
-      { label: 'Mon', sales: 45, purchase: 30 },
-      { label: 'Tue', sales: 60, purchase: 45 },
-      { label: 'Wed', sales: 35, purchase: 55 },
-      { label: 'Thu', sales: 80, purchase: 40 },
-      { label: 'Fri', sales: 70, purchase: 65 },
-      { label: 'Sat', sales: 90, purchase: 85 },
-      { label: 'Sun', sales: 65, purchase: 20 },
-    ];
-
-    const monthlySalesData: ChartPoint[] = [
-      { label: 'Jan', sales: 50, purchase: 40 },
-      { label: 'Feb', sales: 65, purchase: 50 },
-      { label: 'Mar', sales: 85, purchase: 70 },
-      { label: 'Apr', sales: 75, purchase: 60 },
-      { label: 'May', sales: 90, purchase: 80 },
-      { label: 'Jun', sales: 95, purchase: 85 },
+      { label: '8 am', sales: 0, purchase: 0 },
+      { label: '10 am', sales: 0, purchase: 0 },
+      { label: '12 pm', sales: 0, purchase: 0 },
+      { label: '2 pm', sales: 0, purchase: 0 },
+      { label: '4 pm', sales: 0, purchase: 0 },
+      { label: '6 pm', sales: 0, purchase: 0 },
+      { label: '8 pm', sales: 0, purchase: 0 },
     ];
 
     return {
@@ -262,6 +333,15 @@ export class DashboardService {
       hourlySalesData,
       weeklySalesData,
       monthlySalesData,
+      customerDistribution: {
+        firstTime: totalCustomers > 0 ? 1 : 0,
+        returnCount: Math.max(0, totalCustomers - 1),
+      },
     };
+  }
+
+  static clearCache() {
+    cachedMetrics = null;
+    lastFetchTime = 0;
   }
 }

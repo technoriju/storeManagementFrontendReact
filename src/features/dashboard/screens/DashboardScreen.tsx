@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
+import { useAuthStore } from '../../../core/auth/auth.store';
 import { DashboardService, DashboardMetrics } from '../services/dashboard.service';
 import { DashboardCard } from '../components/DashboardCard';
 import { DashboardBarChart, DashboardDoughnutChart } from '../components/DashboardChart';
@@ -27,12 +28,10 @@ import {
   UserPlus,
   ShoppingCart,
   PlusCircle,
-  TrendingUp,
   AlertTriangle,
   ChevronRight,
   Package,
   Receipt,
-  Sparkles,
   FolderTree,
   GitCommit,
   Tag,
@@ -40,6 +39,7 @@ import {
   Copy,
   PieChart,
   CreditCard,
+  TrendingUp,
 } from 'lucide-react-native';
 import { format } from 'date-fns';
 
@@ -158,53 +158,75 @@ interface DashboardScreenProps {
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab }) => {
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  const currentUser = useAuthStore((s) => s.user);
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isMobile = width < 768;
 
-  const loadMetrics = async () => {
+  const loadMetrics = useCallback(async (isRefresh = false) => {
     try {
-      const data = await DashboardService.getMetrics();
+      if (isRefresh) setRefreshing(true);
+      const data = await DashboardService.getMetrics(isRefresh);
       setMetrics(data);
     } catch (error) {
-      console.error('Failed to load metrics', error);
+      console.error('Dashboard: failed to load metrics', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadMetrics();
-  }, []);
+  }, [loadMetrics]);
 
-  const formatCurrency = (val: number | undefined, fallbackVal: number): string => {
-    const finalVal = val !== undefined && val !== 0 ? val : fallbackVal;
-    return `₹${Math.round(finalVal).toLocaleString('en-IN')}`;
+  const formatCurrency = (val: number | undefined): string => {
+    const num = val !== undefined && !isNaN(val) ? val : 0;
+    return `₹${Math.round(num).toLocaleString('en-IN')}`;
   };
 
-  if (loading || !metrics) {
+  if (loading && !metrics) {
     return (
       <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ marginTop: 12, color: theme.colors.textSecondary, fontSize: 13 }}>
+          Loading dashboard metrics...
+        </Text>
       </View>
     );
   }
 
   const todayStr = format(new Date(), 'dd/MM/yyyy');
-  const todayOrders = metrics.todayOrdersCount > 0 ? metrics.todayOrdersCount : 24;
-  const todaySalesVal = metrics.todaySales > 0 ? metrics.todaySales : 48988;
-  const purchasesVal = metrics.todayPurchases > 0 ? metrics.todayPurchases : 24145;
-  const stockVal = metrics.currentStockValue > 0 ? metrics.currentStockValue : 18458747;
-  const outstandingVal = metrics.outstanding > 0 ? metrics.outstanding : 4898878;
-  const expensesVal = metrics.expenses > 0 ? metrics.expenses : 8980;
-  const profitVal = metrics.profit > 0 ? metrics.profit : 8458;
+  const greetingName = currentUser?.name || 'Admin';
+  const m = metrics || {
+    todaySales: 0,
+    todayPurchases: 0,
+    currentStockValue: 0,
+    outstanding: 0,
+    profit: 0,
+    expenses: 0,
+    todayOrdersCount: 0,
+    totalSales: 0,
+    totalPurchases: 0,
+    totalSalesReturn: 0,
+    totalPurchaseReturn: 0,
+    totalCustomers: 0,
+    totalSuppliers: 0,
+    totalProducts: 0,
+    lowStockCount: 0,
+    recentSales: [],
+    hourlySalesData: [],
+    weeklySalesData: [],
+    monthlySalesData: [],
+    customerDistribution: { firstTime: 0, returnCount: 0 },
+  };
 
   // -------------------------------------------------------------
   // MOBILE VIEW (< 768px)
   // -------------------------------------------------------------
   if (isMobile) {
-    // Adjust 4 to 5 or 6 items per line based on screen width, wrapping overflow to next line
     const numCols = width < 380 ? 4 : width < 520 ? 5 : 6;
     const horizontalPadding = 28;
     const quickActionItemWidth = Math.floor((width - horizontalPadding) / numCols);
@@ -213,19 +235,30 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
       <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         contentContainerStyle={styles.mobileContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadMetrics} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadMetrics(true)}
+            colors={[theme.colors.primary]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         {/* Mobile Header Greeting */}
         <View style={styles.mobileHeader}>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.greetingText, { color: theme.colors.text }]}>Welcome, Admin</Text>
+              <Text style={[styles.greetingText, { color: theme.colors.text }]}>
+                Welcome, {greetingName}
+              </Text>
               <View style={[styles.activeDot, { backgroundColor: '#00C49F' }]} />
             </View>
-            {/* <Text style={[styles.mobileSubtitle, { color: theme.colors.textSecondary }]}>
-              You have <Text style={{ color: '#F89B29', fontWeight: '700' }}>{todayOrders}+ Orders</Text> today
-            </Text> */}
+            <Text style={[styles.mobileSubtitle, { color: theme.colors.textSecondary }]}>
+              <Text style={{ color: '#F89B29', fontWeight: '700' }}>
+                {m.todayOrdersCount} {m.todayOrdersCount === 1 ? 'Order' : 'Orders'}
+              </Text>{' '}
+              recorded today
+            </Text>
           </View>
 
           <View style={[styles.dateChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -234,7 +267,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           </View>
         </View>
 
-        {/* Quick Actions Launcher - Footer Style Multi-row Grid */}
+        {/* Quick Actions Launcher */}
         <View style={styles.quickActionsSection}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionHeaderTitleWrapper}>
@@ -274,42 +307,41 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             ))}
           </View>
 
-          {/* Horizontal line with quick action */}
           <View style={[styles.quickActionsBottomLine, { backgroundColor: theme.colors.border }]} />
         </View>
 
         {/* Low Stock Contextual Banner */}
-        {metrics.lowStockCount > 0 && (
+        {m.lowStockCount > 0 && (
           <TouchableOpacity
             style={[styles.alertBanner, { backgroundColor: '#FFF7ED', borderColor: '#FDBA74' }]}
-            onPress={() => onNavigateTab?.('inventory')}
+            onPress={() => onNavigateTab?.('low_stocks')}
             activeOpacity={0.8}
           >
             <AlertTriangle size={16} color="#EA580C" style={{ marginRight: 8 }} />
             <Text style={styles.alertBannerText}>
-              <Text style={{ fontWeight: '700' }}>{metrics.lowStockCount} items</Text> are low on stock. Tap to review.
+              <Text style={{ fontWeight: '700' }}>{m.lowStockCount} items</Text> are low on stock. Tap to review.
             </Text>
             <ChevronRight size={15} color="#EA580C" />
           </TouchableOpacity>
         )}
 
-        {/* 2x2 Financial KPI Grid - 4 Cards: Amount on Top, Icon + Text on Bottom */}
+        {/* 2x2 Financial KPI Grid */}
         <View style={styles.kpiGrid}>
           <View style={styles.kpiRow}>
             <DashboardCard
               variant="compact"
-              title="Total Sales"
-              value={formatCurrency(metrics.todaySales, 48988)}
-              icon={<FileText size={13} color="#F89B29" />}
+              title="Today Sales"
+              value={formatCurrency(m.todaySales)}
+              icon={<FileText size={14} color="#F89B29" />}
               color="#F89B29"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('pos')}
             />
             <DashboardCard
               variant="compact"
-              title="Total Purchase"
-              value={formatCurrency(purchasesVal, 24145)}
-              icon={<Gift size={13} color="#1E9B85" />}
+              title="Today Purchase"
+              value={formatCurrency(m.todayPurchases)}
+              icon={<Gift size={14} color="#1E9B85" />}
               color="#1E9B85"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('purchases')}
@@ -320,8 +352,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             <DashboardCard
               variant="compact"
               title="Invoice Due"
-              value={formatCurrency(outstandingVal, 4898878)}
-              icon={<Clock size={13} color="#FF4560" />}
+              value={formatCurrency(m.outstanding)}
+              icon={<Clock size={14} color="#FF4560" />}
               color="#FF4560"
               style={styles.kpiGridCard}
               onViewAll={() => onNavigateTab?.('customers')}
@@ -329,26 +361,52 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             <DashboardCard
               variant="compact"
               title="Stock Value"
-              value={formatCurrency(stockVal, 18458747)}
-              icon={<Layers size={13} color="#2664FF" />}
+              value={formatCurrency(m.currentStockValue)}
+              icon={<Layers size={14} color="#2664FF" />}
               color="#2664FF"
               style={styles.kpiGridCard}
-              onViewAll={() => onNavigateTab?.('inventory')}
+              onViewAll={() => onNavigateTab?.('manage_stock')}
+            />
+          </View>
+
+          {/* Secondary financial indicators */}
+          <View style={styles.kpiRow}>
+            <DashboardCard
+              variant="compact"
+              title="Today Profit"
+              value={formatCurrency(m.profit)}
+              icon={<TrendingUp size={14} color="#00C49F" />}
+              color="#00C49F"
+              style={styles.kpiGridCard}
+              onViewAll={() => onNavigateTab?.('profit_loss')}
+            />
+            <DashboardCard
+              variant="compact"
+              title="All-Time Sales"
+              value={formatCurrency(m.totalSales)}
+              icon={<Receipt size={14} color="#6366F1" />}
+              color="#6366F1"
+              style={styles.kpiGridCard}
+              onViewAll={() => onNavigateTab?.('reports')}
             />
           </View>
         </View>
 
-        {/* Responsive Sales & Purchase Bar Chart */}
+        {/* Responsive Real Bar Chart */}
         <DashboardBarChart
-          hourlyData={metrics.hourlySalesData}
-          weeklyData={metrics.weeklySalesData}
-          monthlyData={metrics.monthlySalesData}
+          hourlyData={m.hourlySalesData}
+          weeklyData={m.weeklySalesData}
+          monthlyData={m.monthlySalesData}
           isMobile={true}
         />
 
-        {/* Customer Distribution & Overall Business Info */}
-        <DashboardDoughnutChart firstTime={5500} returnCount={3500} />
+        {/* Real Customer Distribution Doughnut Chart */}
+        <DashboardDoughnutChart
+          firstTime={m.customerDistribution?.firstTime ?? 0}
+          returnCount={m.customerDistribution?.returnCount ?? 0}
+        />
 
+        {/* Overall Directory Counts */}
         <View style={[styles.overallMobileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <Text style={[styles.overallCardHeading, { color: theme.colors.text }]}>Overall Directory</Text>
           <View style={styles.infoCardsRow}>
@@ -360,7 +418,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <UserPlus size={20} color="#2664FF" />
               <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Suppliers</Text>
               <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                {metrics.totalSuppliers > 0 ? metrics.totalSuppliers : 6987}
+                {m.totalSuppliers}
               </Text>
             </TouchableOpacity>
 
@@ -372,7 +430,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <Users size={20} color="#FF4560" />
               <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Customers</Text>
               <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                {metrics.totalCustomers > 0 ? metrics.totalCustomers : 4896}
+                {m.totalCustomers}
               </Text>
             </TouchableOpacity>
 
@@ -384,26 +442,28 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <ShoppingCart size={20} color="#00C49F" />
               <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Products</Text>
               <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                {metrics.totalProducts > 0 ? metrics.totalProducts : 487}
+                {m.totalProducts}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Recent Invoices Feed */}
+        {/* Real Recent Invoices Feed */}
         <View style={[styles.recentSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.recentHeader}>
             <View>
               <Text style={[styles.recentTitle, { color: theme.colors.text }]}>Recent Invoices</Text>
-              <Text style={[styles.recentSubtitle, { color: theme.colors.textSecondary }]}>Latest transactions recorded</Text>
+              <Text style={[styles.recentSubtitle, { color: theme.colors.textSecondary }]}>
+                Latest transactions recorded
+              </Text>
             </View>
             <TouchableOpacity onPress={() => onNavigateTab?.('invoices')}>
               <Text style={[styles.viewAllRecent, { color: theme.colors.primary }]}>View All →</Text>
             </TouchableOpacity>
           </View>
 
-          {metrics.recentSales.length > 0 ? (
-            metrics.recentSales.map((sale) => (
+          {m.recentSales.length > 0 ? (
+            m.recentSales.map((sale) => (
               <View key={sale.id} style={[styles.saleRow, { borderBottomColor: theme.colors.border }]}>
                 <View style={styles.saleRowLeft}>
                   <Text style={[styles.saleInvoiceNum, { color: theme.colors.text }]}>{sale.invoiceNumber}</Text>
@@ -412,13 +472,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
                   </Text>
                 </View>
                 <View style={styles.saleRowRight}>
-                  <Text style={[styles.saleAmount, { color: theme.colors.text }]}>₹{sale.total.toLocaleString('en-IN')}</Text>
+                  <Text style={[styles.saleAmount, { color: theme.colors.text }]}>
+                    ₹{sale.total.toLocaleString('en-IN')}
+                  </Text>
                   <View
                     style={[
                       styles.statusPill,
                       {
                         backgroundColor:
-                          sale.paymentStatus.toLowerCase() === 'paid' ? '#E6F9F4' : '#FFF7ED',
+                          sale.paymentStatus.toLowerCase() === 'paid'
+                            ? '#E6F9F4'
+                            : sale.paymentStatus.toLowerCase() === 'partial'
+                            ? '#FEF3C7'
+                            : '#FFF7ED',
                       },
                     ]}
                   >
@@ -427,7 +493,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
                         styles.statusPillText,
                         {
                           color:
-                            sale.paymentStatus.toLowerCase() === 'paid' ? '#00C49F' : '#F89B29',
+                            sale.paymentStatus.toLowerCase() === 'paid'
+                              ? '#00C49F'
+                              : sale.paymentStatus.toLowerCase() === 'partial'
+                              ? '#D97706'
+                              : '#EA580C',
                         },
                       ]}
                     >
@@ -440,7 +510,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           ) : (
             <View style={styles.emptyRecentBox}>
               <Receipt size={24} color={theme.colors.textSecondary} style={{ marginBottom: 6 }} />
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>No sales recorded today</Text>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>No recent sales recorded</Text>
               <TouchableOpacity
                 style={[styles.startSaleBtn, { backgroundColor: theme.colors.primary }]}
                 onPress={() => onNavigateTab?.('pos')}
@@ -455,128 +525,214 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
   }
 
   // -------------------------------------------------------------
-  // DESKTOP VIEW (>= 768px) - Keeps original desktop layout intact
+  // DESKTOP VIEW (>= 768px)
   // -------------------------------------------------------------
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={loading} onRefresh={loadMetrics} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadMetrics(true)}
+          colors={[theme.colors.primary]}
+        />
+      }
     >
       <View style={styles.header}>
         <View>
-          <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>Welcome, Admin</Text>
+          <Text style={[styles.welcomeTitle, { color: theme.colors.text }]}>
+            Welcome, {greetingName}
+          </Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
             You have{' '}
-            <Text style={{ color: '#F89B29', fontWeight: '600' }}>
-              {metrics.todayOrdersCount > 0 ? metrics.todayOrdersCount : '200+'}
+            <Text style={{ color: '#F89B29', fontWeight: '700' }}>
+              {m.todayOrdersCount} {m.todayOrdersCount === 1 ? 'Order' : 'Orders'}
             </Text>{' '}
-            Orders, Today
+            recorded today
           </Text>
         </View>
-        <TouchableOpacity
+        <View
           style={[
             styles.datePicker,
             { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
           ]}
         >
           <Calendar size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>
-            15/09/2026 - 21/09/2026
-          </Text>
-        </TouchableOpacity>
+          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>{todayStr}</Text>
+        </View>
       </View>
 
+      {/* Row 1: Primary Metrics */}
       <View style={styles.cardRow}>
         <DashboardCard
           variant="primary"
-          title="Total Sales"
-          value={formatCurrency(metrics.todaySales, 48988078)}
+          title="Today Sales"
+          value={formatCurrency(m.todaySales)}
           icon={<FileText size={20} color="#F89B29" />}
-          trend="+22%"
-          trendUp={true}
+          trend={`${m.todayOrdersCount} orders`}
+          trendUp={m.todaySales > 0}
           color="#F89B29"
+          onViewAll={() => onNavigateTab?.('pos')}
         />
         <DashboardCard
           variant="primary"
           title="Total Sales Return"
-          value={formatCurrency(metrics.totalSalesReturn, 16478145)}
+          value={formatCurrency(m.totalSalesReturn)}
           icon={<RefreshCcw size={20} color="#1C2E46" />}
-          trend="-22%"
+          trend="Returns"
           trendUp={false}
           color="#1C2E46"
+          onViewAll={() => onNavigateTab?.('sales_return')}
         />
         <DashboardCard
           variant="primary"
-          title="Total Purchase"
-          value={formatCurrency(metrics.todayPurchases, 24145789)}
+          title="Today Purchase"
+          value={formatCurrency(m.todayPurchases)}
           icon={<Gift size={20} color="#1E9B85" />}
-          trend="+22%"
-          trendUp={true}
+          trend="Purchases"
+          trendUp={m.todayPurchases > 0}
           color="#1E9B85"
+          onViewAll={() => onNavigateTab?.('purchases')}
         />
         <DashboardCard
           variant="primary"
           title="Total Purchase Return"
-          value={formatCurrency(metrics.totalPurchaseReturn, 18458747)}
+          value={formatCurrency(m.totalPurchaseReturn)}
           icon={<Shield size={20} color="#2664FF" />}
-          trend="+22%"
+          trend="Returns"
           trendUp={true}
           color="#2664FF"
+          onViewAll={() => onNavigateTab?.('purchase_return')}
         />
       </View>
 
+      {/* Row 2: Secondary Indicators */}
       <View style={styles.cardRow}>
         <DashboardCard
           variant="secondary"
-          title="Profit"
-          value={formatCurrency(metrics.profit, 8458798)}
+          title="Profit (Today)"
+          value={formatCurrency(m.profit)}
           icon={<Layers size={16} color="#00C49F" />}
-          trend="35%"
-          trendUp={true}
+          trend="Gross"
+          trendUp={m.profit >= 0}
           color="#00C49F"
-          onViewAll={() => onNavigateTab?.('reports')}
+          onViewAll={() => onNavigateTab?.('profit_loss')}
         />
         <DashboardCard
           variant="secondary"
           title="Invoice Due"
-          value={formatCurrency(metrics.outstanding, 4898878)}
+          value={formatCurrency(m.outstanding)}
           icon={<Clock size={16} color="#00C49F" />}
-          trend="35%"
-          trendUp={true}
+          trend="Receivables"
+          trendUp={false}
           color="#00C49F"
           onViewAll={() => onNavigateTab?.('customers')}
         />
         <DashboardCard
           variant="secondary"
-          title="Total Expenses"
-          value={formatCurrency(metrics.expenses, 8980097)}
+          title="Today Expenses"
+          value={formatCurrency(m.expenses)}
           icon={<Target size={16} color="#FF4560" />}
-          trend="41%"
-          trendUp={true}
+          trend="Outflow"
+          trendUp={false}
           color="#FF4560"
           onViewAll={() => onNavigateTab?.('reports')}
         />
         <DashboardCard
           variant="secondary"
           title="Stock Value"
-          value={formatCurrency(metrics.currentStockValue, 78458798)}
+          value={formatCurrency(m.currentStockValue)}
           icon={<Hash size={16} color="#8A2BE2" />}
-          trend="20%"
-          trendUp={false}
+          trend={`${m.totalProducts} items`}
+          trendUp={true}
           color="#8A2BE2"
-          onViewAll={() => onNavigateTab?.('inventory')}
+          onViewAll={() => onNavigateTab?.('manage_stock')}
         />
       </View>
 
+      {/* Bottom Section: Chart and Right Panel */}
       <View style={styles.bottomSection}>
         <View style={styles.chartContainer}>
           <DashboardBarChart
-            hourlyData={metrics.hourlySalesData}
-            weeklyData={metrics.weeklySalesData}
-            monthlyData={metrics.monthlySalesData}
+            hourlyData={m.hourlySalesData}
+            weeklyData={m.weeklySalesData}
+            monthlyData={m.monthlySalesData}
             isMobile={false}
           />
+
+          {/* Desktop Recent Invoices Feed */}
+          <View style={[styles.recentSection, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, marginTop: 16 }]}>
+            <View style={styles.recentHeader}>
+              <View>
+                <Text style={[styles.recentTitle, { color: theme.colors.text }]}>Recent Invoices</Text>
+                <Text style={[styles.recentSubtitle, { color: theme.colors.textSecondary }]}>
+                  Latest transactions recorded
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => onNavigateTab?.('invoices')}>
+                <Text style={[styles.viewAllRecent, { color: theme.colors.primary }]}>View All →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {m.recentSales.length > 0 ? (
+              m.recentSales.map((sale) => (
+                <View key={sale.id} style={[styles.saleRow, { borderBottomColor: theme.colors.border }]}>
+                  <View style={styles.saleRowLeft}>
+                    <Text style={[styles.saleInvoiceNum, { color: theme.colors.text }]}>{sale.invoiceNumber}</Text>
+                    <Text style={[styles.saleCustomer, { color: theme.colors.textSecondary }]}>
+                      {sale.customerName} • {sale.date}
+                    </Text>
+                  </View>
+                  <View style={styles.saleRowRight}>
+                    <Text style={[styles.saleAmount, { color: theme.colors.text }]}>
+                      ₹{sale.total.toLocaleString('en-IN')}
+                    </Text>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        {
+                          backgroundColor:
+                            sale.paymentStatus.toLowerCase() === 'paid'
+                              ? '#E6F9F4'
+                              : sale.paymentStatus.toLowerCase() === 'partial'
+                              ? '#FEF3C7'
+                              : '#FFF7ED',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          {
+                            color:
+                              sale.paymentStatus.toLowerCase() === 'paid'
+                                ? '#00C49F'
+                                : sale.paymentStatus.toLowerCase() === 'partial'
+                                ? '#D97706'
+                                : '#EA580C',
+                          },
+                        ]}
+                      >
+                        {sale.paymentStatus.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyRecentBox}>
+                <Receipt size={24} color={theme.colors.textSecondary} style={{ marginBottom: 6 }} />
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>No recent sales recorded</Text>
+                <TouchableOpacity
+                  style={[styles.startSaleBtn, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => onNavigateTab?.('pos')}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Create First Sale</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.rightPanel}>
@@ -590,35 +746,52 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <View style={[styles.infoIcon, { backgroundColor: theme.colors.background }]}>
                 <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>i</Text>
               </View>
-              <Text style={[styles.overallTitle, { color: theme.colors.text }]}>Overall Information</Text>
+              <Text style={[styles.overallTitle, { color: theme.colors.text }]}>Overall Directory</Text>
             </View>
 
             <View style={styles.infoCardsRow}>
-              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+              <TouchableOpacity
+                style={[styles.infoCard, { borderColor: theme.colors.border }]}
+                onPress={() => onNavigateTab?.('suppliers')}
+                activeOpacity={0.7}
+              >
                 <UserPlus size={24} color="#2664FF" />
                 <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Suppliers</Text>
                 <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                  {metrics.totalSuppliers > 0 ? metrics.totalSuppliers : 6987}
+                  {m.totalSuppliers}
                 </Text>
-              </View>
-              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.infoCard, { borderColor: theme.colors.border }]}
+                onPress={() => onNavigateTab?.('customers')}
+                activeOpacity={0.7}
+              >
                 <Users size={24} color="#FF4560" />
-                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Customer</Text>
+                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Customers</Text>
                 <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                  {metrics.totalCustomers > 0 ? metrics.totalCustomers : 4896}
+                  {m.totalCustomers}
                 </Text>
-              </View>
-              <View style={[styles.infoCard, { borderColor: theme.colors.border }]}>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.infoCard, { borderColor: theme.colors.border }]}
+                onPress={() => onNavigateTab?.('products')}
+                activeOpacity={0.7}
+              >
                 <ShoppingCart size={24} color="#00C49F" />
-                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Orders</Text>
+                <Text style={[styles.infoCardTitle, { color: theme.colors.textSecondary }]}>Products</Text>
                 <Text style={[styles.infoCardValue, { color: theme.colors.text }]}>
-                  {metrics.totalProducts > 0 ? metrics.totalProducts : 487}
+                  {m.totalProducts}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
-          <DashboardDoughnutChart />
+          <DashboardDoughnutChart
+            firstTime={m.customerDistribution?.firstTime ?? 0}
+            returnCount={m.customerDistribution?.returnCount ?? 0}
+          />
         </View>
       </View>
     </ScrollView>
@@ -647,24 +820,24 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   welcomeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 12,
   },
   datePicker: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   dateText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   cardRow: {
     flexDirection: 'row',
@@ -673,7 +846,7 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
   },
   chartContainer: {
     flex: 2,
@@ -684,15 +857,15 @@ const styles = StyleSheet.create({
     minWidth: 300,
   },
   overallInfoContainer: {
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 14,
+    padding: 18,
     borderWidth: 1,
     marginBottom: 16,
   },
   overallHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   infoIcon: {
     width: 24,
@@ -700,11 +873,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   overallTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   infoCardsRow: {
     flexDirection: 'row',
@@ -724,8 +897,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   infoCardValue: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
 
   // -------------------------------------------------
@@ -733,7 +906,7 @@ const styles = StyleSheet.create({
   // -------------------------------------------------
   mobileContent: {
     padding: 14,
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
   mobileHeader: {
     flexDirection: 'row',
@@ -746,8 +919,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   activeDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
     marginLeft: 6,
   },
@@ -765,10 +938,10 @@ const styles = StyleSheet.create({
   },
   dateChipText: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
-  // Quick Action Launcher (Footer style: icon top, name bottom)
+  // Quick Action Launcher
   quickActionsSection: {
     marginBottom: 14,
   },
@@ -854,10 +1027,10 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
   },
 
-  // 2x2 KPI Grid (Reduced card sizing)
+  // KPI Grid
   kpiGrid: {
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   kpiRow: {
     flexDirection: 'row',

@@ -81,4 +81,7 @@ export const API_ENDPOINTS = {
     ADJUST_STOCK: '/inventory/adjust-stock',
     TRANSACTIONS: '/inventory/transactions',
   },
+  DASHBOARD: {
+    METRICS: '/dashboard/metrics',
+  },
 };
