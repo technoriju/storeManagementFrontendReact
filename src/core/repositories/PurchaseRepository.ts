@@ -221,6 +221,16 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
           await db.execute(`UPDATE purchase_items SET syncStatus = 'synced' WHERE purchaseId = ?`, [entity.id]);
         }
+
+        if (body?.supplier && body.supplier.outstandingBalance !== undefined) {
+          try {
+            const targetSId = body.supplier.id || entity.supplierId;
+            await db.execute(
+              `UPDATE suppliers SET outstandingBalance = ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+              [Number(body.supplier.outstandingBalance), new Date().toISOString(), targetSId, targetSId]
+            );
+          } catch (_) {}
+        }
       }
     } catch (error) {
       console.error(`Failed to sync purchase ${entity.id} with API:`, error);
@@ -400,6 +410,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         }
 
         const { purchase, items } = this.normalizeApiPurchase(raw);
+      if (raw?.supplier && raw.supplier.outstandingBalance !== undefined) {
+        try {
+          const targetSId = raw.supplier.id || purchase.supplierId;
+          await db.execute(
+            `UPDATE suppliers SET outstandingBalance = ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+            [Number(raw.supplier.outstandingBalance), new Date().toISOString(), targetSId, targetSId]
+          );
+        } catch (_) {}
+      }
         if (existing && existing.syncStatus !== 'synced') {
           // Do not overwrite local pending modifications
           continue;
@@ -474,6 +493,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       if (!raw || !raw.id) return await this.getById(id);
 
       const { purchase, items } = this.normalizeApiPurchase(raw);
+      if (raw?.supplier && raw.supplier.outstandingBalance !== undefined) {
+        try {
+          const targetSId = raw.supplier.id || purchase.supplierId;
+          await db.execute(
+            `UPDATE suppliers SET outstandingBalance = ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+            [Number(raw.supplier.outstandingBalance), new Date().toISOString(), targetSId, targetSId]
+          );
+        } catch (_) {}
+      }
       const existing = await super.getById(purchase.id);
       if (!existing || existing.syncStatus === 'synced') {
         if (existing) {
@@ -606,13 +634,22 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     if (purchase.supplierId && Number(purchase.supplierId) > 0) {
       try {
         const sId = Number(purchase.supplierId);
-        const purDue = Number(purchase.due || 0);
-        const balanceDelta = purDue + advUsed;
-        if (balanceDelta !== 0) {
+        if (purchase.showPreviousBalance) {
+          const anchorPrev = Number(purchase.previousDue || 0) - Number(purchase.advancePayment || 0);
+          const newBalance = anchorPrev + Number(purchase.total || 0) - Number(purchase.paid || 0);
           await db.execute(
-            `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
-            [balanceDelta, now, sId]
+            `UPDATE suppliers SET outstandingBalance = ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+            [newBalance, now, sId, sId]
           );
+        } else {
+          const purDue = Number(purchase.due || 0);
+          const balanceDelta = purDue + advUsed;
+          if (balanceDelta !== 0) {
+            await db.execute(
+              `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+              [balanceDelta, now, sId, sId]
+            );
+          }
         }
       } catch (suppErr) {
         console.warn('Failed to update supplier balance on purchase creation:', suppErr);
@@ -1120,19 +1157,24 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       let totalDue = 0;
       let advance = 0;
 
-      if (suppBal !== null) {
-        if (suppBal > 0) {
-          totalDue = suppBal;
-        } else if (suppBal < 0) {
-          advance = Math.abs(suppBal);
-        }
-      } else if (pDue > 0) {
-        totalDue = pDue;
+      // Single source of truth: prioritize authoritative supplier balance, fallback to local computation
+      const effectiveBal = suppBal !== null ? suppBal : pDue;
+
+      if (effectiveBal > 0) {
+        totalDue = effectiveBal;
+      } else if (effectiveBal < 0) {
+        advance = Math.abs(effectiveBal);
+      }
+
+      if (resolvedLocalId) {
+        try {
+          await db.execute('UPDATE suppliers SET outstandingBalance = ? WHERE id = ?', [effectiveBal, resolvedLocalId]);
+        } catch (_) {}
       }
 
       return {
-        outstandingBalance: suppBal !== null ? suppBal : pDue,
-        purchasesDue: pDue,
+        outstandingBalance: effectiveBal,
+        purchasesDue: effectiveBal,
         totalDue,
         advance,
         unpaidCount,

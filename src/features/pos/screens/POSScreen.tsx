@@ -148,6 +148,8 @@ export const POSScreen = () => {
         } catch (_) {}
       }
 
+      const totalPaidAmount = prevDue > 0 ? gTotal + prevDue : gTotal;
+
       await createSaleMutation.mutateAsync({
         sale: {
           invoiceNumber: invNum,
@@ -159,7 +161,7 @@ export const POSScreen = () => {
           discount: disc,
           gst: gTax,
           total: gTotal,
-          paid: gTotal,
+          paid: totalPaidAmount,
           due: 0,
           status: 'Completed',
           paymentStatus: 'Paid',

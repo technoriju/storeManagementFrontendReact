@@ -458,6 +458,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         previousDue: Number(entity.previousDue || 0),
         advancePayment: Number(entity.advancePayment || 0),
         showPreviousBalance: Boolean(entity.showPreviousBalance),
+        balanceAdjustment: (entity as any).balanceAdjustment !== undefined ? Number((entity as any).balanceAdjustment) : undefined,
         notes: entity.notes || undefined,
         paymentStatus: entity.paymentStatus || 'Unpaid',
         items: items.map((it) => ({
@@ -490,6 +491,16 @@ export class SaleRepository extends BaseRepository<Sale> {
         } else {
           await db.execute(`UPDATE sales SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
           await db.execute(`UPDATE sale_items SET syncStatus = 'synced' WHERE saleId = ?`, [entity.id]);
+        }
+
+        if (body.customer && (body.customer.id || customerId) && body.customer.outstandingBalance !== undefined) {
+          try {
+            const targetCId = body.customer.id || customerId;
+            await db.execute(
+              `UPDATE customers SET outstandingBalance = ?, updatedAt = ? WHERE id = ? OR backendId = ?`,
+              [Number(body.customer.outstandingBalance), new Date().toISOString(), targetCId, targetCId]
+            );
+          } catch (_) {}
         }
       }
     } catch (error) {
@@ -999,6 +1010,36 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
+    // Record explicit balance adjustment payment if manual previous due was adjusted
+    const adjDelta = Number((saleData as any).balanceAdjustment || 0);
+    if (sale.customerId && Number(sale.customerId) > 0 && Boolean(sale.showPreviousBalance) && Math.abs(adjDelta) > 0.001) {
+      try {
+        const invNum = sale.invoiceNumber || sale.reference || `SL-${saleId}`;
+        const adjPaymentId = Date.now() + Math.floor(Math.random() * 10000) + 1;
+        const adjAmount = Math.abs(adjDelta);
+        const adjType = adjDelta > 0 ? 'pay' : 'receive';
+        await db.execute(
+          `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            adjPaymentId,
+            null,
+            adjAmount,
+            'adjustment',
+            adjType,
+            invNum,
+            `Mutual balance adjustment (${adjDelta > 0 ? '+' : '-'}₹${adjAmount.toFixed(2)}) on ${invNum}`,
+            Number(sale.customerId),
+            now,
+            now,
+            'pending_insert'
+          ]
+        );
+      } catch (adjErr) {
+        console.warn('Failed to insert adjustment payment for sale:', adjErr);
+      }
+    }
+
     // Always queue in outbox for reliable auto-sync
     await outboxRepo.add(this.tableName, saleId, 'CREATE', { sale, items: fullItems });
     this.requestSync();
@@ -1399,47 +1440,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           const salesRes = await db.execute(sql, saleArgs);
           const sRows = this.extractRows(salesRes);
 
-          // Find the last anchor sale where showPreviousBalance was active
-          let anchorIndex = -1;
-          for (let i = sRows.length - 1; i >= 0; i--) {
-            const row = sRows[i];
-            if (Boolean(row && row.showPreviousBalance)) {
-              anchorIndex = i;
-              break;
-            }
-          }
-
-          let runningBalance = 0;
-          if (anchorIndex >= 0) {
-            const anchor = sRows[anchorIndex];
-            const anchorPrev = Number(anchor.previousDue || 0) - Number(anchor.advancePayment || 0);
-            const anchorTotal = Number(anchor.total || 0);
-            const anchorPaid = Number(anchor.paid || 0);
-            runningBalance = anchorPrev + anchorTotal - anchorPaid;
-
-            // Subsequent sales occurring after the anchor sale
-            for (let i = anchorIndex + 1; i < sRows.length; i++) {
-              const row = sRows[i];
-              if (!row) continue;
-              const total = Number(row.total || 0);
-              const paid = Number(row.paid || 0);
-              runningBalance += (total - paid);
-            }
-          } else {
-            // No anchor sale found, sum unpaid dues across sales
-            for (const row of sRows) {
-              if (!row) continue;
-              const total = Number(row.total || 0);
-              const paid = Number(row.paid || 0);
-              let due = Number(row.due !== undefined && row.due !== null ? row.due : 0);
-              if (due <= 0 && total > paid && String(row.paymentStatus || '').toLowerCase() !== 'paid') {
-                due = total - paid;
-              }
-              runningBalance += due;
-            }
-          }
-
-          // Check for standalone payments in SQLite
+          // Fetch all customer payments
+          let pRows: any[] = [];
           try {
             const payWhere: string[] = [];
             const payArgs: any[] = [];
@@ -1452,32 +1454,91 @@ export class SaleRepository extends BaseRepository<Sale> {
               payArgs.push(resolvedBackendId);
             }
             if (payWhere.length > 0) {
-              const paySql = `SELECT id, amount, type, reference, createdAt FROM payments WHERE (${payWhere.join(' OR ')})`;
-              const payRes = await db.execute(paySql, payArgs);
-              const pRows = this.extractRows(payRes);
-              const invNums = new Set(sRows.map((r: any) => String(r.invoiceNumber || '')).filter(Boolean));
-              const anchorTime = anchorIndex >= 0 ? new Date(sRows[anchorIndex].createdAt || sRows[anchorIndex].date || 0).getTime() : 0;
-
-              for (const p of pRows) {
-                if (!p) continue;
-                const pRef = p.reference ? String(p.reference) : '';
-                if (pRef && invNums.has(pRef)) continue;
-
-                const pTime = new Date(p.createdAt || 0).getTime();
-                if (anchorIndex >= 0 && pTime <= anchorTime) continue;
-
-                const amt = Number(p.amount || 0);
-                const t = String(p.type || 'receive').toLowerCase();
-                if (t === 'receive' || t === 'received') {
-                  runningBalance -= amt;
-                } else if (t === 'pay' || t === 'paid') {
-                  runningBalance += amt;
-                }
+              let paySql = `SELECT id, amount, type, method, reference, createdAt FROM payments WHERE (${payWhere.join(' OR ')})`;
+              if (excludeSaleId) {
+                paySql += ` AND (reference IS NULL OR (reference != ? AND reference != ?))`;
+                payArgs.push(String(excludeSaleId), `SL-${excludeSaleId}`);
               }
+              const payRes = await db.execute(paySql, payArgs);
+              pRows = this.extractRows(payRes);
             }
           } catch (_) {}
 
-          unpaidCount = sRows.filter((r: any) => Number(r.total || 0) > Number(r.paid || 0)).length;
+          // Sort sales chronologically
+          const sortedSales = [...sRows].sort((a, b) => {
+            const tA = new Date(a.createdAt || a.date || 0).getTime();
+            const tB = new Date(b.createdAt || b.date || 0).getTime();
+            if (tA !== tB) return tA - tB;
+            return Number(a.id || 0) - Number(b.id || 0);
+          });
+
+          // Sort payments chronologically
+          const sortedPayments = [...pRows].sort((a, b) => {
+            const tA = new Date(a.createdAt || 0).getTime();
+            const tB = new Date(b.createdAt || 0).getTime();
+            if (tA !== tB) return tA - tB;
+            return Number(a.id || 0) - Number(b.id || 0);
+          });
+
+          const adjustmentRefs = new Set(
+            sortedPayments
+              .filter((p) => String(p.method || '').toLowerCase() === 'adjustment')
+              .map((p) => String(p.reference || ''))
+              .filter(Boolean)
+          );
+
+          let runningBalance = 0;
+          let pIdx = 0;
+
+          for (const s of sortedSales) {
+            const sTime = new Date(s.createdAt || s.date || 0).getTime();
+
+            // Apply payments made before or at this sale
+            while (pIdx < sortedPayments.length) {
+              const p = sortedPayments[pIdx];
+              const pTime = new Date(p.createdAt || 0).getTime();
+              if (pTime < sTime) {
+                const amt = Number(p.amount || 0);
+                const t = String(p.type || 'receive').toLowerCase();
+                if (t === 'receive' || t === 'received' || t === 'adjustment_credit') {
+                  runningBalance -= amt;
+                } else if (t === 'pay' || t === 'paid' || t === 'adjustment_debit') {
+                  runningBalance += amt;
+                }
+                pIdx++;
+              } else {
+                break;
+              }
+            }
+
+            // Check for manual adjustment on sale if not already in payments
+            const invNum = String(s.invoiceNumber || '');
+            if (Boolean(s.showPreviousBalance) && !adjustmentRefs.has(invNum)) {
+              const enteredPrev = Number(s.previousDue || 0) - Number(s.advancePayment || 0);
+              const delta = enteredPrev - runningBalance;
+              if (Math.abs(delta) > 0.001) {
+                runningBalance += delta;
+              }
+            }
+
+            const total = Number(s.total || 0);
+            runningBalance += total;
+          }
+
+          // Apply remaining payments made after the last sale
+          while (pIdx < sortedPayments.length) {
+            const p = sortedPayments[pIdx];
+            const amt = Number(p.amount || 0);
+            const t = String(p.type || 'receive').toLowerCase();
+            if (t === 'receive' || t === 'received' || t === 'adjustment_credit') {
+              runningBalance -= amt;
+            } else if (t === 'pay' || t === 'paid' || t === 'adjustment_debit') {
+              runningBalance += amt;
+            }
+            pIdx++;
+          }
+
+          unpaidCount = sortedSales.filter((r: any) => Number(r.total || 0) > Number(r.paid || 0)).length;
           if (runningBalance > 0 && unpaidCount === 0) unpaidCount = 1;
           sDue = Number(runningBalance.toFixed(2));
         }
@@ -1489,8 +1550,8 @@ export class SaleRepository extends BaseRepository<Sale> {
       let totalDue = 0;
       let advance = 0;
 
-      // Prefer local sales-derived balance if sales exist; otherwise fallback to customer record balance
-      const effectiveBal = sDue !== 0 || custBal === null ? sDue : custBal;
+      // Single source of truth: prioritize authoritative customer balance, fallback to ledger computation
+      const effectiveBal = custBal !== null ? custBal : sDue;
 
       if (effectiveBal > 0) {
         totalDue = effectiveBal;
@@ -1505,8 +1566,8 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
 
       return {
-        outstandingBalance: custBal !== null ? custBal : sDue,
-        salesDue: sDue,
+        outstandingBalance: effectiveBal,
+        salesDue: effectiveBal,
         totalDue,
         advance,
         unpaidCount,
