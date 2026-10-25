@@ -302,6 +302,7 @@ export function paginateInvoiceItems({
   isBalanceActive,
   previousDue = 0,
   advancePayment = 0,
+  shipping = 0,
 }: {
   items: ReceiptItem[];
   paperFormat: ReceiptPaperFormat;
@@ -310,6 +311,7 @@ export function paginateInvoiceItems({
   isBalanceActive: boolean;
   previousDue?: number;
   advancePayment?: number;
+  shipping?: number;
 }): { pages: InvoicePageLayout[]; totalPages: number } {
   if (items.length === 0) {
     return {
@@ -324,6 +326,7 @@ export function paginateInvoiceItems({
 
   let footerHeight = isLandscape ? 52 : 56;
   if (isWholesale && showBankDetails) footerHeight += 12;
+  if (shipping > 0) footerHeight += 4;
   if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 10;
 
   const availWithFooter = pageHeight - headerHeight - footerHeight;
@@ -465,7 +468,10 @@ export function generateReceiptHtml({
   const subtotal = Number(data.subtotal || 0);
   const discount = Number(data.discount || 0);
   const gst = Number(data.gst || data.orderTax || 0);
+  const rawShipping = Number(data.shipping || (data as any).shippingCost || (data as any).shippingAmount || 0);
   const total = Number(data.total || 0);
+  const inferredShipping = Math.round((total - (subtotal - discount + gst)) * 100) / 100;
+  const shipping = rawShipping > 0 ? rawShipping : (inferredShipping > 0.05 ? inferredShipping : 0);
   const paid = Number(data.paid !== undefined ? data.paid : total);
   const due = Number(data.due !== undefined ? data.due : Math.max(0, total - paid));
   const biller = data.biller || 'Cashier';
@@ -658,6 +664,12 @@ export function generateReceiptHtml({
       <span>₹${sgstAmount.toFixed(2)}</span>
     </div>
   ` : ''}
+  ${shipping > 0 ? `
+    <div class="summary-row">
+      <span>Shipping:</span>
+      <span>+₹${shipping.toFixed(2)}</span>
+    </div>
+  ` : ''}
 
   <div class="double-line"></div>
 
@@ -751,6 +763,7 @@ export function generateReceiptHtml({
       isBalanceActive,
       previousDue,
       advancePayment,
+      shipping,
     });
 
     return `<!DOCTYPE html>
@@ -1119,6 +1132,12 @@ ${pages.map((page, pageIdx) => {
                 <td style="text-align: right;">₹${gst.toFixed(2)}</td>
               </tr>
             ` : ''}
+            ${shipping > 0 ? `
+              <tr>
+                <td style="color: #64748b;">Shipping:</td>
+                <td style="text-align: right;">+₹${shipping.toFixed(2)}</td>
+              </tr>
+            ` : ''}
             <tr class="grand-total-row">
               <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'TOTAL:'}</td>
               <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 11px; font-weight: bold;">₹${total.toFixed(2)}</td>
@@ -1213,6 +1232,7 @@ ${pages.map((page, pageIdx) => {
     isBalanceActive,
     previousDue,
     advancePayment,
+    shipping,
   });
 
   return `<!DOCTYPE html>
@@ -1550,6 +1570,12 @@ ${pagesLs.map((page, pageIdx) => {
                 <td style="text-align: right;">₹${sgstAmount.toFixed(2)}</td>
               </tr>
             ` : ''}
+            ${shipping > 0 ? `
+              <tr>
+                <td style="color: #64748b;">Shipping:</td>
+                <td style="text-align: right;">+₹${shipping.toFixed(2)}</td>
+              </tr>
+            ` : ''}
             <tr class="grand-total-row">
               <td style="color: #fff; font-weight: bold;">${isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}</td>
               <td style="text-align: right; color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: bold;">₹${total.toFixed(2)}</td>
@@ -1778,7 +1804,10 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const subtotal = Number(data.subtotal || 0);
   const discount = Number(data.discount || 0);
   const gst = Number(data.gst || data.orderTax || 0);
+  const rawShipping = Number(data.shipping || (data as any).shippingCost || (data as any).shippingAmount || 0);
   const total = Number(data.total || 0);
+  const inferredShipping = Math.round((total - (subtotal - discount + gst)) * 100) / 100;
+  const shipping = rawShipping > 0 ? rawShipping : (inferredShipping > 0.05 ? inferredShipping : 0);
   const paid = Number(data.paid !== undefined ? data.paid : total);
   const due = Number(data.due !== undefined ? data.due : Math.max(0, total - paid));
   const biller = data.biller || 'Cashier';
@@ -2238,6 +2267,12 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                           </View>
                         </>
                       )}
+                      {shipping > 0 && (
+                        <View style={styles.thermalSummaryRow}>
+                          <Text style={styles.thermalMono}>Shipping:</Text>
+                          <Text style={styles.thermalMono}>+₹{shipping.toFixed(2)}</Text>
+                        </View>
+                      )}
                     </View>
 
                     <View style={styles.thermalDoubleLine} />
@@ -2532,6 +2567,12 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                                 <Text style={styles.p140TotalVal}>₹{sgstAmount.toFixed(2)}</Text>
                               </View>
                             </>
+                          )}
+                          {shipping > 0 && (
+                            <View style={styles.p140TotalRow}>
+                              <Text style={styles.p140TotalKey}>Shipping:</Text>
+                              <Text style={styles.p140TotalVal}>+₹{shipping.toFixed(2)}</Text>
+                            </View>
                           )}
                           <View style={styles.p140GrandTotalRow}>
                             <Text style={styles.p140GrandTotalKey}>
@@ -2885,6 +2926,12 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                                 <Text style={styles.lsSumVal}>₹{sgstAmount.toFixed(2)}</Text>
                               </View>
                             </>
+                          )}
+                          {shipping > 0 && (
+                            <View style={styles.lsSumRow}>
+                              <Text style={styles.lsSumKey}>Shipping:</Text>
+                              <Text style={styles.lsSumVal}>+₹{shipping.toFixed(2)}</Text>
+                            </View>
                           )}
                           <View style={[styles.lsTotalRow, colorMode === 'bw' && { backgroundColor: '#000000' }]}>
                             <Text style={styles.lsTotalKey}>

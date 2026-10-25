@@ -255,6 +255,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
       subtotal: Number(order.subtotal || order.grandTotal || 0),
       discount: Number(order.discount || 0),
       gst: Number(order.gst || 0),
+      shipping: Number(order.shipping || 0),
       total: Number(order.grandTotal || order.total || 0),
       paid: Number(order.paid !== undefined ? order.paid : (order.grandTotal || order.total || 0)),
       due: Number(order.due !== undefined ? order.due : 0),
@@ -699,6 +700,30 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
                 )}
 
                 <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10, gap: 4 }}>
+                  {Number(selectedOrder.subtotal || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Subtotal:</Text>
+                      <Text style={{ color: theme.colors.text }}>₹{Number(selectedOrder.subtotal).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedOrder.discount || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Discount:</Text>
+                      <Text style={{ color: '#EF4444' }}>-₹{Number(selectedOrder.discount).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedOrder.gst || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Taxes & GST:</Text>
+                      <Text style={{ color: theme.colors.text }}>₹{Number(selectedOrder.gst).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedOrder.shipping || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Shipping:</Text>
+                      <Text style={{ color: theme.colors.text }}>+₹{Number(selectedOrder.shipping).toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text style={{ color: theme.colors.textSecondary }}>Grand Total:</Text>
                     <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 16 }}>₹{Number(selectedOrder.grandTotal).toFixed(2)}</Text>

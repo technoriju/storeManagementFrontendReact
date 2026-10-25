@@ -593,6 +593,13 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
                     </View>
                   )}
 
+                  {!!receiptData.shipping && receiptData.shipping > 0 && (
+                    <View style={styles.sumRow}>
+                      <Text style={styles.sumLabel}>Shipping:</Text>
+                      <Text style={styles.sumVal}>+₹{receiptData.shipping.toFixed(2)}</Text>
+                    </View>
+                  )}
+
                   <View style={styles.dashedDivider} />
 
                   {isBalanceActive && previousDue > 0 ? (

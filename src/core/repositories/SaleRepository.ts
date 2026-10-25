@@ -450,6 +450,7 @@ export class SaleRepository extends BaseRepository<Sale> {
         subTotal: Number(entity.subtotal || 0),
         taxTotal: Number((entity.orderTax || 0) + (entity.gst || 0)),
         discountTotal: Number(entity.discount || 0),
+        shipping: Number(entity.shipping || 0),
         grandTotal: Number(entity.total || 0),
         paymentAmount: Number(entity.paid || 0),
         paymentMethod: 'CASH',
@@ -594,6 +595,10 @@ export class SaleRepository extends BaseRepository<Sale> {
       ? Boolean(s.showPreviousBalance)
       : Boolean(existingSale?.showPreviousBalance || (prevDue > 0 || advPay > 0));
 
+    const shippingVal = s.shipping !== undefined && Number(s.shipping) > 0
+      ? Number(s.shipping)
+      : Number(existingSale?.shipping || 0);
+
     const sale: Sale = {
       id: saleId,
       invoiceNumber: String(s.invoiceNumber || `INV-${saleId}`),
@@ -606,7 +611,7 @@ export class SaleRepository extends BaseRepository<Sale> {
       subtotal: Number(s.subTotal ?? s.subtotal ?? 0),
       discount: Number(s.discountTotal ?? s.discount ?? 0),
       orderTax: Number(s.taxTotal ?? s.orderTax ?? 0),
-      shipping: Number(s.shipping ?? 0),
+      shipping: shippingVal,
       gst: Number(s.gst ?? 0),
       total,
       paid,
