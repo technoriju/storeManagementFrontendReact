@@ -88,8 +88,11 @@ export const AppSelect = ({
   const [modalVisible, setModalVisible] = useState(false);
   const [internalValue, setInternalValue] = useState<any>(isMulti ? (Array.isArray(value) ? value : []) : value);
   const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const selectRef = useRef<any>(null);
   const searchInputRef = useRef<any>(null);
+  const flatListRef = useRef<FlatList<any>>(null);
+  const selectId = useRef(`app-select-${Math.random().toString(36).slice(2, 9)}`).current;
   const [dropdownLayout, setDropdownLayout] = useState<any>(() => {
     const sw = Dimensions.get('window').width;
     return computeDropdownLayout(12, 120, sw - 24, 40, fullWidthDropdown);
@@ -155,6 +158,12 @@ export const AppSelect = ({
   const closeModal = () => {
     setModalVisible(false);
     setSearchQuery('');
+    setHighlightedIndex(-1);
+    if (Platform.OS === 'web' && selectRef.current) {
+      setTimeout(() => {
+        selectRef.current?.focus?.();
+      }, 50);
+    }
   };
 
   const currentValue = value !== undefined ? value : internalValue;
@@ -235,6 +244,121 @@ export const AppSelect = ({
     });
   }, [sanitizedOptions, searchable, searchQuery]);
 
+  const highlightedIndexRef = useRef(highlightedIndex);
+  highlightedIndexRef.current = highlightedIndex;
+
+  const filteredOptionsRef = useRef(filteredOptions);
+  filteredOptionsRef.current = filteredOptions;
+
+  const handleSelectRef = useRef(handleSelect);
+  handleSelectRef.current = handleSelect;
+
+  const scrollToOption = (index: number) => {
+    if (index < 0) return;
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`${selectId}-opt-${index}`);
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    } else {
+      try {
+        flatListRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      } catch {
+        // FlatList scrollToIndex might fail if out of render window
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (modalVisible) {
+      if (filteredOptions.length > 0) {
+        let initialIdx = -1;
+        if (!isMulti && hasValue) {
+          initialIdx = filteredOptions.findIndex(o => String(o.value) === String(currentValue));
+        }
+        const targetIdx = initialIdx >= 0 ? initialIdx : 0;
+        setHighlightedIndex(targetIdx);
+        setTimeout(() => {
+          scrollToOption(targetIdx);
+        }, 80);
+      } else {
+        setHighlightedIndex(-1);
+      }
+    } else {
+      setHighlightedIndex(-1);
+    }
+  }, [modalVisible, searchQuery]);
+
+  useEffect(() => {
+    if (!modalVisible || Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const optionsList = filteredOptionsRef.current;
+      const count = optionsList.length;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (count === 0) return;
+        setHighlightedIndex(prev => {
+          const next = prev < count - 1 ? prev + 1 : 0;
+          scrollToOption(next);
+          return next;
+        });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (count === 0) return;
+        setHighlightedIndex(prev => {
+          const next = prev > 0 ? prev - 1 : count - 1;
+          scrollToOption(next);
+          return next;
+        });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        const curr = highlightedIndexRef.current;
+        if (curr >= 0 && curr < count) {
+          const opt = optionsList[curr];
+          if (opt) {
+            handleSelectRef.current(opt);
+          }
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+      } else if (e.key === 'Tab') {
+        closeModal();
+      } else if (!searchable && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const char = e.key.toLowerCase();
+        if (count === 0) return;
+        const start = (highlightedIndexRef.current + 1) % count;
+        for (let i = 0; i < count; i++) {
+          const target = (start + i) % count;
+          if (String(optionsList[target]?.label || '').toLowerCase().startsWith(char)) {
+            setHighlightedIndex(target);
+            scrollToOption(target);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [modalVisible, searchable]);
+
   return (
     <View style={[styles.container, { marginBottom: theme.spacing.md }, containerStyle]}>
       {label && <Text style={{ color: theme.colors.text, marginBottom: theme.spacing.xs, fontWeight: theme.typography.weights.medium as any }}>{label}</Text>}
@@ -243,6 +367,17 @@ export const AppSelect = ({
         ref={selectRef}
         onLayout={handleInputLayout}
         delayPressIn={0}
+        // @ts-ignore
+        tabIndex={0}
+        // @ts-ignore
+        onKeyDown={(e: any) => {
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            openModal();
+          }
+        }}
+        accessibilityRole="combobox"
+        accessibilityExpanded={modalVisible}
         style={[
           styles.input, 
           { 
@@ -350,6 +485,12 @@ export const AppSelect = ({
                   onChangeText={setSearchQuery}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  onSubmitEditing={() => {
+                    const curr = highlightedIndexRef.current;
+                    if (curr >= 0 && curr < filteredOptionsRef.current.length) {
+                      handleSelectRef.current(filteredOptionsRef.current[curr]);
+                    }
+                  }}
                 />
               </View>
             )}
@@ -360,6 +501,7 @@ export const AppSelect = ({
               </View>
             ) : (
               <FlatList
+                ref={flatListRef}
                 data={filteredOptions}
                 keyExtractor={(item, index) => `select-opt-${String(item.value ?? '')}-${index}`}
                 renderItem={({ item, index }) => {
@@ -369,21 +511,32 @@ export const AppSelect = ({
                   } else {
                     isSelected = String(currentValue) === String(item.value);
                   }
+                  const isHighlighted = highlightedIndex === index;
 
                   return (
                     <TouchableOpacity 
                       key={`select-item-${String(item.value ?? '')}-${index}`}
+                      // @ts-ignore
+                      id={`${selectId}-opt-${index}`}
+                      nativeID={`${selectId}-opt-${index}`}
                       style={[
                         styles.optionItem, 
-                        isSelected && !isMulti && { backgroundColor: theme.colors.background || '#f9f9f9' }
+                        isSelected && !isMulti && { backgroundColor: theme.colors.background || '#f9f9f9' },
+                        isHighlighted && { backgroundColor: theme.colors.primary ? `${theme.colors.primary}18` : '#EBF5FF' }
                       ]} 
                       onPress={() => handleSelect(item)}
+                      // @ts-ignore
+                      onMouseEnter={() => {
+                        if (Platform.OS === 'web') {
+                          setHighlightedIndex(index);
+                        }
+                      }}
                       delayPressIn={0}
                     >
                       <Text style={[
                         styles.optionText, 
                         { color: theme.colors.text },
-                        isSelected && { color: theme.colors.primary, fontWeight: '600' as any }
+                        (isSelected || isHighlighted) && { color: theme.colors.primary, fontWeight: '600' as any }
                       ]}>
                         {item.label}
                       </Text>
@@ -400,6 +553,11 @@ export const AppSelect = ({
                 initialNumToRender={20}
                 maxToRenderPerBatch={20}
                 windowSize={5}
+                onScrollToIndexFailed={(info) => {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                  }, 50);
+                }}
               />
             )}
           </View>
