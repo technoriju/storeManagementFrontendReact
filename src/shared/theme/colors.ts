@@ -7,6 +7,7 @@ export const colors = {
   warning: '#FFBB28',
   error: '#FF4560',
   info: '#0088FE',
+  dropdownHighlight: '#e1e9ff',
   
   background: '#F3F4F6',
   surface: '#FFFFFF',
