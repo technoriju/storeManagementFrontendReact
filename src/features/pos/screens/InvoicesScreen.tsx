@@ -259,6 +259,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
       subtotal: Number(invoice.subtotal || invoice.total || 0),
       discount: Number(invoice.discount || 0),
       gst: Number((invoice.orderTax || 0) + (invoice.gst || 0)),
+      shipping: Number(invoice.shipping || 0),
       total: Number(invoice.total || 0),
       paid: Number(invoice.paid !== undefined ? invoice.paid : invoice.total || 0),
       due: Number(invoice.due !== undefined ? invoice.due : 0),
@@ -599,6 +600,12 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                     <Text style={{ color: theme.colors.textSecondary }}>Taxes & GST:</Text>
                     <Text style={{ color: theme.colors.text }}>₹{Number((viewInvoice.orderTax || 0) + (viewInvoice.gst || 0)).toFixed(2)}</Text>
                   </View>
+                  {Number(viewInvoice.shipping || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Shipping:</Text>
+                      <Text style={{ color: theme.colors.text }}>+₹{Number(viewInvoice.shipping).toFixed(2)}</Text>
+                    </View>
+                  )}
                   {viewInvoice.showPreviousBalance && Number(viewInvoice.previousDue || 0) > 0 ? (
                     <>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8, marginTop: 4 }}>
