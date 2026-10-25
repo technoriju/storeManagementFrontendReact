@@ -367,157 +367,160 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
         </View>
       )}
 
-      {/* Search Input Box */}
-      <View
-        style={[
-          styles.inputContainer,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: error ? '#EF4444' : isOpen ? theme.colors.primary : theme.colors.border,
-            height: isMouse ? 36 : 40,
-          },
-          disabled && { opacity: 0.6 },
-        ]}
-      >
-        <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-        <TextInput
-          ref={inputRef}
-          value={query}
-          onChangeText={handleQueryChange}
-          onKeyPress={handleKeyDown}
-          {...(Platform.OS === 'web' ? ({ onKeyDown: handleKeyDown } as any) : {})}
-          onFocus={() => {
-            if (query.trim().length >= minSearchLength || results.length > 0) {
-              setIsOpen(true);
-            }
-          }}
-          onSubmitEditing={handleSubmitEditing}
-          placeholder={placeholder}
-          placeholderTextColor={theme.colors.textSecondary}
-          editable={!disabled}
-          autoFocus={autoFocus}
+      {/* Input & Dropdown Relative Container */}
+      <View style={{ position: 'relative', width: '100%', zIndex: isOpen ? 99999 : 1 }}>
+        {/* Search Input Box */}
+        <View
           style={[
-            styles.textInput,
-            { color: theme.colors.text, fontSize: isMouse ? 13 : 14 },
-            inputStyle,
+            styles.inputContainer,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: error ? '#EF4444' : isOpen ? theme.colors.primary : theme.colors.border,
+              height: isMouse ? 36 : 40,
+            },
+            disabled && { opacity: 0.6 },
           ]}
-        />
-        {isLoading && (
-          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 6 }} />
-        )}
-        {query.length > 0 && !isLoading && (
-          <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <X size={15} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
+        >
+          <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
+          <TextInput
+            ref={inputRef}
+            value={query}
+            onChangeText={handleQueryChange}
+            onKeyPress={handleKeyDown}
+            {...(Platform.OS === 'web' ? ({ onKeyDown: handleKeyDown } as any) : {})}
+            onFocus={() => {
+              if (query.trim().length >= minSearchLength || results.length > 0) {
+                setIsOpen(true);
+              }
+            }}
+            onSubmitEditing={handleSubmitEditing}
+            placeholder={placeholder}
+            placeholderTextColor={theme.colors.textSecondary}
+            editable={!disabled}
+            autoFocus={autoFocus}
+            style={[
+              styles.textInput,
+              { color: theme.colors.text, fontSize: isMouse ? 13 : 14 },
+              inputStyle,
+            ]}
+          />
+          {isLoading && (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 6 }} />
+          )}
+          {query.length > 0 && !isLoading && (
+            <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={15} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Floating Dropdown Results */}
+        {isOpen && (
+          <View
+            style={[
+              styles.dropdown,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                top: (isMouse ? 36 : 40) + 4,
+              },
+              dropdownStyle,
+            ]}
+          >
+            {isLoading && results.length === 0 ? (
+              <View style={styles.stateContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
+                  Searching products...
+                </Text>
+              </View>
+            ) : results.length > 0 ? (
+              <ScrollView
+                ref={scrollViewRef}
+                style={{ maxHeight: isMobile ? 220 : 260 }}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {results.map((product, idx) => {
+                  const isHighlighted = idx === highlightedIndex;
+                  const priceInfo = getPriceDisplay(product);
+                  const stockQty = Number(product.stockQuantity ?? product.openingStock ?? 0);
+                  const unitName = product.baseUnit?.shortName || product.unit || 'Pc';
+                  const brand = product.brandName || product.brand?.name;
+                  const cat = product.categoryName || product.category?.name;
+
+                  return (
+                    <TouchableOpacity
+                      key={product.id}
+                      ref={(el) => {
+                        itemRefs.current[idx] = el;
+                      }}
+                      style={[
+                        styles.resultItem,
+                        {
+                          borderBottomColor: theme.colors.divider || theme.colors.border,
+                          backgroundColor: isHighlighted ? (theme.colors.dropdownHighlight || '#EEF2FF') : 'transparent',
+                        },
+                      ]}
+                      onPress={() => handleItemSelect(product)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text
+                          style={[styles.resultName, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {product.name}
+                        </Text>
+                        <View style={styles.resultMetaRow}>
+                          <Text style={[styles.resultMeta, { color: theme.colors.textSecondary }]}>
+                            SKU: {product.sku || 'N/A'}
+                          </Text>
+                          {(brand || cat) && (
+                            <>
+                              <Text style={[styles.metaDot, { color: theme.colors.textSecondary }]}>•</Text>
+                              <Text style={[styles.resultMeta, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                                {brand || cat}
+                              </Text>
+                            </>
+                          )}
+                          <Text style={[styles.metaDot, { color: theme.colors.textSecondary }]}>•</Text>
+                          <Text
+                            style={[
+                              styles.resultMeta,
+                              { color: stockQty > 0 ? '#10B981' : '#EF4444', fontWeight: '600' },
+                            ]}
+                          >
+                            Qty: {Number(stockQty.toFixed(4))} {unitName}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.resultPriceBadge}>
+                        <Text style={[styles.resultPriceText, { color: priceInfo.color }]}>
+                          {priceInfo.value}
+                        </Text>
+                        <Text style={[styles.resultPriceSub, { color: theme.colors.textSecondary }]}>
+                          {priceInfo.label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : query.trim().length >= minSearchLength && !isLoading ? (
+              <View style={styles.stateContainer}>
+                <AlertCircle size={16} color={theme.colors.textSecondary} />
+                <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
+                  No products found matching "{query}".
+                </Text>
+              </View>
+            ) : null}
+          </View>
         )}
       </View>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
-
-      {/* Floating Dropdown Results */}
-      {isOpen && (
-        <View
-          style={[
-            styles.dropdown,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              top: isMouse ? 40 : 44,
-            },
-            dropdownStyle,
-          ]}
-        >
-          {isLoading && results.length === 0 ? (
-            <View style={styles.stateContainer}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
-                Searching products...
-              </Text>
-            </View>
-          ) : results.length > 0 ? (
-            <ScrollView
-              ref={scrollViewRef}
-              style={{ maxHeight: 260 }}
-              nestedScrollEnabled={true}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-            >
-              {results.map((product, idx) => {
-                const isHighlighted = idx === highlightedIndex;
-                const priceInfo = getPriceDisplay(product);
-                const stockQty = Number(product.stockQuantity ?? product.openingStock ?? 0);
-                const unitName = product.baseUnit?.shortName || product.unit || 'Pc';
-                const brand = product.brandName || product.brand?.name;
-                const cat = product.categoryName || product.category?.name;
-
-                return (
-                  <TouchableOpacity
-                    key={product.id}
-                    ref={(el) => {
-                      itemRefs.current[idx] = el;
-                    }}
-                    style={[
-                      styles.resultItem,
-                      {
-                        borderBottomColor: theme.colors.divider || theme.colors.border,
-                        backgroundColor: isHighlighted ? (theme.colors.dropdownHighlight || '#EEF2FF') : 'transparent',
-                      },
-                    ]}
-                    onPress={() => handleItemSelect(product)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text
-                        style={[styles.resultName, { color: theme.colors.text }]}
-                        numberOfLines={1}
-                      >
-                        {product.name}
-                      </Text>
-                      <View style={styles.resultMetaRow}>
-                        <Text style={[styles.resultMeta, { color: theme.colors.textSecondary }]}>
-                          SKU: {product.sku || 'N/A'}
-                        </Text>
-                        {(brand || cat) && (
-                          <>
-                            <Text style={[styles.metaDot, { color: theme.colors.textSecondary }]}>•</Text>
-                            <Text style={[styles.resultMeta, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                              {brand || cat}
-                            </Text>
-                          </>
-                        )}
-                        <Text style={[styles.metaDot, { color: theme.colors.textSecondary }]}>•</Text>
-                        <Text
-                          style={[
-                            styles.resultMeta,
-                            { color: stockQty > 0 ? '#10B981' : '#EF4444', fontWeight: '600' },
-                          ]}
-                        >
-                          Qty: {Number(stockQty.toFixed(4))} {unitName}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.resultPriceBadge}>
-                      <Text style={[styles.resultPriceText, { color: priceInfo.color }]}>
-                        {priceInfo.value}
-                      </Text>
-                      <Text style={[styles.resultPriceSub, { color: theme.colors.textSecondary }]}>
-                        {priceInfo.label}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          ) : query.trim().length >= minSearchLength && !isLoading ? (
-            <View style={styles.stateContainer}>
-              <AlertCircle size={16} color={theme.colors.textSecondary} />
-              <Text style={[styles.stateText, { color: theme.colors.textSecondary }]}>
-                No products found matching "{query}".
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      )}
     </View>
   );
 };
@@ -551,14 +554,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 8,
     zIndex: 99999,
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.16)',
+      },
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 10,
       },
       default: {
-        elevation: 10,
+        elevation: 20,
       },
     }),
     overflow: 'hidden',
@@ -568,7 +577,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
+    minHeight: 46,
     borderBottomWidth: 1,
   },
   resultName: {
@@ -578,6 +588,7 @@ const styles = StyleSheet.create({
   resultMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     marginTop: 2,
     gap: 4,
   },

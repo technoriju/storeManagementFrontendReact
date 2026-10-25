@@ -29,8 +29,12 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
   productName,
 }) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowHeight } = useResponsive();
   const { data: transactions = [], isLoading, refetch } = useStockTransactions(productId || undefined);
+
+  const modalHeight = isMobile
+    ? Math.min((windowHeight || 700) * 0.88, 620)
+    : Math.min((windowHeight || 700) * 0.85, 680);
 
   const getTypeStyle = (type: string) => {
     const t = (type || '').toUpperCase();
@@ -54,128 +58,138 @@ export const StockHistoryModal: React.FC<StockHistoryModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={styles.headerIcon}>
-                    <History size={18} color="#2563EB" />
-                  </View>
-                  <View>
-                    <Text style={[styles.title, { color: theme.colors.text }]}>Stock Movement Log</Text>
-                    {productName ? (
-                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                        Product: {productName}
-                      </Text>
-                    ) : (
-                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                        Recent inventory transactions
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <X size={14} color="#FFF" />
-                </TouchableOpacity>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          style={[
+            styles.modalContainer,
+            {
+              backgroundColor: theme.colors.surface,
+              height: modalHeight,
+              maxHeight: '92%',
+              width: isMobile ? '95%' : '100%',
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+              <View style={styles.headerIcon}>
+                <History size={18} color="#2563EB" />
               </View>
-
-              {/* Content */}
-              <View style={styles.body}>
-                {isLoading ? (
-                  <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                  </View>
-                ) : transactions.length === 0 ? (
-                  <View style={styles.emptyContainer}>
-                    <History size={40} color={theme.colors.border} />
-                    <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-                      No stock movement records found
-                    </Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={transactions}
-                    keyExtractor={(item) => String(item.id)}
-                    contentContainerStyle={{ paddingVertical: 8 }}
-                    renderItem={({ item }) => {
-                      const typeMeta = getTypeStyle(item.type);
-                      return (
-                        <View style={[styles.logItem, { borderColor: theme.colors.border }]}>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                              <View style={[styles.typeBadge, { backgroundColor: typeMeta.bg }]}>
-                                <Text style={[styles.typeBadgeText, { color: typeMeta.text }]}>
-                                  {item.type.replace('_', ' ')}
-                                </Text>
-                              </View>
-                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
-                                {formatDate(item.createdAt)}
-                              </Text>
-                            </View>
-                            <Text style={[styles.itemName, { color: theme.colors.text }]}>
-                              {item.productName} {item.sku ? `(${item.sku})` : ''}
-                            </Text>
-                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                              {item.reason || item.reference || 'Manual update'}
-                            </Text>
-                          </View>
-
-                          <View style={styles.qtyContainer}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                              {typeMeta.isPositive ? (
-                                <ArrowUpRight size={14} color="#10B981" />
-                              ) : (
-                                <ArrowDownLeft size={14} color="#EF4444" />
-                              )}
-                              <Text
-                                style={[
-                                  styles.qtyValue,
-                                  { color: typeMeta.isPositive ? '#10B981' : '#EF4444' }
-                                ]}
-                              >
-                                {`${typeMeta.isPositive ? '+' : '-'}${Math.abs(Number(item.quantity || 0))}`}
-                              </Text>
-                            </View>
-                            {item.newStock > 0 && (
-                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
-                                Stock: {item.newStock}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      );
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Footer */}
-              <View style={[
-                styles.footer,
-                { borderTopColor: theme.colors.border },
-                isMobile && { flexDirection: 'column-reverse', gap: 8 }
-              ]}>
-                <TouchableOpacity
-                  style={[styles.refreshBtn, { borderColor: theme.colors.border }, isMobile && { width: '100%', justifyContent: 'center' }]}
-                  onPress={() => refetch()}
-                >
-                  <RefreshCw size={14} color={theme.colors.textSecondary} />
-                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Refresh</Text>
-                </TouchableOpacity>
-                <AppButton
-                  title="Close"
-                  size="small"
-                  onPress={onClose}
-                  style={[styles.closeBtn, isMobile && { width: '100%' }]}
-                  textStyle={{ color: '#FFF' }}
-                />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
+                  Stock Movement Log
+                </Text>
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }} numberOfLines={1}>
+                  {productName ? `Product: ${productName}` : 'Recent inventory transactions'}
+                </Text>
               </View>
             </View>
-        </Pressable>
-      </Pressable>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <X size={14} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Content */}
+          <View style={styles.body}>
+            {isLoading ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : transactions.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <History size={40} color={theme.colors.border} />
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                  No stock movement records found
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={transactions}
+                keyExtractor={(item) => String(item.id)}
+                contentContainerStyle={{ paddingVertical: 8 }}
+                renderItem={({ item }) => {
+                  const typeMeta = getTypeStyle(item.type);
+                  return (
+                    <View style={[styles.logItem, { borderColor: theme.colors.border }]}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <View style={[styles.typeBadge, { backgroundColor: typeMeta.bg }]}>
+                            <Text style={[styles.typeBadgeText, { color: typeMeta.text }]}>
+                              {item.type.replace('_', ' ')}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                            {formatDate(item.createdAt)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.itemName, { color: theme.colors.text }]} numberOfLines={2}>
+                          {item.productName} {item.sku ? `(${item.sku})` : ''}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }} numberOfLines={1}>
+                          {item.reason || item.reference || 'Manual update'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.qtyContainer}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                          {typeMeta.isPositive ? (
+                            <ArrowUpRight size={14} color="#10B981" />
+                          ) : (
+                            <ArrowDownLeft size={14} color="#EF4444" />
+                          )}
+                          <Text
+                            style={[
+                              styles.qtyValue,
+                              { color: typeMeta.isPositive ? '#10B981' : '#EF4444' }
+                            ]}
+                          >
+                            {`${typeMeta.isPositive ? '+' : '-'}${Math.abs(Number(item.quantity || 0))}`}
+                          </Text>
+                        </View>
+                        {item.newStock > 0 && (
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                            Stock: {item.newStock}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+
+          {/* Footer */}
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border },
+            isMobile && { flexDirection: 'column-reverse', gap: 8 }
+          ]}>
+            <TouchableOpacity
+              style={[styles.refreshBtn, { borderColor: theme.colors.border }, isMobile && { width: '100%', justifyContent: 'center' }]}
+              onPress={() => refetch()}
+            >
+              <RefreshCw size={14} color={theme.colors.textSecondary} />
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Refresh</Text>
+            </TouchableOpacity>
+            <AppButton
+              title="Close"
+              size="small"
+              onPress={onClose}
+              style={[styles.closeBtn, isMobile && { width: '100%' }]}
+              textStyle={{ color: '#FFF' }}
+            />
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -217,16 +231,16 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     backgroundColor: '#EF4444',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   body: {
     flex: 1,
     paddingHorizontal: 16,
-    minHeight: 250,
   },
   centerContainer: {
     flex: 1,
