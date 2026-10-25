@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
@@ -35,7 +36,7 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
   onSuccess,
 }) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowHeight } = useResponsive();
   const { fetchProductById } = useProductStore();
   const adjustStockMutation = useAdjustStock();
 
@@ -127,50 +128,75 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={styles.headerIcon}>
-                    <SlidersHorizontal size={18} color="#1E3A8A" />
-                  </View>
-                  <Text style={[styles.title, { color: theme.colors.text }]}>Stock Adjustment</Text>
-                </View>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <X size={14} color="#FFF" />
-                </TouchableOpacity>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          style={[
+            styles.modalContainer,
+            {
+              backgroundColor: theme.colors.surface,
+              maxHeight: isMobile ? Math.floor((windowHeight || 800) * 0.92) : '90%',
+              width: isMobile ? '95%' : '100%',
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+              <View style={styles.headerIcon}>
+                <SlidersHorizontal size={18} color="#1E3A8A" />
               </View>
+              <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>Stock Adjustment</Text>
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <X size={14} color="#FFF" />
+            </TouchableOpacity>
+          </View>
 
-              {/* Body */}
-              <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-                {errorMessage && (
-                  <View style={styles.errorAlert}>
-                    <AlertCircle size={16} color="#EF4444" />
-                    <Text style={styles.errorText}>{errorMessage}</Text>
-                  </View>
-                )}
+          {/* Body */}
+          <ScrollView
+            style={styles.body}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+          >
+            {errorMessage && (
+              <View style={styles.errorAlert}>
+                <AlertCircle size={16} color="#EF4444" />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
 
-                {/* Product Select */}
-                <View style={{ marginBottom: 16 }}>
-                  <ProductSearchSelect
-                    mode="select"
-                    label="Select Product *"
-                    placeholder="Search product to adjust..."
-                    selectedProductId={selectedProductId}
-                    selectedProduct={selectedProduct}
-                    onSelectProduct={(p) => {
-                      setSelectedProductId(String(p.id));
-                      setSelectedProduct(p);
-                    }}
-                    onClearSelection={() => {
-                      setSelectedProductId('');
-                      setSelectedProduct(null);
-                    }}
-                  />
-                </View>
+            {/* Product Select */}
+            <View
+              style={{
+                marginBottom: 16,
+                zIndex: 100,
+                elevation: Platform.OS === 'android' ? 50 : undefined,
+              }}
+            >
+              <ProductSearchSelect
+                mode="select"
+                label="Select Product *"
+                placeholder="Search product to adjust..."
+                selectedProductId={selectedProductId}
+                selectedProduct={selectedProduct}
+                onSelectProduct={(p) => {
+                  setSelectedProductId(String(p.id));
+                  setSelectedProduct(p);
+                }}
+                onClearSelection={() => {
+                  setSelectedProductId('');
+                  setSelectedProduct(null);
+                }}
+              />
+            </View>
 
                 {/* Adjustment Mode Selector */}
                 <View style={{ marginBottom: 16 }}>
@@ -331,31 +357,30 @@ export const AdjustStockModal: React.FC<AdjustStockModalProps> = ({
                 />
               </ScrollView>
 
-              {/* Footer */}
-              <View style={[
-                styles.footer,
-                { borderTopColor: theme.colors.border },
-                isMobile && { flexDirection: 'column-reverse', gap: 8 }
-              ]}>
-                <AppButton
-                  title="Cancel"
-                  size="small"
-                  onPress={onClose}
-                  style={[styles.cancelBtn, isMobile && { width: '100%' }]}
-                  textStyle={{ color: '#FFF' }}
-                />
-                <AppButton
-                  title="Apply Adjustment"
-                  size="small"
-                  onPress={handleSubmit}
-                  style={[styles.submitBtn, isMobile && { width: '100%' }]}
-                  disabled={adjustStockMutation.isPending}
-                  isLoading={adjustStockMutation.isPending}
-                />
-              </View>
-            </View>
-        </Pressable>
-      </Pressable>
+          {/* Footer */}
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border },
+            isMobile && { flexDirection: 'column-reverse', gap: 8 }
+          ]}>
+            <AppButton
+              title="Cancel"
+              size="small"
+              onPress={onClose}
+              style={[styles.cancelBtn, isMobile && { width: '100%' }]}
+              textStyle={{ color: '#FFF' }}
+            />
+            <AppButton
+              title="Apply Adjustment"
+              size="small"
+              onPress={handleSubmit}
+              style={[styles.submitBtn, isMobile && { width: '100%' }]}
+              disabled={adjustStockMutation.isPending}
+              isLoading={adjustStockMutation.isPending}
+            />
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -397,11 +422,12 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     backgroundColor: '#EF4444',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   body: {
     padding: 20,

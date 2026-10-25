@@ -9,6 +9,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
@@ -34,7 +35,7 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   onSuccess,
 }) => {
   const theme = useTheme();
-  const { isMobile } = useResponsive();
+  const { isMobile, windowHeight } = useResponsive();
   const { fetchProductById } = useProductStore();
   const addStockMutation = useAddStock();
 
@@ -110,156 +111,180 @@ export const AddStockModal: React.FC<AddStockModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
-              {/* Header */}
-              <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={styles.headerIcon}>
-                    <Layers size={18} color="#F97316" />
-                  </View>
-                  <Text style={[styles.title, { color: theme.colors.text }]}>Add Stock</Text>
-                </View>
-                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                  <X size={14} color="#FFF" />
-                </TouchableOpacity>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          style={[
+            styles.modalContainer,
+            {
+              backgroundColor: theme.colors.surface,
+              maxHeight: isMobile ? Math.floor((windowHeight || 800) * 0.92) : '90%',
+              width: isMobile ? '95%' : '100%',
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+              <View style={styles.headerIcon}>
+                <Layers size={18} color="#F97316" />
               </View>
+              <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>Add Stock</Text>
+            </View>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <X size={14} color="#FFF" />
+            </TouchableOpacity>
+          </View>
 
-              {/* Body */}
-              <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-                {errorMessage && (
-                  <View style={styles.errorAlert}>
-                    <AlertCircle size={16} color="#EF4444" />
-                    <Text style={styles.errorText}>{errorMessage}</Text>
-                  </View>
-                )}
+          {/* Body */}
+          <ScrollView
+            style={styles.body}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+          >
+            {errorMessage && (
+              <View style={styles.errorAlert}>
+                <AlertCircle size={16} color="#EF4444" />
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
 
-                {/* Product Select */}
-                <View style={{ marginBottom: 16 }}>
-                  <ProductSearchSelect
-                    mode="select"
-                    label="Select Product *"
-                    priceType="purchase"
-                    placeholder="Search product to restock..."
-                    selectedProductId={selectedProductId}
-                    selectedProduct={selectedProduct}
-                    onSelectProduct={(p) => {
-                      setSelectedProductId(String(p.id));
-                      setSelectedProduct(p);
-                      const price = p.purchasePrice ?? p.cost ?? 0;
-                      setUnitCost(price > 0 ? String(price) : '');
-                    }}
-                    onClearSelection={() => {
-                      setSelectedProductId('');
-                      setSelectedProduct(null);
-                      setUnitCost('');
-                    }}
-                  />
-                </View>
+            {/* Product Select */}
+            <View
+              style={{
+                marginBottom: 16,
+                zIndex: 100,
+                elevation: Platform.OS === 'android' ? 50 : undefined,
+              }}
+            >
+              <ProductSearchSelect
+                mode="select"
+                label="Select Product *"
+                priceType="purchase"
+                placeholder="Search product to restock..."
+                selectedProductId={selectedProductId}
+                selectedProduct={selectedProduct}
+                onSelectProduct={(p) => {
+                  setSelectedProductId(String(p.id));
+                  setSelectedProduct(p);
+                  const price = p.purchasePrice ?? p.cost ?? 0;
+                  setUnitCost(price > 0 ? String(price) : '');
+                }}
+                onClearSelection={() => {
+                  setSelectedProductId('');
+                  setSelectedProduct(null);
+                  setUnitCost('');
+                }}
+              />
+            </View>
 
-                {/* Quantity and Unit Price row */}
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <AppInput
-                      label="Quantity to Add *"
-                      placeholder="e.g. 50"
-                      value={quantity}
-                      onChangeText={setQuantity}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <AppInput
-                      label="Unit Cost (₹)"
-                      placeholder="e.g. 150.00"
-                      value={unitCost}
-                      onChangeText={setUnitCost}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                </View>
-
-                {/* Reason Presets */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Reason / Source</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {reasonPresets.map((preset) => (
-                        <TouchableOpacity
-                          key={preset}
-                          style={[
-                            styles.presetPill,
-                            reason === preset
-                              ? { backgroundColor: '#F97316', borderColor: '#F97316' }
-                              : { borderColor: theme.colors.border, backgroundColor: theme.colors.background }
-                          ]}
-                          onPress={() => setReason(preset)}
-                        >
-                          <Text
-                            style={[
-                              styles.presetText,
-                              { color: reason === preset ? '#FFF' : theme.colors.text }
-                            ]}
-                          >
-                            {preset}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
-                  <AppInput
-                    placeholder="Or enter custom reason"
-                    value={reason}
-                    onChangeText={setReason}
-                  />
-                </View>
-
-                {/* Reference No */}
+            {/* Quantity and Unit Price row */}
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
                 <AppInput
-                  label="Reference No / Batch No"
-                  placeholder="e.g. STK-123456"
-                  value={reference}
-                  onChangeText={setReference}
+                  label="Quantity to Add *"
+                  placeholder="e.g. 50"
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  keyboardType="decimal-pad"
                 />
-
-                {/* Notes */}
+              </View>
+              <View style={{ flex: 1 }}>
                 <AppInput
-                  label="Remarks / Notes"
-                  placeholder="Optional notes or supplier info..."
-                  value={notes}
-                  onChangeText={setNotes}
-                  multiline
-                  numberOfLines={2}
-                />
-              </ScrollView>
-
-              {/* Footer */}
-              <View style={[
-                styles.footer,
-                { borderTopColor: theme.colors.border },
-                isMobile && { flexDirection: 'column-reverse', gap: 8 }
-              ]}>
-                <AppButton
-                  title="Cancel"
-                  size="small"
-                  onPress={onClose}
-                  style={[styles.cancelBtn, isMobile && { width: '100%' }]}
-                  textStyle={{ color: '#FFF' }}
-                />
-                <AppButton
-                  title="Add Stock"
-                  size="small"
-                  onPress={handleSubmit}
-                  style={[styles.submitBtn, isMobile && { width: '100%' }]}
-                  disabled={addStockMutation.isPending}
-                  isLoading={addStockMutation.isPending}
+                  label="Unit Cost (₹)"
+                  placeholder="e.g. 150.00"
+                  value={unitCost}
+                  onChangeText={setUnitCost}
+                  keyboardType="decimal-pad"
                 />
               </View>
             </View>
-        </Pressable>
-      </Pressable>
+
+            {/* Reason Presets */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Reason / Source</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {reasonPresets.map((preset) => (
+                    <TouchableOpacity
+                      key={preset}
+                      style={[
+                        styles.presetPill,
+                        reason === preset
+                          ? { backgroundColor: '#F97316', borderColor: '#F97316' }
+                          : { borderColor: theme.colors.border, backgroundColor: theme.colors.background }
+                      ]}
+                      onPress={() => setReason(preset)}
+                    >
+                      <Text
+                        style={[
+                          styles.presetText,
+                          { color: reason === preset ? '#FFF' : theme.colors.text }
+                        ]}
+                      >
+                        {preset}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+              <AppInput
+                placeholder="Or enter custom reason"
+                value={reason}
+                onChangeText={setReason}
+              />
+            </View>
+
+            {/* Reference No */}
+            <AppInput
+              label="Reference No / Batch No"
+              placeholder="e.g. STK-123456"
+              value={reference}
+              onChangeText={setReference}
+            />
+
+            {/* Notes */}
+            <AppInput
+              label="Remarks / Notes"
+              placeholder="Optional notes or supplier info..."
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={2}
+            />
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={[
+            styles.footer,
+            { borderTopColor: theme.colors.border },
+            isMobile && { flexDirection: 'column-reverse', gap: 8 }
+          ]}>
+            <AppButton
+              title="Cancel"
+              size="small"
+              onPress={onClose}
+              style={[styles.cancelBtn, isMobile && { width: '100%' }]}
+              textStyle={{ color: '#FFF' }}
+            />
+            <AppButton
+              title="Add Stock"
+              size="small"
+              onPress={handleSubmit}
+              style={[styles.submitBtn, isMobile && { width: '100%' }]}
+              disabled={addStockMutation.isPending}
+              isLoading={addStockMutation.isPending}
+            />
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -301,11 +326,12 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     backgroundColor: '#EF4444',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   body: {
     padding: 20,
