@@ -425,6 +425,122 @@ export interface MoneyTransfer extends BaseEntity {
   backendId?: number;
 }
 
+export interface Department extends BaseEntity {
+  name: string;
+  code: string;
+  description?: string;
+  managerName?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  backendId?: number;
+}
+
+export interface Designation extends BaseEntity {
+  name: string;
+  code: string;
+  departmentId?: number;
+  departmentName?: string;
+  description?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  backendId?: number;
+}
+
+export interface Shift extends BaseEntity {
+  name: string;
+  code: string;
+  startTime: string;
+  endTime: string;
+  lateToleranceMinutes?: number;
+  breakDurationMinutes?: number;
+  status: 'ACTIVE' | 'INACTIVE';
+  backendId?: number;
+}
+
+export interface Employee extends BaseEntity {
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  departmentId?: number;
+  departmentName?: string;
+  designationId?: number;
+  designationName?: string;
+  shiftId?: number;
+  shiftName?: string;
+  joiningDate: string;
+  salary: number;
+  employmentType: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
+  status: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
+  address?: string;
+  emergencyContact?: string;
+  backendId?: number;
+}
+
+export interface Attendance extends BaseEntity {
+  employeeId: number;
+  employeeName: string;
+  departmentName?: string;
+  date: string;
+  clockIn?: string;
+  clockOut?: string;
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY' | 'ON_LEAVE';
+  totalHours?: number;
+  notes?: string;
+  backendId?: number;
+}
+
+export interface LeaveType extends BaseEntity {
+  name: string;
+  daysAllowed: number;
+  description?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  backendId?: number;
+}
+
+export interface LeaveRequest extends BaseEntity {
+  employeeId: number;
+  employeeName: string;
+  departmentName?: string;
+  leaveTypeId: number;
+  leaveTypeName: string;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  appliedAt?: string;
+  backendId?: number;
+}
+
+export interface Holiday extends BaseEntity {
+  name: string;
+  date: string;
+  dayOfWeek?: string;
+  type: 'PUBLIC' | 'COMPANY' | 'OPTIONAL';
+  description?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  backendId?: number;
+}
+
+export interface Payroll extends BaseEntity {
+  employeeId: number;
+  employeeName: string;
+  departmentName?: string;
+  designationName?: string;
+  month: string;
+  year: number;
+  basicSalary: number;
+  allowances: number;
+  deductions: number;
+  netSalary: number;
+  paymentDate?: string;
+  paymentMethod?: string;
+  status: 'PAID' | 'GENERATED' | 'PENDING';
+  notes?: string;
+  backendId?: number;
+}
+
+
 
 
 

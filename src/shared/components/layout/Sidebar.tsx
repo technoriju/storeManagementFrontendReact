@@ -122,14 +122,50 @@ const menuSections: MenuSection[] = [
   {
     title: 'HRM',
     items: [
-      { id: 'employees', label: 'Employees', icon: 'user' },
+      {
+        id: 'employees',
+        label: 'Employees',
+        icon: 'user',
+        hasChevron: true,
+        subItems: [
+          { id: 'employees', label: 'Employee List' },
+          { id: 'add_employee', label: 'Add Employee' }
+        ]
+      },
       { id: 'departments', label: 'Departments', icon: 'pie-chart' },
       { id: 'designation', label: 'Designation', icon: 'share-2' },
       { id: 'shifts', label: 'Shifts', icon: 'shuffle' },
-      { id: 'attendance', label: 'Attendance', icon: 'user-check', hasChevron: true },
-      { id: 'leaves', label: 'Leaves', icon: 'calendar', hasChevron: true },
+      {
+        id: 'attendance',
+        label: 'Attendance',
+        icon: 'user-check',
+        hasChevron: true,
+        subItems: [
+          { id: 'attendance_list', label: 'Daily Attendance' },
+          { id: 'attendance_report', label: 'Attendance Log' }
+        ]
+      },
+      {
+        id: 'leaves',
+        label: 'Leaves',
+        icon: 'calendar',
+        hasChevron: true,
+        subItems: [
+          { id: 'leave_list', label: 'Leave Requests' },
+          { id: 'leave_types', label: 'Leave Types' }
+        ]
+      },
       { id: 'holidays', label: 'Holidays', icon: 'calendar' },
-      { id: 'payroll', label: 'Payroll', icon: 'dollar-sign', hasChevron: true },
+      {
+        id: 'payroll',
+        label: 'Payroll',
+        icon: 'dollar-sign',
+        hasChevron: true,
+        subItems: [
+          { id: 'payroll_list', label: 'Salary List' },
+          { id: 'payroll_process', label: 'Process Payroll' }
+        ]
+      },
     ]
   },
   {
@@ -194,7 +230,11 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   const hasChevron = item.hasChevron || hasSubItems;
   const isDirectActive = activeItem === item.id ||
     (item.id === 'add_product' && activeItem === 'create_product') ||
-    (item.id === 'create_product' && activeItem === 'add_product');
+    (item.id === 'create_product' && activeItem === 'add_product') ||
+    (item.id === 'employees' && (activeItem === 'employees' || activeItem === 'employee_list' || activeItem === 'add_employee')) ||
+    (item.id === 'attendance' && (activeItem === 'attendance' || activeItem === 'attendance_list' || activeItem === 'attendance_report')) ||
+    (item.id === 'leaves' && (activeItem === 'leaves' || activeItem === 'leave_list' || activeItem === 'leave_types')) ||
+    (item.id === 'payroll' && (activeItem === 'payroll' || activeItem === 'payroll_list' || activeItem === 'payroll_process'));
   const isSubActive = hasSubItems && item.subItems!.some(sub => sub.id === activeItem);
   const isActiveGroup = isDirectActive || isSubActive;
   
@@ -245,7 +285,7 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   const handlePress = () => {
     if (hasSubItems) {
       toggleExpand();
-      if (item.id === 'settings') {
+      if (item.id === 'settings' || item.id === 'employees' || item.id === 'attendance' || item.id === 'leaves' || item.id === 'payroll') {
         onItemPress(item.id);
       }
     } else {
