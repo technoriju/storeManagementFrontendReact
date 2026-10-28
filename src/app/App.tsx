@@ -31,7 +31,13 @@ import { initializeDatabase } from '../core/database/db';
 const AuthenticatedApp = () => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [tabParams, setTabParams] = useState<any>(null);
   const [loadingPermissions, setLoadingPermissions] = useState(true);
+
+  const handleNavigateTab = (tab: string, params?: any) => {
+    setTabParams(params || null);
+    setActiveTab(tab);
+  };
 
   useEffect(() => {
     const loadPerms = async () => {
@@ -129,9 +135,20 @@ const AuthenticatedApp = () => {
       activeTab === 'expense_category' ||
       activeTab === 'income' ||
       activeTab === 'income_list' ||
-      activeTab === 'income_category'
+      activeTab === 'income_category' ||
+      activeTab === 'bank_accounts' ||
+      activeTab === 'money_transfer' ||
+      activeTab === 'trial_balance' ||
+      activeTab === 'cash_flow' ||
+      activeTab === 'account_statement'
     ) {
-      return <FinanceModule initialScreen={activeTab} onNavigateTab={setActiveTab} />;
+      return (
+        <FinanceModule
+          initialScreen={activeTab}
+          onNavigateTab={handleNavigateTab}
+          params={tabParams}
+        />
+      );
     }
     if (
       activeTab === 'settings' ||

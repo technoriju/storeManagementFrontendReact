@@ -490,6 +490,48 @@ export const initializeDatabase = () => {
       );
     `);
 
+    // Bank Accounts Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS bank_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        accountName TEXT NOT NULL,
+        accountNumber TEXT,
+        bankName TEXT,
+        branchName TEXT,
+        ifscCode TEXT,
+        accountType TEXT DEFAULT 'BANK',
+        openingBalance REAL DEFAULT 0,
+        currentBalance REAL DEFAULT 0,
+        status TEXT DEFAULT 'ACTIVE',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Money Transfers Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS money_transfers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        fromAccountId INTEGER NOT NULL,
+        toAccountId INTEGER NOT NULL,
+        fromAccountName TEXT,
+        toAccountName TEXT,
+        amount REAL NOT NULL,
+        transferDate TEXT NOT NULL,
+        reference TEXT,
+        description TEXT,
+        status TEXT DEFAULT 'COMPLETED',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
     // Quotations Table
     db.execute(`
       CREATE TABLE IF NOT EXISTS quotations (

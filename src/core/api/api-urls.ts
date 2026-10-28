@@ -96,4 +96,15 @@ export const API_ENDPOINTS = {
     CATEGORIES: '/incomes/categories',
     CATEGORY_BY_ID: (id: string | number) => `/incomes/categories/${id}`,
   },
+  BANKING: {
+    ACCOUNTS: '/banking/accounts',
+    ACCOUNT_BY_ID: (id: string | number) => `/banking/accounts/${id}`,
+    STATEMENT: (id: string | number) => `/banking/accounts/${id}/statement`,
+    TRANSFERS: '/banking/transfers',
+    TRANSFER_BY_ID: (id: string | number) => `/banking/transfers/${id}`,
+  },
+  ACCOUNTING_REPORTS: {
+    TRIAL_BALANCE: '/reports/trial-balance',
+    CASH_FLOW: '/reports/cash-flow',
+  },
 };
