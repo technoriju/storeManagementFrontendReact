@@ -18,6 +18,10 @@ import { saleReturnRepository } from '../repositories/SaleReturnRepository';
 import { purchaseOrderRepository } from '../repositories/PurchaseOrderRepository';
 import { quotationRepository } from '../repositories/QuotationRepository';
 import { paymentRepository } from '../repositories/PaymentRepository';
+import { expenseRepository } from '../repositories/ExpenseRepository';
+import { expenseCategoryRepository } from '../repositories/ExpenseCategoryRepository';
+import { incomeRepository } from '../repositories/IncomeRepository';
+import { incomeCategoryRepository } from '../repositories/IncomeCategoryRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -190,6 +194,18 @@ class SyncEngine {
         } else if (item.entityType === 'payments') {
           await paymentRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'expenses') {
+          await expenseRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'expense_categories') {
+          await expenseCategoryRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'incomes') {
+          await incomeRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'income_categories') {
+          await incomeCategoryRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);
         }
@@ -219,6 +235,10 @@ class SyncEngine {
         purchaseOrderRepository.fetchFromApi(),
         quotationRepository.fetchFromApi(),
         paymentRepository.fetchFromApi(),
+        expenseRepository.fetchFromApi(),
+        expenseCategoryRepository.fetchFromApi(),
+        incomeRepository.fetchFromApi(),
+        incomeCategoryRepository.fetchFromApi(),
       ]);
     } catch (e) {
       console.warn('[SyncEngine] pullServerChanges error:', e);

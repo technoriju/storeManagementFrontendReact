@@ -216,6 +216,8 @@ export const initializeDatabase = () => {
       'ALTER TABLE purchases ADD COLUMN showPreviousBalance INTEGER DEFAULT 0',
       'ALTER TABLE sale_items ADD COLUMN brandName TEXT',
       'ALTER TABLE sale_items ADD COLUMN subUnitName TEXT',
+      'ALTER TABLE expenses ADD COLUMN backendId INTEGER',
+      'ALTER TABLE expenses ADD COLUMN deletedAt TEXT',
     ]) {
       try { db.execute(statement); } catch (e) { /* Existing database already migrated. */ }
     }
@@ -428,6 +430,7 @@ export const initializeDatabase = () => {
     db.execute(`
       CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
         category TEXT NOT NULL,
         amount REAL NOT NULL,
         date TEXT NOT NULL,
@@ -435,6 +438,54 @@ export const initializeDatabase = () => {
         reference TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Expense Categories Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS expense_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'ACTIVE',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Incomes Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS incomes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        category TEXT NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        description TEXT,
+        reference TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
+        syncStatus TEXT DEFAULT 'synced'
+      );
+    `);
+
+    // Income Categories Table
+    db.execute(`
+      CREATE TABLE IF NOT EXISTS income_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        backendId INTEGER,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'ACTIVE',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        deletedAt TEXT,
         syncStatus TEXT DEFAULT 'synced'
       );
     `);

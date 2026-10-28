@@ -361,5 +361,44 @@ export interface PurchaseOrder extends BaseEntity {
   items?: PurchaseOrderItem[];
 }
 
+export interface ExpenseCategory extends BaseEntity {
+  name: string;
+  description?: string;
+  status?: string;
+  backendId?: number;
+}
+
+export interface Expense extends BaseEntity {
+  category: string;
+  amount: number;
+  date: string;
+  description?: string;
+  reference?: string;
+  branchId?: number;
+  userId?: number;
+  status?: string;
+  backendId?: number;
+}
+
+export interface IncomeCategory extends BaseEntity {
+  name: string;
+  description?: string;
+  status?: string;
+  backendId?: number;
+}
+
+export interface Income extends BaseEntity {
+  category: string;
+  amount: number;
+  date: string;
+  description?: string;
+  reference?: string;
+  branchId?: number;
+  userId?: number;
+  status?: string;
+  backendId?: number;
+}
+
+
 
 

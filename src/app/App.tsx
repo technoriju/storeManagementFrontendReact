@@ -23,6 +23,7 @@ import { SuppliersModule } from '../features/suppliers/SuppliersModule';
 import { SettingsModule } from '../features/settings/SettingsModule';
 import { DashboardModule } from '../features/dashboard/DashboardModule';
 import { ReportsModule } from '../features/reports/ReportsModule';
+import { FinanceModule } from '../features/finance/FinanceModule';
 import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
 import { LocalDbManager } from '../features/settings/screens/LocalDbManager';
 import { initializeDatabase } from '../core/database/db';
@@ -121,6 +122,16 @@ const AuthenticatedApp = () => {
     }
     if (activeTab === 'suppliers' || activeTab === 'supplier_payment' || activeTab === 'supplier_payments') {
       return <SuppliersModule initialScreen={activeTab} />;
+    }
+    if (
+      activeTab === 'expenses' ||
+      activeTab === 'expense_list' ||
+      activeTab === 'expense_category' ||
+      activeTab === 'income' ||
+      activeTab === 'income_list' ||
+      activeTab === 'income_category'
+    ) {
+      return <FinanceModule initialScreen={activeTab} onNavigateTab={setActiveTab} />;
     }
     if (
       activeTab === 'settings' ||

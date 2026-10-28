@@ -84,4 +84,16 @@ export const API_ENDPOINTS = {
   DASHBOARD: {
     METRICS: '/dashboard/metrics',
   },
+  EXPENSES: {
+    BASE: '/expenses',
+    BY_ID: (id: string | number) => `/expenses/${id}`,
+    CATEGORIES: '/expenses/categories',
+    CATEGORY_BY_ID: (id: string | number) => `/expenses/categories/${id}`,
+  },
+  INCOMES: {
+    BASE: '/incomes',
+    BY_ID: (id: string | number) => `/incomes/${id}`,
+    CATEGORIES: '/incomes/categories',
+    CATEGORY_BY_ID: (id: string | number) => `/incomes/categories/${id}`,
+  },
 };
