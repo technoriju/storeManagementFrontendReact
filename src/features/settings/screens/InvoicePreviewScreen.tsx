@@ -693,7 +693,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                     </View>
                     <Text style={styles.p140Original}>ORIGINAL FOR RECIPIENT</Text>
 
-                    <View style={{ width: 130, gap: 2, marginTop: 4 }}>
+                    <View style={{ width: 150, gap: 2, marginTop: 4 }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={styles.p140MetaKey}>Invoice No:</Text>
                         <Text style={styles.p140MetaVal}>{sampleData.invoiceNumber}</Text>
@@ -736,13 +736,13 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewScreenProps> = ({ onNa
                   <View style={styles.p140TableHead}>
                     <Text style={[styles.p140Th, { width: 22, textAlign: 'center' }]}>#</Text>
                     <Text style={[styles.p140Th, { flex: 2 }]}>ITEM</Text>
-                    {customerType === 'wholesale' && <Text style={[styles.p140Th, { width: 40, textAlign: 'center' }]}>HSN</Text>}
-                    <Text style={[styles.p140Th, { width: 35, textAlign: 'center' }]}>QTY</Text>
+                    {customerType === 'wholesale' && <Text style={[styles.p140Th, { width: 42, textAlign: 'center' }]}>HSN</Text>}
+                    <Text style={[styles.p140Th, { width: 38, textAlign: 'center' }]}>QTY</Text>
                     <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>RATE</Text>
-                    <Text style={[styles.p140Th, { width: 45, textAlign: 'right' }]}>DISC</Text>
+                    <Text style={[styles.p140Th, { width: 42, textAlign: 'right' }]}>DISC</Text>
                     <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>TAXABLE</Text>
-                    <Text style={[styles.p140Th, { width: 35, textAlign: 'center' }]}>GST</Text>
-                    <Text style={[styles.p140Th, { width: 60, textAlign: 'right' }]}>TOTAL</Text>
+                    <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>GST</Text>
+                    <Text style={[styles.p140Th, { width: 66, textAlign: 'right' }]}>TOTAL</Text>
                   </View>
 
                   {sampleData.items.map((it, idx) => {
@@ -1549,44 +1549,44 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   p140StoreName: {
-    fontSize: 15,
+    fontSize: 17.5,
     fontWeight: '800',
     color: '#0F172A',
     textTransform: 'uppercase',
   },
   p140Tagline: {
-    fontSize: 9,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#0284C7',
     marginBottom: 1,
   },
   p140StoreSub: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: '#334155',
-    lineHeight: 12,
+    lineHeight: 14,
   },
   p140Badge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 2,
+    borderRadius: 3,
     marginBottom: 2,
   },
   p140BadgeText: {
     color: '#FFFFFF',
-    fontSize: 9.5,
+    fontSize: 11,
     fontWeight: '800',
   },
   p140Original: {
-    fontSize: 7.5,
+    fontSize: 9,
     color: '#64748B',
     fontWeight: '700',
   },
   p140MetaKey: {
-    fontSize: 8,
+    fontSize: 9.5,
     color: '#64748B',
   },
   p140MetaVal: {
-    fontSize: 8.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -1599,23 +1599,23 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   p140SectionHead: {
-    fontSize: 7.5,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#64748B',
     textTransform: 'uppercase',
   },
   p140CustName: {
-    fontSize: 10.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
   p140PartySub: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#334155',
-    lineHeight: 11.5,
+    lineHeight: 13.5,
   },
   p140StatusPaid: {
-    fontSize: 9.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#059669',
   },
@@ -1627,20 +1627,20 @@ const styles = StyleSheet.create({
   p140TableHead: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
-    paddingVertical: 3.5,
-    paddingHorizontal: 4,
+    paddingVertical: 4.5,
+    paddingHorizontal: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#CBD5E1',
   },
   p140Th: {
-    fontSize: 7.5,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#1E293B',
   },
   p140TableRow: {
     flexDirection: 'row',
-    paddingVertical: 3,
-    paddingHorizontal: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -1648,7 +1648,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   p140Td: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#0F172A',
   },
   p140BottomGrid: {
@@ -1661,16 +1661,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 2,
-    padding: 3,
+    padding: 4,
     marginBottom: 3,
   },
   p140WordsTitle: {
-    fontSize: 7.5,
+    fontSize: 9,
     fontWeight: '700',
     color: '#334155',
   },
   p140WordsVal: {
-    fontSize: 7.5,
+    fontSize: 10,
     fontStyle: 'italic',
     color: '#0F172A',
   },
@@ -1679,30 +1679,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BBF7D0',
     borderRadius: 2,
-    padding: 3,
+    padding: 4,
     marginBottom: 3,
   },
   p140BankTitle: {
-    fontSize: 7.5,
+    fontSize: 8.5,
     fontWeight: '700',
     color: '#166534',
   },
   p140BankText: {
-    fontSize: 7.5,
+    fontSize: 9,
     color: '#14532D',
   },
   p140TermsBox: {
     padding: 2,
   },
   p140TermsHead: {
-    fontSize: 7.5,
+    fontSize: 9,
     fontWeight: '700',
     color: '#64748B',
   },
   p140TermsText: {
-    fontSize: 7,
+    fontSize: 8.5,
     color: '#64748B',
-    lineHeight: 10,
+    lineHeight: 11.5,
   },
   p140TotalsTable: {
     borderWidth: 1,
@@ -1713,17 +1713,17 @@ const styles = StyleSheet.create({
   p140TotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 1.5,
-    paddingHorizontal: 5,
+    paddingVertical: 2.5,
+    paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   p140TotalKey: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#64748B',
   },
   p140TotalVal: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: '600',
     color: '#0F172A',
   },
@@ -1731,16 +1731,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: '#0F172A',
-    paddingVertical: 3,
-    paddingHorizontal: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
   },
   p140GrandTotalKey: {
-    fontSize: 8.5,
+    fontSize: 10.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   p140GrandTotalVal: {
-    fontSize: 10,
+    fontSize: 12.5,
     fontWeight: '900',
     color: '#FACC15',
   },
@@ -1756,16 +1756,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   p140QrImg: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
   },
   p140QrCaption: {
-    fontSize: 7.5,
+    fontSize: 9,
     fontWeight: '700',
     color: '#0F172A',
   },
   p140QrUpi: {
-    fontSize: 7,
+    fontSize: 8.5,
     color: '#64748B',
   },
   p140SignaturesRow: {
@@ -1775,7 +1775,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   p140SignBox: {
-    width: 110,
+    width: 130,
     alignItems: 'center',
   },
   p140SignLine: {
@@ -1786,11 +1786,11 @@ const styles = StyleSheet.create({
     height: 12,
   },
   p140SignLabel: {
-    fontSize: 7.5,
+    fontSize: 9,
     color: '#64748B',
   },
   p140SignCompany: {
-    fontSize: 7.5,
+    fontSize: 9,
     fontWeight: '700',
     color: '#0F172A',
     marginBottom: 1,
