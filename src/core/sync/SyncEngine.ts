@@ -22,6 +22,8 @@ import { expenseRepository } from '../repositories/ExpenseRepository';
 import { expenseCategoryRepository } from '../repositories/ExpenseCategoryRepository';
 import { incomeRepository } from '../repositories/IncomeRepository';
 import { incomeCategoryRepository } from '../repositories/IncomeCategoryRepository';
+import { bankAccountRepository } from '../repositories/BankAccountRepository';
+import { moneyTransferRepository } from '../repositories/MoneyTransferRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -206,6 +208,12 @@ class SyncEngine {
         } else if (item.entityType === 'income_categories') {
           await incomeCategoryRepository.syncOutboxItem(item);
           await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'bank_accounts') {
+          await bankAccountRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'money_transfers') {
+          await moneyTransferRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);
         }
@@ -239,6 +247,8 @@ class SyncEngine {
         expenseCategoryRepository.fetchFromApi(),
         incomeRepository.fetchFromApi(),
         incomeCategoryRepository.fetchFromApi(),
+        bankAccountRepository.fetchFromApi(),
+        moneyTransferRepository.fetchFromApi(),
       ]);
     } catch (e) {
       console.warn('[SyncEngine] pullServerChanges error:', e);

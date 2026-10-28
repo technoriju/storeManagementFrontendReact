@@ -399,6 +399,32 @@ export interface Income extends BaseEntity {
   backendId?: number;
 }
 
+export interface BankAccount extends BaseEntity {
+  accountName: string;
+  accountNumber?: string;
+  bankName?: string;
+  branchName?: string;
+  ifscCode?: string;
+  accountType?: 'BANK' | 'CASH';
+  openingBalance?: number;
+  currentBalance?: number;
+  status?: string;
+  backendId?: number;
+}
+
+export interface MoneyTransfer extends BaseEntity {
+  fromAccountId: number;
+  toAccountId: number;
+  fromAccountName?: string;
+  toAccountName?: string;
+  amount: number;
+  transferDate: string;
+  reference?: string;
+  description?: string;
+  status?: string;
+  backendId?: number;
+}
+
 
 
 
