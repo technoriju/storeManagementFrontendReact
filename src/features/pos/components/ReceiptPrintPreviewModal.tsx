@@ -291,7 +291,7 @@ export function getItemHeightMm(item: ReceiptItem, paperFormat: ReceiptPaperForm
   if (paperFormat === 'halfA4Landscape') {
     return 5.5 + (lines - 1) * 3.6;
   }
-  return 5.2 + (lines - 1) * 3.4;
+  return 5.6 + (lines - 1) * 3.6;
 }
 
 export function paginateInvoiceItems({
@@ -322,9 +322,9 @@ export function paginateInvoiceItems({
 
   const isLandscape = paperFormat === 'halfA4Landscape';
   const pageHeight = isLandscape ? 136.5 : 200;
-  const headerHeight = isLandscape ? 48 : 50;
+  const headerHeight = isLandscape ? 48 : 52;
 
-  let footerHeight = isLandscape ? 52 : 56;
+  let footerHeight = isLandscape ? 52 : 58;
   if (isWholesale && showBankDetails) footerHeight += 12;
   if (shipping > 0) footerHeight += 4;
   if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 10;
@@ -779,7 +779,7 @@ export function generateReceiptHtml({
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      font-size: 8.5px;
+      font-size: 9.5px;
       color: #0f172a;
       background: #fff;
       margin: 0;
@@ -815,19 +815,19 @@ export function generateReceiptHtml({
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .store-name { font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; line-height: 1.1; }
-    .store-sub { font-size: 7.5px; color: #334155; line-height: 1.2; }
+    .store-name { font-size: 16px; font-weight: 800; color: #0f172a; text-transform: uppercase; line-height: 1.1; }
+    .store-sub { font-size: 8.5px; color: #334155; line-height: 1.25; }
     .inv-badge {
       background: ${colorMode === 'bw' ? '#000000' : (isWholesale ? '#1e293b' : '#047857')};
       color: #fff;
-      padding: 2.5px 7px;
-      font-size: 9px;
+      padding: 3px 8px;
+      font-size: 10px;
       font-weight: 800;
       border-radius: 2px;
       display: inline-block;
       text-align: right;
     }
-    .copy-text { font-size: 7px; color: #64748b; font-weight: bold; margin-top: 1px; }
+    .copy-text { font-size: 8px; color: #64748b; font-weight: bold; margin-top: 1px; }
     .parties-grid {
       display: flex;
       justify-content: space-between;
@@ -840,17 +840,17 @@ export function generateReceiptHtml({
     }
     .party-col { flex: 1.5; }
     .status-col { flex: 1; text-align: right; }
-    .section-title { font-size: 7px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
-    .cust-name { font-size: 10.5px; font-weight: bold; color: #0f172a; line-height: 1.15; }
-    .party-sub { font-size: 7.5px; color: #334155; line-height: 1.2; }
+    .section-title { font-size: 8px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
+    .cust-name { font-size: 12px; font-weight: bold; color: #0f172a; line-height: 1.15; }
+    .party-sub { font-size: 8.5px; color: #334155; line-height: 1.25; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; border: 1px solid #cbd5e1; }
-    .items-table th { background: #f1f5f9; font-size: 7.5px; font-weight: 700; color: #1e293b; padding: 2.5px 3px; border: 1px solid #cbd5e1; }
-    .items-table td { font-size: 7.5px; padding: 2px 3px; border: 1px solid #e2e8f0; line-height: 1.15; }
+    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 3px 3px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 8.5px; padding: 2.5px 3px; border: 1px solid #e2e8f0; line-height: 1.2; }
     .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
     .continuation-note {
       text-align: right;
-      font-size: 7.5px;
+      font-size: 8.5px;
       font-weight: 600;
       color: #64748b;
       margin-top: 3px;
@@ -874,7 +874,7 @@ export function generateReceiptHtml({
       border: 1px solid #e2e8f0;
       padding: 3px 5px;
       border-radius: 2px;
-      font-size: 7.5px;
+      font-size: 8.5px;
       margin-bottom: 3px;
       page-break-inside: avoid;
       break-inside: avoid;
@@ -884,7 +884,7 @@ export function generateReceiptHtml({
       border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'};
       padding: 3px 5px;
       border-radius: 2px;
-      font-size: 7.5px;
+      font-size: 8.5px;
       margin-bottom: 3px;
       page-break-inside: avoid;
       break-inside: avoid;
@@ -892,11 +892,11 @@ export function generateReceiptHtml({
     .bank-title {
       font-weight: bold;
       color: ${colorMode === 'bw' ? '#000000' : '#166534'};
-      font-size: 8px;
+      font-size: 9px;
       margin-bottom: 1px;
     }
     .terms-box {
-      font-size: 7px;
+      font-size: 8px;
       color: #64748b;
       line-height: 1.2;
       margin-top: 3px;
@@ -911,7 +911,7 @@ export function generateReceiptHtml({
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .totals-table td { padding: 2px 5px; font-size: 8.5px; border-bottom: 1px solid #f1f5f9; }
+    .totals-table td { padding: 2.5px 5px; font-size: 9.5px; border-bottom: 1px solid #f1f5f9; }
     .grand-total-row {
       background: ${colorMode === 'bw' ? '#000000' : '#0f172a'};
       color: #fff;
@@ -919,7 +919,7 @@ export function generateReceiptHtml({
     }
     .grand-total-row td {
       color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'};
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 900;
     }
     .signatures-row {
@@ -971,7 +971,7 @@ ${pages.map((page, pageIdx) => {
       <tr>
         <td style="vertical-align: top; width: 62%;">
           <div class="store-name">${business.businessName || 'Tarama Enterprise'}</div>
-          ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 8.5px;">${business.tagline}</div>` : ''}
+          ${business.tagline ? `<div style="color: ${colorMode === 'bw' ? '#334155' : '#2563eb'}; font-weight: 600; font-size: 9.5px;">${business.tagline}</div>` : ''}
           <div class="store-sub">${business.address || ''}</div>
           <div class="store-sub">Phone: ${business.phone || ''} | Email: ${business.email || ''}</div>
           <div class="store-sub" style="font-weight: bold; color: #0f172a;">
@@ -985,16 +985,16 @@ ${pages.map((page, pageIdx) => {
           <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
           <table style="margin-top: 2px; width: 100%; text-align: right;">
             <tr>
-              <td style="font-size: 7.5px; color: #64748b;">Invoice No:</td>
-              <td style="font-size: 9px; font-weight: bold; color: #0f172a;">${invNumber}${pageTitleNote}</td>
+              <td style="font-size: 8.5px; color: #64748b;">Invoice No:</td>
+              <td style="font-size: 10px; font-weight: bold; color: #0f172a;">${invNumber}${pageTitleNote}</td>
             </tr>
             <tr>
-              <td style="font-size: 7.5px; color: #64748b;">Date:</td>
-              <td style="font-size: 8px; font-weight: 600; color: #0f172a;">${invDate}</td>
+              <td style="font-size: 8.5px; color: #64748b;">Date:</td>
+              <td style="font-size: 9px; font-weight: 600; color: #0f172a;">${invDate}</td>
             </tr>
             <tr>
-              <td style="font-size: 7.5px; color: #64748b;">Mode:</td>
-              <td style="font-size: 8px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
+              <td style="font-size: 8.5px; color: #64748b;">Mode:</td>
+              <td style="font-size: 9px; color: #0f172a;">${paymentMethod.toUpperCase()}</td>
             </tr>
           </table>
         </td>
@@ -1011,7 +1011,7 @@ ${pages.map((page, pageIdx) => {
       </div>
       <div class="status-col">
         <div><strong>Status:</strong> <span style="font-weight: bold; color: ${due === 0 ? '#059669' : '#dc2626'};">${due === 0 ? 'FULLY PAID' : 'DUE'}</span></div>
-        <div style="font-size: 7.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
+        <div style="font-size: 8.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
       </div>
     </div>
 
@@ -1054,7 +1054,7 @@ ${pages.map((page, pageIdx) => {
           } else if (conversionRate && Number(conversionRate) > 1) {
             metaParts.push(`Conversion: <strong>1 ${baseUnit} = ${conversionRate}</strong>`);
           }
-          const metaLine = metaParts.length > 0 ? `<div style="font-size: 8px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
+          const metaLine = metaParts.length > 0 ? `<div style="font-size: 8.5px; font-weight: normal; color: #475569; margin-top: 1.5px;">${metaParts.join(' &nbsp;|&nbsp; ')}</div>` : '';
 
           return `
             <tr>
@@ -1080,7 +1080,7 @@ ${pages.map((page, pageIdx) => {
       </tbody>
     </table>
     ` : `
-    <div style="font-size: 8px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
+    <div style="font-size: 9px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
       Bill Summary & Settlement (All ${items.length} products listed on Page 1):
     </div>
     `}
@@ -1149,7 +1149,7 @@ ${pages.map((page, pageIdx) => {
               </tr>
               <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#fee2e2'}; font-weight: bold;">
                 <td style="color: ${colorMode === 'bw' ? '#000000' : '#991b1b'};">TOTAL PAYABLE:</td>
-                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 10px;">₹${totalPayable.toFixed(2)}</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#991b1b'}; font-size: 11px;">₹${totalPayable.toFixed(2)}</td>
               </tr>
             ` : ''}
             ${isBalanceActive && advancePayment > 0 ? `
@@ -1159,7 +1159,7 @@ ${pages.map((page, pageIdx) => {
               </tr>
               <tr style="background: ${colorMode === 'bw' ? '#e2e8f0' : '#dcfce7'}; font-weight: bold;">
                 <td style="color: ${colorMode === 'bw' ? '#000000' : '#166534'};">NET PAYABLE:</td>
-                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 10px;">₹${netPayable.toFixed(2)}</td>
+                <td style="text-align: right; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 11px;">₹${netPayable.toFixed(2)}</td>
               </tr>
             ` : ''}
             <tr>
@@ -1206,12 +1206,12 @@ ${pages.map((page, pageIdx) => {
         <div class="signatures-row">
           <div class="sign-box">
             <div class="sign-line"></div>
-            <div style="font-size: 7.5px; color: #64748b;">Customer Signature</div>
+            <div style="font-size: 8.5px; color: #64748b;">Customer Signature</div>
           </div>
           <div class="sign-box">
-            <div style="font-size: 7.5px; font-weight: bold;">For ${business.businessName || ''}</div>
+            <div style="font-size: 8.5px; font-weight: bold;">For ${business.businessName || ''}</div>
             <div class="sign-line"></div>
-            <div style="font-size: 7.5px; color: #64748b;">Authorized Signatory</div>
+            <div style="font-size: 8.5px; color: #64748b;">Authorized Signatory</div>
           </div>
         </div>
       ` : ''}
@@ -2455,16 +2455,16 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                         <Text style={[styles.p140Th, { width: 22, textAlign: 'center' }]}>#</Text>
                         <Text style={[styles.p140Th, { flex: 2 }]}>ITEM & DESCRIPTION</Text>
                         {isWholesale && <Text style={[styles.p140Th, { width: 42, textAlign: 'center' }]}>HSN</Text>}
-                        <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>QTY</Text>
-                        <Text style={[styles.p140Th, { width: 48, textAlign: 'right' }]}>RATE</Text>
+                        <Text style={[styles.p140Th, { width: 38, textAlign: 'center' }]}>QTY</Text>
+                        <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>RATE</Text>
                         <Text style={[styles.p140Th, { width: 42, textAlign: 'right' }]}>DISC</Text>
                         {showTaxBreakdown && (
                           <>
-                            <Text style={[styles.p140Th, { width: 48, textAlign: 'right' }]}>TAXABLE</Text>
-                            <Text style={[styles.p140Th, { width: 34, textAlign: 'center' }]}>GST%</Text>
+                            <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>TAXABLE</Text>
+                            <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>GST%</Text>
                           </>
                         )}
-                        <Text style={[styles.p140Th, { width: 62, textAlign: 'right' }]}>TOTAL</Text>
+                        <Text style={[styles.p140Th, { width: 66, textAlign: 'right' }]}>TOTAL</Text>
                       </View>
 
                       {items.map((item, idx) => {
@@ -2481,15 +2481,15 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               <Text style={[styles.p140Td, { fontWeight: '600', color: '#0F172A' }]}>
                                 {item.productName || `Item #${idx + 1}`}
                               </Text>
-                              {metaText ? <Text style={{ fontSize: 7.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
+                              {metaText ? <Text style={{ fontSize: 8.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
                             </View>
                             {isWholesale && (
                               <Text style={[styles.p140Td, { width: 42, textAlign: 'center' }]}>{item.hsn || '-'}</Text>
                             )}
-                            <Text style={[styles.p140Td, { width: 36, textAlign: 'center' }]}>
+                            <Text style={[styles.p140Td, { width: 38, textAlign: 'center' }]}>
                               {item.quantity}{item.unit ? ` ${item.unit}` : ''}
                             </Text>
-                            <Text style={[styles.p140Td, { width: 48, textAlign: 'right' }]}>
+                            <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
                               {Number(item.unitPrice).toFixed(2)}
                             </Text>
                             <Text style={[styles.p140Td, { width: 42, textAlign: 'right' }]}>
@@ -2497,15 +2497,15 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                             </Text>
                             {showTaxBreakdown && (
                               <>
-                                <Text style={[styles.p140Td, { width: 48, textAlign: 'right' }]}>
+                                <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
                                   {taxableAmt.toFixed(2)}
                                 </Text>
-                                <Text style={[styles.p140Td, { width: 34, textAlign: 'center' }]}>
+                                <Text style={[styles.p140Td, { width: 36, textAlign: 'center' }]}>
                                   {item.gst || 0}%
                                 </Text>
                               </>
                             )}
-                            <Text style={[styles.p140Td, { width: 62, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
+                            <Text style={[styles.p140Td, { width: 66, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
                               {Number(item.total).toFixed(2)}
                             </Text>
                           </View>
@@ -2588,8 +2588,8 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                                 <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
                               </View>
                               <View style={[styles.p140GrandTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 2.5 }]}>
-                                <Text style={[styles.p140GrandTotalKey, { color: '#991B1B', fontSize: 9 }]}>TOTAL PAYABLE:</Text>
-                                <Text style={[styles.p140GrandTotalVal, { color: '#991B1B', fontSize: 10 }]}>₹{totalPayable.toFixed(2)}</Text>
+                                <Text style={[styles.p140GrandTotalKey, { color: '#991B1B', fontSize: 10.5 }]}>TOTAL PAYABLE:</Text>
+                                <Text style={[styles.p140GrandTotalVal, { color: '#991B1B', fontSize: 11.5 }]}>₹{totalPayable.toFixed(2)}</Text>
                               </View>
                             </>
                           )}
@@ -2601,8 +2601,8 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                                 <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
                               </View>
                               <View style={[styles.p140GrandTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
-                                <Text style={[styles.p140GrandTotalKey, { color: '#166534', fontSize: 9 }]}>NET PAYABLE:</Text>
-                                <Text style={[styles.p140GrandTotalVal, { color: '#166534', fontSize: 10 }]}>₹{netPayable.toFixed(2)}</Text>
+                                <Text style={[styles.p140GrandTotalKey, { color: '#166534', fontSize: 10.5 }]}>NET PAYABLE:</Text>
+                                <Text style={[styles.p140GrandTotalVal, { color: '#166534', fontSize: 11.5 }]}>₹{netPayable.toFixed(2)}</Text>
                               </View>
                             </>
                           )}
@@ -4158,21 +4158,21 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   p140StoreName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
     textTransform: 'uppercase',
   },
   p140Tagline: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#0284C7',
     marginBottom: 1,
   },
   p140StoreSub: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#334155',
-    lineHeight: 13,
+    lineHeight: 14,
   },
   p140Badge: {
     paddingHorizontal: 8,
@@ -4183,16 +4183,16 @@ const styles = StyleSheet.create({
   },
   p140BadgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
   },
   p140Original: {
-    fontSize: 8,
+    fontSize: 9,
     color: '#64748B',
     fontWeight: '700',
   },
   p140MetaGrid: {
-    width: 140,
+    width: 150,
     gap: 2,
     marginTop: 4,
   },
@@ -4201,11 +4201,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   p140MetaKey: {
-    fontSize: 8.5,
+    fontSize: 9.5,
     color: '#64748B',
   },
   p140MetaVal: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -4217,24 +4217,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   p140SectionHead: {
-    fontSize: 8.5,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.5,
   },
   p140CustName: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
     marginTop: 1,
   },
   p140PartySub: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#334155',
-    lineHeight: 12,
+    lineHeight: 14,
   },
   p140StatusPaid: {
-    fontSize: 10.5,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   p140Table: {
@@ -4253,14 +4253,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#CBD5E1',
   },
   p140Th: {
-    fontSize: 8.5,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#1E293B',
   },
   p140TableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 4.5,
     paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -4269,7 +4269,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   p140Td: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#334155',
   },
   p140BottomGrid: {
@@ -4286,12 +4286,12 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   p140WordsTitle: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     color: '#64748B',
   },
   p140WordsVal: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '600',
     color: '#0F172A',
     fontStyle: 'italic',
@@ -4305,26 +4305,26 @@ const styles = StyleSheet.create({
     borderColor: '#BBF7D0',
   },
   p140BankTitle: {
-    fontSize: 7.5,
+    fontSize: 8.5,
     fontWeight: '800',
     color: '#166534',
   },
   p140BankText: {
-    fontSize: 8,
+    fontSize: 9,
     color: '#14532D',
   },
   p140TermsBox: {
     marginTop: 5,
   },
   p140TermsHead: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     color: '#475569',
   },
   p140TermsText: {
-    fontSize: 7.5,
+    fontSize: 8.5,
     color: '#64748B',
-    lineHeight: 10,
+    lineHeight: 11.5,
   },
   p140TotalsTable: {
     borderWidth: 1,
@@ -4336,34 +4336,34 @@ const styles = StyleSheet.create({
   p140TotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 2.5,
+    paddingVertical: 3,
     paddingHorizontal: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   p140TotalKey: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#475569',
   },
   p140TotalVal: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '600',
     color: '#0F172A',
   },
   p140GrandTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 4.5,
     paddingHorizontal: 6,
     backgroundColor: '#0F172A',
   },
   p140GrandTotalKey: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   p140GrandTotalVal: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '900',
     color: '#FACC15',
   },
@@ -4379,16 +4379,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   p140QrImg: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
   },
   p140QrCaption: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     color: '#0F172A',
   },
   p140QrUpi: {
-    fontSize: 7.5,
+    fontSize: 8.5,
     color: '#64748B',
   },
   p140SignaturesRow: {
@@ -4409,13 +4409,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   p140SignCompany: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '700',
     color: '#0F172A',
     marginBottom: 14,
   },
   p140SignLabel: {
-    fontSize: 8,
+    fontSize: 9,
     color: '#64748B',
     textAlign: 'center',
   },

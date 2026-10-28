@@ -943,7 +943,67 @@ export class ReportsService {
 
   // 10. Income Report
   static async getIncomeReport(filters: ReportFilters = {}): Promise<PaginatedReportResult<any>> {
-    return { data: [], total: 0, page: filters.page || 1, limit: filters.limit || 10, totalPages: 1 };
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
+    try {
+      const apiRes = await apiClient.get('/reports/income', {
+        params: {
+          page,
+          limit,
+          search: filters.search?.trim() || undefined,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        },
+      });
+      const parsed = this.parsePaginatedApiResponse(apiRes, filters, (item: any) => ({
+        ...item,
+        voucherNo: item.voucherNo || `INC-${String(item.id).padStart(3, '0')}`,
+        date: item.incomeDate ? String(item.incomeDate).slice(0, 10) : (item.date || ''),
+        category: (item.category && String(item.category).trim()) || (item.categoryName && String(item.categoryName).trim()) || 'General Income',
+        description: item.description || '',
+        payer: item.payer || item.userName || item.branchName || 'Customer / Source',
+        paymentMethod: item.reference || item.paymentMethod || 'Bank / Cash',
+        amount: Number(item.amount) || 0,
+      }));
+      if (parsed.data.length > 0 || parsed.total > 0) {
+        return parsed;
+      }
+    } catch {}
+
+    try {
+      let query = `
+        SELECT 
+          id, 
+          'INC-' || SUBSTR('000' || id, -3) as voucherNo, 
+          date, 
+          CASE 
+            WHEN category IS NOT NULL AND TRIM(category) != '' THEN category 
+            ELSE 'General Income' 
+          END as category, 
+          description, 
+          'Customer / Source' as payer, 
+          COALESCE(reference, 'Bank / Cash') as paymentMethod, 
+          amount 
+        FROM incomes 
+        WHERE ${this.buildDateCondition('date', filters)} 
+      `;
+
+      if (filters.search) {
+        const safeSearch = filters.search.replace(/'/g, "''");
+        query += ` AND (category LIKE '%${safeSearch}%' OR description LIKE '%${safeSearch}%' OR reference LIKE '%${safeSearch}%')`;
+      }
+      query += ' ORDER BY date DESC';
+
+      const res = await db.execute(query);
+      const rows = this.extractDbRows(res);
+      const summary = {
+        totalIncomeCount: rows.length,
+        totalAmount: rows.reduce((acc, r) => acc + Number(r.amount || 0), 0),
+      };
+      return this.formatDbResult(rows, filters, undefined, summary);
+    } catch {}
+
+    return { data: [], total: 0, page, limit, totalPages: 1 };
   }
 
   // 11. Tax (GST) Report
