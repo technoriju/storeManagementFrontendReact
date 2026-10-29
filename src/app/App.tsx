@@ -28,10 +28,140 @@ import { HRMModule } from '../features/hrm/HRMModule';
 import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
 import { LocalDbManager } from '../features/settings/screens/LocalDbManager';
 import { PrintBarcodeScreen } from '../features/barcode';
+import { UserManagementModule } from '../features/users-roles';
+import { usePermissions } from '../core/auth/usePermissions';
+import { ShieldAlert } from 'lucide-react-native';
+import { AppButton } from '../shared/components/inputs/AppButton';
 import { initializeDatabase } from '../core/database/db';
+
+const getRequiredPermissionForTab = (tab: string): string | null => {
+  if (tab === 'dashboard') return 'dashboard:view';
+  if (
+    tab === 'products' ||
+    tab === 'create_product' ||
+    tab === 'add_product' ||
+    tab === 'expired_products' ||
+    tab === 'low_stocks' ||
+    tab === 'category' ||
+    tab === 'sub_category' ||
+    tab === 'brands' ||
+    tab === 'units' ||
+    tab === 'sub_units' ||
+    tab === 'variant_attributes' ||
+    tab === 'warranties' ||
+    tab === 'print_barcode' ||
+    tab === 'print_qr_code'
+  ) return 'inventory:view';
+
+  if (
+    tab === 'manage_stock' ||
+    tab === 'inventory' ||
+    tab === 'stock_adjustment' ||
+    tab === 'stock_transfer' ||
+    tab === 'stock'
+  ) return 'stock:manage';
+
+  if (
+    tab === 'pos' ||
+    tab === 'sales' ||
+    tab === 'invoices' ||
+    tab === 'sales_return' ||
+    tab === 'quotation'
+  ) return 'sales:view';
+
+  if (
+    tab === 'purchases' ||
+    tab === 'purchase' ||
+    tab === 'purchase_order' ||
+    tab === 'purchase_return'
+  ) return 'purchases:view';
+
+  if (
+    tab === 'expenses' ||
+    tab === 'expense_list' ||
+    tab === 'expense_category' ||
+    tab === 'income' ||
+    tab === 'income_list' ||
+    tab === 'income_category' ||
+    tab === 'bank_accounts' ||
+    tab === 'money_transfer' ||
+    tab === 'trial_balance' ||
+    tab === 'cash_flow' ||
+    tab === 'account_statement' ||
+    tab === 'balance_sheet' ||
+    tab === 'balancesheet'
+  ) return 'finance:view';
+
+  if (
+    tab === 'customers' ||
+    tab === 'customer_payment' ||
+    tab === 'customer_payments' ||
+    tab === 'payment' ||
+    tab === 'suppliers' ||
+    tab === 'supplier_payment' ||
+    tab === 'supplier_payments' ||
+    tab === 'stores' ||
+    tab === 'warehouses'
+  ) return 'customers:manage';
+
+  if (
+    tab === 'employees' ||
+    tab === 'employee_list' ||
+    tab === 'add_employee' ||
+    tab === 'departments' ||
+    tab === 'designation' ||
+    tab === 'designations' ||
+    tab === 'shifts' ||
+    tab === 'shift' ||
+    tab === 'attendance' ||
+    tab === 'attendance_list' ||
+    tab === 'attendance_report' ||
+    tab === 'leaves' ||
+    tab === 'leave_list' ||
+    tab === 'leave_types' ||
+    tab === 'holidays' ||
+    tab === 'payroll' ||
+    tab === 'payroll_list' ||
+    tab === 'payroll_process'
+  ) return 'hrm:view';
+
+  if (
+    tab === 'reports' ||
+    tab === 'sales_report' ||
+    tab === 'customer_wise' ||
+    tab === 'purchase_report' ||
+    tab === 'supplier_wise' ||
+    tab === 'inventory_report' ||
+    tab === 'invoice_report' ||
+    tab === 'customer_report' ||
+    tab === 'supplier_report' ||
+    tab === 'product_report' ||
+    tab === 'payment_report' ||
+    tab === 'expense_report' ||
+    tab === 'income_report' ||
+    tab === 'tax_report' ||
+    tab === 'profit_loss' ||
+    tab === 'annual_report'
+  ) return 'reports:view';
+
+  if (tab === 'users') return 'users:view';
+  if (tab === 'roles_permissions' || tab === 'roles') return 'roles:view';
+
+  if (
+    tab === 'settings' ||
+    tab === 'invoice_preview' ||
+    tab === 'invoice' ||
+    tab === 'business' ||
+    tab === 'printers' ||
+    tab.startsWith('settings_')
+  ) return 'settings:general';
+
+  return null;
+};
 
 const AuthenticatedApp = () => {
   const theme = useTheme();
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [tabParams, setTabParams] = useState<any>(null);
   const [loadingPermissions, setLoadingPermissions] = useState(true);
@@ -60,6 +190,31 @@ const AuthenticatedApp = () => {
   }
 
   const renderContent = () => {
+    const requiredPermission = getRequiredPermissionForTab(activeTab);
+    if (requiredPermission && !can(requiredPermission)) {
+      return (
+        <View style={[styles.accessDeniedContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.accessDeniedCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={styles.accessDeniedIconBox}>
+              <ShieldAlert size={42} color="#D32F2F" />
+            </View>
+            <Text style={[styles.accessDeniedTitle, { color: theme.colors.text }]}>
+              Access Restricted
+            </Text>
+            <Text style={[styles.accessDeniedSubtitle, { color: theme.colors.textSecondary }]}>
+              You do not have permission ({requiredPermission}) to view or manage this module. Please contact your system administrator to adjust your role privileges.
+            </Text>
+            <View style={{ marginTop: 20 }}>
+              <AppButton
+                title="Back to Dashboard"
+                onPress={() => setActiveTab('dashboard')}
+                size="medium"
+              />
+            </View>
+          </View>
+        </View>
+      );
+    }
     if (activeTab === 'dashboard') {
       return <DashboardModule onNavigateTab={setActiveTab} />;
     }
@@ -194,6 +349,19 @@ const AuthenticatedApp = () => {
     if (activeTab === 'print_barcode' || activeTab === 'print_qr_code') {
       return <PrintBarcodeScreen onNavigateTab={handleNavigateTab} />;
     }
+    if (
+      activeTab === 'users' ||
+      activeTab === 'roles_permissions' ||
+      activeTab === 'roles'
+    ) {
+      return (
+        <UserManagementModule
+          initialScreen={activeTab}
+          onNavigateTab={handleNavigateTab}
+        />
+      );
+    }
+
     if (activeTab === 'sync_queue') {
       return <SyncSettingsScreen />;
     }
@@ -314,7 +482,41 @@ const styles = StyleSheet.create({
   subtitle: {
     marginBottom: 40,
     textAlign: 'center',
-  }
+  },
+  accessDeniedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  accessDeniedCard: {
+    width: '100%',
+    maxWidth: 440,
+    padding: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  accessDeniedIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFEBEE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  accessDeniedTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  accessDeniedSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
 
 

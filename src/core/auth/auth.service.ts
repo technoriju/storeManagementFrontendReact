@@ -33,14 +33,31 @@ export const AuthService = {
 
   loadPermissions: async () => {
     try {
-      // Assuming a permissions endpoint exists
-      const { data } = await apiClient.get(API_ENDPOINTS.AUTH.PERMISSIONS);
-      useAuthStore.getState().setPermissions(data.permissions || []);
+      const response = await apiClient.get(API_ENDPOINTS.AUTH.ME);
+      const data = response.data?.data || response.data;
+      if (data && Array.isArray(data.permissions)) {
+        useAuthStore.getState().setPermissions(data.permissions);
+        const currentUser = useAuthStore.getState().user;
+        const updatedUser = {
+          ...(currentUser || {}),
+          ...data,
+          permissions: data.permissions,
+        };
+        useAuthStore.getState().setUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+        return data.permissions;
+      }
     } catch (e) {
-      console.error('Failed to load permissions', e);
-      // Even if permissions fail, we shouldn't necessarily block the app,
-      // or we could throw depending on requirements
-      useAuthStore.getState().setPermissions([]);
+      console.warn('Could not load profile from /auth/me, falling back to local user:', e);
     }
+
+    const current = useAuthStore.getState().permissions;
+    if (!current || current.length === 0) {
+      const user = useAuthStore.getState().user;
+      if (user?.permissions && Array.isArray(user.permissions)) {
+        useAuthStore.getState().setPermissions(user.permissions);
+      }
+    }
+    return useAuthStore.getState().permissions;
   }
 };

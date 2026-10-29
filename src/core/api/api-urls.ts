@@ -3,6 +3,7 @@ export const API_ENDPOINTS = {
     LOGIN: '/auth/login',
     REFRESH: '/auth/refresh',
     PERMISSIONS: '/auth/permissions',
+    ME: '/auth/me',
   },
   BRANDS: {
     BASE: '/brands',
@@ -68,6 +69,15 @@ export const API_ENDPOINTS = {
   USERS: {
     BASE: '/users',
     BY_ID: (id: string | number) => `/users/${id}`,
+    STATUS: (id: string | number) => `/users/${id}/status`,
+  },
+  ROLES: {
+    BASE: '/roles',
+    BY_ID: (id: string | number) => `/roles/${id}`,
+  },
+  PERMISSIONS: {
+    BASE: '/permissions',
+    MODULES: '/permissions/modules',
   },
   PAYMENTS: {
     BASE: '/payments',
