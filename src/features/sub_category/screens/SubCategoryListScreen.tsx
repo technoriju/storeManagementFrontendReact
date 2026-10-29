@@ -6,6 +6,8 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -39,6 +41,7 @@ export const SubCategoryListScreen = () => {
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const categoryOptions = categories.map(c => ({ label: c.name, value: c.id }));
 
@@ -141,6 +144,7 @@ export const SubCategoryListScreen = () => {
           setCategoryId('');
           setDescription('');
           setStatus('active');
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
       >
@@ -184,6 +188,7 @@ export const SubCategoryListScreen = () => {
           setCategoryId(item.categoryId);
           setDescription(item.description || '');
           setStatus(item.status || 'active');
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
@@ -243,27 +248,38 @@ export const SubCategoryListScreen = () => {
 
   const handleSave = () => {
     if (!name.trim() || !categoryId) {
-      Alert.alert('Validation Error', 'Category and sub category name are required');
+      setFormError('Category and sub category name are required');
       return;
     }
+    setFormError(null);
     
     if (editingId) {
       const existing = subCategories.find(s => s.id === editingId);
       if (existing) {
         updateMutation.mutate(
-          { ...existing, name, categoryId, description, status },
+          { ...existing, name: name.trim(), categoryId, description: description.trim(), status },
           {
-            onSuccess: () => setIsAddModalVisible(false),
-            onError: (error: any) => Alert.alert('Error', error?.message || 'Failed to update sub category'),
+            onSuccess: () => {
+              setIsAddModalVisible(false);
+              setFormError(null);
+            },
+            onError: (error: any) => {
+              setFormError(formatApiErrorMessage(error, 'Failed to update sub category'));
+            },
           },
         );
       }
     } else {
       addMutation.mutate(
-        { name, categoryId, description, status },
+        { name: name.trim(), categoryId, description: description.trim(), status },
         {
-          onSuccess: () => setIsAddModalVisible(false),
-          onError: (error: any) => Alert.alert('Error', error?.message || 'Failed to add sub category'),
+          onSuccess: () => {
+            setIsAddModalVisible(false);
+            setFormError(null);
+          },
+          onError: (error: any) => {
+            setFormError(formatApiErrorMessage(error, 'Failed to add sub category'));
+          },
         },
       );
     }
@@ -291,13 +307,19 @@ export const SubCategoryListScreen = () => {
       <AppDialog
         visible={isAddModalVisible}
         title={editingId ? "Edit Sub Category" : "Add Sub Category"}
-        onClose={() => setIsAddModalVisible(false)}
+        onClose={() => {
+          setIsAddModalVisible(false);
+          setFormError(null);
+        }}
         actions={
           <>
             <AppButton 
               title="Cancel" 
               variant="secondary" 
-              onPress={() => setIsAddModalVisible(false)} 
+              onPress={() => {
+                setIsAddModalVisible(false);
+                setFormError(null);
+              }} 
               style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton
@@ -310,6 +332,7 @@ export const SubCategoryListScreen = () => {
           </>
         }
       >
+        <FormErrorBanner message={formError} />
         <AppSelect
           label={
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -319,7 +342,10 @@ export const SubCategoryListScreen = () => {
           placeholder="Select Category"
           options={categoryOptions}
           value={categoryId}
-          onSelect={setCategoryId}
+          onSelect={(val) => {
+            setCategoryId(val);
+            if (formError) setFormError(null);
+          }}
         />
         
         <AppInput
@@ -329,7 +355,10 @@ export const SubCategoryListScreen = () => {
             </Text>
           }
           value={name}
-          onChangeText={setName}
+          onChangeText={(val: string) => {
+            setName(val);
+            if (formError) setFormError(null);
+          }}
           placeholder="e.g. Laptops"
         />
         <AppInput

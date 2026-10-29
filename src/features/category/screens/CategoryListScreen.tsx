@@ -6,6 +6,8 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Category } from '../../../types/models';
@@ -45,6 +47,7 @@ export const CategoryListScreen = () => {
   
   const [categoryName, setCategoryName] = useState('');
   const [categoryDescription, setCategoryDescription] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const isSmallMobile = isMobile && windowWidth < 380;
   const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
@@ -111,6 +114,7 @@ export const CategoryListScreen = () => {
           setEditingCategory(null);
           setCategoryName('');
           setCategoryDescription('');
+          setFormError(null);
           setIsModalVisible(true);
         }}
       >
@@ -129,6 +133,7 @@ export const CategoryListScreen = () => {
     setEditingCategory(category);
     setCategoryName(category.name);
     setCategoryDescription(category.description || '');
+    setFormError(null);
     setIsModalVisible(true);
   };
 
@@ -214,28 +219,39 @@ export const CategoryListScreen = () => {
 
   const handleSaveCategory = () => {
     if (!categoryName.trim()) {
-      Alert.alert('Validation Error', 'Category name is required');
+      setFormError('Category name is required');
       return;
     }
+    setFormError(null);
     
     if (editingCategory) {
       updateCategoryMutation.mutate({
         id: editingCategory.id,
         data: {
-          name: categoryName,
-          description: categoryDescription,
+          name: categoryName.trim(),
+          description: categoryDescription.trim(),
         }
       }, {
-        onSuccess: () => setIsModalVisible(false),
-        onError: (e: any) => Alert.alert('Error', e.message || 'An error occurred')
+        onSuccess: () => {
+          setIsModalVisible(false);
+          setFormError(null);
+        },
+        onError: (e: any) => {
+          setFormError(formatApiErrorMessage(e, 'Failed to update category'));
+        }
       });
     } else {
       addCategoryMutation.mutate({
-        name: categoryName,
-        description: categoryDescription,
+        name: categoryName.trim(),
+        description: categoryDescription.trim(),
       }, {
-        onSuccess: () => setIsModalVisible(false),
-        onError: (e: any) => Alert.alert('Error', e.message || 'An error occurred')
+        onSuccess: () => {
+          setIsModalVisible(false);
+          setFormError(null);
+        },
+        onError: (e: any) => {
+          setFormError(formatApiErrorMessage(e, 'Failed to add category'));
+        }
       });
     }
   };
@@ -279,13 +295,19 @@ export const CategoryListScreen = () => {
       <AppDialog
         visible={isModalVisible}
         title={editingCategory ? "Edit Category" : "Add Category"}
-        onClose={() => setIsModalVisible(false)}
+        onClose={() => {
+          setIsModalVisible(false);
+          setFormError(null);
+        }}
         actions={
           <>
             <AppButton 
               title="Cancel" 
               variant="secondary" 
-              onPress={() => setIsModalVisible(false)} 
+              onPress={() => {
+                setIsModalVisible(false);
+                setFormError(null);
+              }} 
               style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton 
@@ -298,6 +320,7 @@ export const CategoryListScreen = () => {
           </>
         }
       >
+        <FormErrorBanner message={formError} />
         <AppInput
           label={
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -305,7 +328,10 @@ export const CategoryListScreen = () => {
             </Text>
           }
           value={categoryName}
-          onChangeText={setCategoryName}
+          onChangeText={(val: string) => {
+            setCategoryName(val);
+            if (formError) setFormError(null);
+          }}
           placeholder="e.g. Computers"
         />
         <AppInput
@@ -315,7 +341,10 @@ export const CategoryListScreen = () => {
             </Text>
           }
           value={categoryDescription}
-          onChangeText={setCategoryDescription}
+          onChangeText={(val: string) => {
+            setCategoryDescription(val);
+            if (formError) setFormError(null);
+          }}
           placeholder="Category description"
         />
       </AppDialog>

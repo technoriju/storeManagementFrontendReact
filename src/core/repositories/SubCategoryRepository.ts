@@ -28,6 +28,101 @@ export class SubCategoryRepository extends BaseRepository<SubCategory> {
     }
   }
 
+  async createDirect(data: Partial<SubCategory>): Promise<SubCategory> {
+    const numericCategoryId = Number(data.categoryId);
+    const apiPayload = {
+      name: data.name,
+      description: data.description,
+      categoryId: numericCategoryId,
+      status: data.status || 'active',
+    };
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.SUBCATEGORIES.BASE, apiPayload);
+      const responseData = response.data?.data || response.data || {};
+      const serverId = Number(responseData?.id || responseData?._id || responseData?.subcategoryId || data.id || Date.now());
+
+      const entity: SubCategory = {
+        ...data,
+        ...responseData,
+        id: serverId,
+        backendId: serverId,
+        name: responseData.name || data.name || '',
+        categoryId: numericCategoryId,
+        description: responseData.description || data.description,
+        status: responseData.status || data.status || 'active',
+        createdAt: responseData.createdAt || new Date().toISOString(),
+        updatedAt: responseData.updatedAt || new Date().toISOString(),
+        syncStatus: 'synced',
+      };
+      await super.insert(entity, false);
+      return entity;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallbackEntity: SubCategory = {
+          ...data,
+          id: data.id || Math.floor(Math.random() * -1000000000),
+          name: data.name || '',
+          categoryId: numericCategoryId,
+          description: data.description,
+          status: data.status || 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          syncStatus: 'pending_insert',
+        };
+        await this.insert(fallbackEntity, true);
+        return fallbackEntity;
+      }
+      throw error;
+    }
+  }
+
+  async updateDirect(data: SubCategory): Promise<SubCategory> {
+    const id = Number(data.id);
+    const existing = await this.getById(id);
+    const serverId = Number((existing as any)?.backendId || id);
+    const numericCategoryId = Number(data.categoryId || existing?.categoryId);
+    const apiPayload = {
+      name: data.name ?? existing?.name,
+      description: data.description ?? existing?.description,
+      categoryId: numericCategoryId,
+      status: data.status || existing?.status || 'active',
+    };
+    try {
+      const response = await apiClient.patch(API_ENDPOINTS.SUBCATEGORIES.BY_ID(serverId), apiPayload);
+      const responseData = response.data?.data || response.data || {};
+      const updated: SubCategory = {
+        ...(existing || {}),
+        ...data,
+        ...responseData,
+        id,
+        backendId: serverId,
+        syncStatus: 'synced',
+        updatedAt: new Date().toISOString(),
+      };
+      await super.update(updated, false);
+      return updated;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallback = {
+          ...(existing || {}),
+          ...data,
+          id,
+          syncStatus: 'pending_update',
+          updatedAt: new Date().toISOString(),
+        } as SubCategory;
+        await this.update(fallback, true);
+        return fallback;
+      }
+      throw error;
+    }
+  }
+
   async update(entity: SubCategory, shouldSync = true): Promise<void> {
     const localEntity: SubCategory = { ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' };
     await super.update(localEntity, false);

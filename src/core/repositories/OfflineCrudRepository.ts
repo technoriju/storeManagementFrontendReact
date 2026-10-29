@@ -50,6 +50,88 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
     }
   }
 
+  async createDirect(data: Partial<T>): Promise<T> {
+    const payload = this.config.payload(data as T);
+    try {
+      const response = await apiClient.post(this.config.endpoint.BASE, payload);
+      const body = response?.data?.data || response?.data || {};
+      const entityName = this.config.tableName.slice(0, -1);
+      const camelEntityName = entityName.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+      const returnedId = body.id || body._id || body[`${entityName}Id`] || body[`${camelEntityName}Id`] || data.id || Math.floor(Math.random() * -1000000000);
+
+      const normalized = this.config.normalize ? this.config.normalize(body) : ({
+        ...data,
+        ...body,
+      } as any);
+
+      const entityToSave = {
+        ...data,
+        ...normalized,
+        id: Number(returnedId),
+        backendId: Number(returnedId),
+        syncStatus: 'synced' as const,
+        createdAt: normalized.createdAt || new Date().toISOString(),
+        updatedAt: normalized.updatedAt || new Date().toISOString(),
+      } as T;
+
+      await super.insert(entityToSave, false);
+      return entityToSave;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallbackEntity = {
+          ...data,
+          id: data.id || Math.floor(Math.random() * -1000000000),
+          syncStatus: 'pending_insert' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as T;
+        await this.insert(fallbackEntity, true);
+        return fallbackEntity;
+      }
+      throw error;
+    }
+  }
+
+  async updateDirect(entity: T): Promise<T> {
+    const id = Number(entity.id);
+    const existing = await this.getById(id);
+    const serverId = Number((existing as any)?.backendId || id);
+    const merged = { ...(existing || {}), ...entity };
+    const payload = this.config.payload(merged as T);
+
+    try {
+      const response = await apiClient.patch(this.config.endpoint.BY_ID(serverId), payload);
+      const body = response?.data?.data || response?.data || {};
+      const updated = {
+        ...merged,
+        ...body,
+        id,
+        backendId: serverId,
+        syncStatus: 'synced' as const,
+        updatedAt: new Date().toISOString(),
+      } as T;
+      await super.update(updated, false);
+      return updated;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallback = {
+          ...merged,
+          syncStatus: 'pending_update' as const,
+          updatedAt: new Date().toISOString(),
+        } as T;
+        await this.update(fallback, true);
+        return fallback;
+      }
+      throw error;
+    }
+  }
+
   async update(entity: T, shouldSync = true) {
     // Keep fields omitted by edit forms, especially backendId and createdAt.
     const existing = await this.getById(entity.id);

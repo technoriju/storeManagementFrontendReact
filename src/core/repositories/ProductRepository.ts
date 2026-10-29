@@ -563,6 +563,9 @@ export class ProductRepository extends BaseRepository<Product> {
         return entity;
       }
     } catch (err: any) {
+      if (err?.response && err.response.status >= 400 && err.response.status < 500) {
+        throw err;
+      }
       console.warn('[ProductRepository] createDirect API error, fallback to offline:', err?.message);
     }
 
@@ -589,6 +592,38 @@ export class ProductRepository extends BaseRepository<Product> {
     };
     await this.insert(fallbackEntity, true);
     return fallbackEntity;
+  }
+
+  public async updateDirect(id: number, data: Partial<Product>): Promise<Product> {
+    const existing = await this.getById(id);
+    const serverId = (existing as any)?.backendId || id;
+    const merged: Product = { ...(existing || {}), ...data, id } as Product;
+    const payload = this.toApiPayload(merged);
+
+    try {
+      const response = await apiClient.put(API_ENDPOINTS.PRODUCTS.BY_ID(serverId), payload);
+      const serverData = response.data?.data || response.data || {};
+      const updatedEntity: Product = {
+        ...merged,
+        ...serverData,
+        id,
+        updatedAt: new Date().toISOString(),
+        syncStatus: 'synced',
+      };
+      await this.update(updatedEntity, false);
+      return updatedEntity;
+    } catch (err: any) {
+      if (err?.response && err.response.status >= 400 && err.response.status < 500) {
+        throw err;
+      }
+      const fallbackEntity: Product = {
+        ...merged,
+        updatedAt: new Date().toISOString(),
+        syncStatus: 'pending_update',
+      };
+      await this.update(fallbackEntity, true);
+      return fallbackEntity;
+    }
   }
 }
 

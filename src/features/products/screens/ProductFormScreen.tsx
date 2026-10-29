@@ -7,6 +7,8 @@ import { ProductScreenType } from '../ProductsModule';
 
 import { Product } from '../types';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AddCategoryModal } from '../components/AddCategoryModal';
 import { AddBrandModal } from '../components/AddBrandModal';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -207,6 +209,8 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   const [isCategoryModalVisible, setCategoryModalVisible] = useState(false);
   const [isBrandModalVisible, setBrandModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const scrollViewRef = React.useRef<any>(null);
 
   const [variants, setVariants] = useState([
     { id: Math.floor(Math.random() * -1000000000), variation: 'color', value: 'red', sku: '1234', qty: 2, price: '50000' }
@@ -712,19 +716,23 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   // Save product
   const handleSaveProduct = async () => {
     if (!productName.trim()) {
-      Alert.alert('Validation Error', 'Please enter product name');
+      setFormError('Please enter product name');
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (!sku.trim()) {
-      Alert.alert('Validation Error', 'Please enter or generate SKU');
+      setFormError('Please enter or generate SKU');
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (!retailPrice && !purchasePrice) {
-      Alert.alert('Validation Error', 'Please enter Retail Price or Purchase Price');
+      setFormError('Please enter Retail Price or Purchase Price');
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     setIsSaving(true);
+    setFormError(null);
     try {
       const pPrice = parseFloat(purchasePrice) || 0;
       const wPrice = parseFloat(wholesalePrice) || 0;
@@ -771,20 +779,11 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       };
 
       if (productId) {
-        updateProduct(productData);
+        const updated = await productRepository.updateDirect(Number(productId), productData as any);
+        updateProduct(updated as any);
       } else {
-        addProduct(productData);
-      }
-
-      // Persist to offline repository
-      try {
-        if (productId) {
-          await productRepository.update(productData as any);
-        } else {
-          await productRepository.insert(productData as any);
-        }
-      } catch (repoErr) {
-        console.warn('Repository save warning:', repoErr);
+        const created = await productRepository.createDirect(productData as any);
+        addProduct(created as any);
       }
 
       fetchProducts(true).catch(() => {});
@@ -792,7 +791,9 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
       Alert.alert('Success', `Product ${productId ? 'updated' : 'added'} successfully!`);
       onNavigate('list');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save product');
+      const msg = formatApiErrorMessage(error, 'Failed to save product');
+      setFormError(msg);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setIsSaving(false);
     }
@@ -801,6 +802,7 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
   return (
     <View style={styles.container}>
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.scrollArea} 
         contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
         keyboardShouldPersistTaps="handled"
@@ -813,6 +815,8 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
           <ArrowLeft size={20} color={TEXT_MAIN} />
           <Text style={styles.backButtonText}>Back to Product List</Text>
         </TouchableOpacity>
+
+        <FormErrorBanner message={formError} style={{ marginBottom: 16 }} />
 
         {/* 1. PRODUCT INFORMATION CARD */}
         <Card title="Product Information" icon={<Info size={18} color={ORANGE} />}>
@@ -1337,33 +1341,21 @@ export const ProductFormScreen: React.FC<Props> = ({ productId, onNavigate }) =>
         <AddCategoryModal 
           visible={isCategoryModalVisible} 
           onClose={() => setCategoryModalVisible(false)} 
-          onSubmit={(name) => {
-            setCategories(dedupeOptions([...categories, { label: name, value: Date.now().toString() }]));
-            setCategoryModalVisible(false);
+          onSubmit={async (name) => {
+            const saved = await categoryRepository.createDirect({ name });
+            const val = String(saved.id);
+            setCategories(prev => dedupeOptions([...prev, { label: saved.name, value: val }]));
+            setSelectedCategory(val);
           }} 
         />
         <AddBrandModal 
           visible={isBrandModalVisible} 
           onClose={() => setBrandModalVisible(false)} 
           onSubmit={async (name) => {
-            const tempId = Math.floor(Math.random() * -1000000000);
-            const brandItem: any = {
-              id: tempId,
-              name,
-              status: 'Active',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              syncStatus: 'pending_insert' as const,
-            };
-            try {
-              await brandRepository.insert(brandItem);
-            } catch (e) {
-              console.warn('Failed to insert brand locally:', e);
-            }
-            const val = String(brandItem.id);
-            setBrands(prev => dedupeOptions([...prev, { label: name, value: val }]));
+            const saved = await brandRepository.createDirect({ name, status: 'Active' });
+            const val = String(saved.id);
+            setBrands(prev => dedupeOptions([...prev, { label: saved.name, value: val }]));
             setSelectedBrand(val);
-            setBrandModalVisible(false);
           }} 
         />
       </ScrollView>

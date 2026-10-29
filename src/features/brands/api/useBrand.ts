@@ -20,15 +20,7 @@ export const useAddBrand = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (data: Partial<Brand>) => {
-      const item = {
-        ...data,
-        id: data.id || Math.floor(Math.random() * -1000000000),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_insert' as const,
-      } as Brand;
-      await brandRepository.insert(item);
-      return item;
+      return await brandRepository.createDirect(data);
     },
     onSuccess: (item) => {
       client.setQueryData(BRAND_QUERY_KEY, (old: Brand[] | undefined) => [...(old || []), item]);
@@ -41,16 +33,7 @@ export const useUpdateBrand = () => {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (data: Brand) => {
-      const existing = await brandRepository.getById(Number(data.id));
-      const item = {
-        ...(existing || {}),
-        ...data,
-        id: Number(data.id),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_update' as const,
-      } as Brand;
-      await brandRepository.update(item);
-      return item;
+      return await brandRepository.updateDirect(data);
     },
     onSuccess: (item) => {
       client.setQueryData(BRAND_QUERY_KEY, (old: Brand[] | undefined) =>
