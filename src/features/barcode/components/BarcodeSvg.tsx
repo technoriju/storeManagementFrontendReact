@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Text, Platform } from 'react-native';
 import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 import { BarcodeSymbology } from '../types';
 
 interface BarcodeSvgProps {
@@ -15,26 +16,26 @@ interface BarcodeSvgProps {
 export const BarcodeSvg: React.FC<BarcodeSvgProps> = ({
   value,
   format = 'CODE128',
-  width = 1.5,
+  width = 1.4,
   height = 36,
   displayValue = false,
   fontSize = 11,
 }) => {
-  const svgRef = useRef<any>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [qrSvgHtml, setQrSvgHtml] = useState<string>('');
 
   // Validate or adapt value according to symbology
   const sanitizeValue = (val: string, fmt: BarcodeSymbology): { sanitized: string; validFmt: string } => {
     const raw = String(val || '000000').trim();
     if (fmt === 'QR') {
-      return { sanitized: raw, validFmt: 'QR' };
+      return { sanitized: raw || 'ITEM', validFmt: 'QR' };
     }
     if (fmt === 'EAN13') {
       const digits = raw.replace(/\D/g, '');
       if (digits.length >= 12) {
         return { sanitized: digits.slice(0, 13), validFmt: 'EAN13' };
       }
-      // If not 12-13 digits, fallback to CODE128 so it won't crash
       return { sanitized: raw, validFmt: 'CODE128' };
     }
     if (fmt === 'UPC') {
@@ -52,17 +53,39 @@ export const BarcodeSvg: React.FC<BarcodeSvgProps> = ({
   };
 
   useEffect(() => {
+    const rawVal = value || '000000';
+    setError(null);
+
+    if (format === 'QR') {
+      // Offline local pure vector QR generation
+      QRCode.toString(
+        rawVal,
+        {
+          type: 'svg',
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+          width: Math.max(48, Math.round(height * 1.5)),
+        },
+        (err, svgString) => {
+          if (err) {
+            console.warn('QR code generation error:', err);
+            setError('QR error');
+          } else {
+            setQrSvgHtml(svgString);
+          }
+        }
+      );
+      return;
+    }
+
+    // 1D Barcode rendering via JsBarcode
     if (Platform.OS !== 'web' && !svgRef.current) return;
-    
+
     try {
-      setError(null);
-      const { sanitized, validFmt } = sanitizeValue(value, format);
-
-      if (validFmt === 'QR') {
-        // QR is rendered separately
-        return;
-      }
-
+      const { sanitized, validFmt } = sanitizeValue(rawVal, format);
       if (svgRef.current) {
         JsBarcode(svgRef.current, sanitized, {
           format: validFmt,
@@ -82,19 +105,27 @@ export const BarcodeSvg: React.FC<BarcodeSvgProps> = ({
   }, [value, format, width, height, displayValue, fontSize]);
 
   if (format === 'QR') {
-    // Standard high-contrast QR display using URL encoded QR API or SVG blocks
-    const qrUri = `https://api.qrserver.com/v1/create-qr-code/?size=${height * 2}x${height * 2}&data=${encodeURIComponent(
-      value || '000000'
-    )}`;
+    if (error) {
+      return (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>* QR ERROR *</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.container}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={qrUri}
-          alt="QR Code"
-          style={{ width: height * 1.6, height: height * 1.6, objectFit: 'contain' }}
-        />
-      </View>
+      <div
+        className="barcode-qr-container"
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: `${Math.round(height * 1.5)}px`,
+          height: `${Math.round(height * 1.5)}px`,
+          overflow: 'hidden',
+        }}
+        dangerouslySetInnerHTML={{ __html: qrSvgHtml }}
+      />
     );
   }
 

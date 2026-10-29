@@ -11,6 +11,9 @@ import {
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { useProductStore } from '../../products/store/productStore';
+import { categoryRepository } from '../../../core/repositories/CategoryRepository';
+import { apiClient } from '../../../core/api/api-client';
+import { API_ENDPOINTS } from '../../../core/api/api-urls';
 import {
   BarcodePrintItem,
   BarcodeLabelConfig,
@@ -30,29 +33,37 @@ import {
   Settings2,
   Eye,
   RefreshCw,
-  Layers,
   Box,
   Check,
-  ChevronDown,
   Tag,
-  Grid,
+  Filter,
+  CheckCircle2,
+  QrCode,
+  Layers,
 } from 'lucide-react-native';
 
 interface PrintBarcodeScreenProps {
   onNavigateTab?: (tab: string) => void;
 }
 
+interface CategoryOption {
+  id: string;
+  name: string;
+}
+
 export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNavigateTab }) => {
   const theme = useTheme();
-  const { isDesktop } = useResponsive();
-  const { products, categories, brands, fetchProducts } = useProductStore();
+  const { isDesktop, windowWidth } = useResponsive();
+  const { products, fetchProducts } = useProductStore();
+
+  // Categories list
+  const [categoryList, setCategoryList] = useState<CategoryOption[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   // Print Queue
   const [items, setItems] = useState<BarcodePrintItem[]>([]);
-  // Search & Filter
+  // Search Query
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
 
   // Label Configuration
   const [config, setConfig] = useState<BarcodeLabelConfig>(DEFAULT_LABEL_CONFIG);
@@ -61,28 +72,102 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(1.5);
 
+  // Load products & categories on mount
   useEffect(() => {
     fetchProducts();
+    loadCategories();
   }, []);
 
-  // Filtered products for dropdown search
+  const loadCategories = async () => {
+    const map = new Map<string, string>();
+
+    // 1. Load from CategoryRepository (local SQLite)
+    try {
+      const localCats = await categoryRepository.getAll();
+      if (Array.isArray(localCats)) {
+        localCats.forEach((c: any) => {
+          if (c && c.name) {
+            map.set(String(c.id || c.name), c.name);
+          }
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 2. Load from API
+    try {
+      const res = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE).catch(() => null);
+      const apiCats = res?.data?.data || res?.data || [];
+      if (Array.isArray(apiCats)) {
+        apiCats.forEach((c: any) => {
+          if (c && c.name) {
+            map.set(String(c.id || c.name), c.name);
+          }
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 3. Fallback: extract from products already loaded
+    if (products && products.length > 0) {
+      products.forEach((p) => {
+        const catId = p.categoryId || p.category?.id;
+        const catName = p.categoryName || p.category?.name;
+        if (catName) {
+          map.set(String(catId || catName), catName);
+        }
+      });
+    }
+
+    const options: CategoryOption[] = Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      name,
+    }));
+
+    setCategoryList(options);
+  };
+
+  // Re-extract categories when products change if categoryList is small
+  useEffect(() => {
+    if (products.length > 0 && categoryList.length === 0) {
+      loadCategories();
+    }
+  }, [products]);
+
+  // Filter products based on selected Category and Search Query
   const filteredProducts = useMemo(() => {
     if (!products || products.length === 0) return [];
+
     return products.filter((p) => {
+      // Search matching
+      const q = searchQuery.toLowerCase().trim();
       const matchSearch =
-        !searchQuery.trim() ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (p.barcode && p.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
+        !q ||
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.sku && p.sku.toLowerCase().includes(q)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(q));
 
-      const matchCategory =
-        selectedCategory === 'all' ||
-        String(p.categoryId) === selectedCategory ||
-        (p.category && String(p.category.id) === selectedCategory);
+      if (!matchSearch) return false;
 
-      return matchSearch && matchCategory;
+      // Category matching
+      if (selectedCategory === 'all') return true;
+
+      const pCatId = String(p.categoryId || p.category?.id || '');
+      const pCatName = String(p.categoryName || p.category?.name || '').toLowerCase();
+
+      // Find selected category name if selectedCategory is ID
+      const chosenCat = categoryList.find((c) => c.id === selectedCategory);
+      const chosenCatName = chosenCat ? chosenCat.name.toLowerCase() : selectedCategory.toLowerCase();
+
+      return (
+        pCatId === selectedCategory ||
+        pCatName === chosenCatName ||
+        pCatName === selectedCategory.toLowerCase()
+      );
     });
-  }, [products, searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory, categoryList]);
 
   // Add product to queue
   const handleAddProduct = (product: any, qty: number = 1) => {
@@ -103,23 +188,21 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
           sku: product.sku || `SKU-${product.id}`,
           barcode: product.barcode || product.sku || String(product.id),
           price: product.retailPrice || product.price || 0,
-          mrp: product.mrp || product.price || 0,
+          mrp: product.mrp || product.retailPrice || product.price || 0,
           categoryName: product.categoryName || product.category?.name,
           brandName: product.brandName || product.brand?.name,
           quantity: qty,
         },
       ];
     });
-    setSearchQuery('');
-    setSearchDropdownOpen(false);
   };
 
-  // Add all filtered products
+  // Add all filtered products to queue
   const handleAddAllFiltered = () => {
     filteredProducts.forEach((p) => handleAddProduct(p, 1));
   };
 
-  // Modify quantity
+  // Modify queue quantity
   const handleUpdateQty = (productId: string | number, qty: number) => {
     setItems((prev) =>
       prev
@@ -144,6 +227,11 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
     );
   };
 
+  // Check if item is already in queue
+  const isProductInQueue = (productId: string | number) => {
+    return items.some((it) => String(it.productId) === String(productId));
+  };
+
   // Totals
   const totalLabels = useMemo(() => {
     return items.reduce((sum, it) => sum + (it.quantity || 0), 0);
@@ -158,11 +246,11 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
     ? items[0]
     : {
         productId: 'DEMO',
-        name: 'Organic Basmati Rice (1kg)',
-        sku: 'RICE-001',
-        barcode: '8901030382014',
-        price: 149.0,
-        mrp: 180.0,
+        name: 'Fresh Premium Milk 1L',
+        sku: 'MILK-1001',
+        barcode: '8901234567890',
+        price: 65.0,
+        mrp: 75.0,
         quantity: 1,
         packedDate: new Date().toLocaleDateString('en-GB'),
       };
@@ -174,9 +262,9 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
         <View style={styles.titleRow}>
           <Tag size={24} color={theme.colors.primary} />
           <View>
-            <Text style={[styles.pageTitle, { color: theme.colors.text }]}>Print Barcode Labels</Text>
+            <Text style={[styles.pageTitle, { color: theme.colors.text }]}>Print Barcode & QR Labels</Text>
             <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
-              Generate & customize scannable product stickers for retail shelves & packaging
+              Filter by category, search items, customize label fields, and print thermal rolls or A4 sheets
             </Text>
           </View>
         </View>
@@ -216,116 +304,261 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
       <ScrollView contentContainerStyle={styles.mainLayout}>
         <View style={[styles.columnsContainer, { flexDirection: isDesktop ? 'row' : 'column' }]}>
           
-          {/* LEFT COLUMN: Product Selection & Queue */}
+          {/* LEFT COLUMN: Product Category Filter, Product List & Print Queue */}
           <View style={[styles.leftColumn, { flex: isDesktop ? 6 : undefined }]}>
             
-            {/* Search Box */}
+            {/* Category Filter & Search Card */}
             <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Text style={[styles.cardTitle, { color: theme.colors.text }]}>1. Add Products to Print</Text>
-
-              <View style={styles.searchRow}>
-                <View style={[styles.searchInputWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
-                  <Search size={18} color={theme.colors.textSecondary} />
-                  <TextInput
-                    placeholder="Search product by name, SKU or barcode..."
-                    placeholderTextColor={theme.colors.textSecondary}
-                    value={searchQuery}
-                    onChangeText={(txt) => {
-                      setSearchQuery(txt);
-                      setSearchDropdownOpen(true);
-                    }}
-                    onFocus={() => setSearchDropdownOpen(true)}
-                    style={[styles.searchInput, { color: theme.colors.text }]}
-                  />
-                  {searchQuery ? (
-                    <Pressable onPress={() => setSearchQuery('')}>
-                      <Trash2 size={16} color={theme.colors.textSecondary} />
-                    </Pressable>
-                  ) : null}
+              <View style={styles.cardHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Filter size={18} color={theme.colors.primary} />
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>1. Browse & Filter Products</Text>
                 </View>
-
-                {/* Category filter */}
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: `1px solid ${theme.colors.border}`,
-                    backgroundColor: theme.colors.background,
-                    color: theme.colors.text,
-                    fontSize: '14px',
-                    outline: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All Categories</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-
-                <Pressable
-                  onPress={handleAddAllFiltered}
-                  disabled={filteredProducts.length === 0}
-                  style={({ pressed }) => [
-                    styles.secondaryBtn,
-                    { borderColor: theme.colors.border, opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <Plus size={15} color={theme.colors.primary} />
-                  <Text style={[styles.btnTextSecondary, { color: theme.colors.primary, fontWeight: '600' }]}>
-                    Add Filtered ({filteredProducts.length})
-                  </Text>
-                </Pressable>
+                <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>
+                  Showing {filteredProducts.length} of {products.length} products
+                </Text>
               </View>
 
-              {/* Autocomplete Dropdown List */}
-              {searchDropdownOpen && searchQuery.trim() !== '' && (
-                <View style={[styles.dropdownList, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  {filteredProducts.length === 0 ? (
-                    <View style={styles.dropdownEmpty}>
-                      <Text style={{ color: theme.colors.textSecondary }}>No matching products found</Text>
-                    </View>
-                  ) : (
-                    filteredProducts.slice(0, 8).map((p) => (
+              {/* Filter controls row */}
+              <View style={styles.searchRow}>
+                {/* Category Dropdown */}
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: '180px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: theme.colors.textSecondary, marginBottom: '4px' }}>
+                    CATEGORY
+                  </label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: `1px solid ${theme.colors.border}`,
+                      backgroundColor: theme.colors.background,
+                      color: theme.colors.text,
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="all">📁 All Categories ({products.length})</option>
+                    {categoryList.map((c) => {
+                      const count = products.filter(
+                        (p) =>
+                          String(p.categoryId || p.category?.id) === c.id ||
+                          String(p.categoryName || p.category?.name).toLowerCase() === c.name.toLowerCase()
+                      ).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({count})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Search Text Input */}
+                <div style={{ flex: 1, minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: theme.colors.textSecondary, marginBottom: '4px' }}>
+                    SEARCH PRODUCT
+                  </label>
+                  <View style={[styles.searchInputWrapper, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                    <Search size={18} color={theme.colors.textSecondary} />
+                    <TextInput
+                      placeholder="Search by name, SKU or barcode..."
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      style={[styles.searchInput, { color: theme.colors.text }]}
+                    />
+                    {searchQuery ? (
+                      <Pressable onPress={() => setSearchQuery('')}>
+                        <Trash2 size={16} color={theme.colors.textSecondary} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </div>
+
+                {/* Bulk Add Button */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <Pressable
+                    onPress={handleAddAllFiltered}
+                    disabled={filteredProducts.length === 0}
+                    style={({ pressed }) => [
+                      styles.secondaryBtn,
+                      {
+                        borderColor: theme.colors.primary,
+                        backgroundColor: theme.colors.primary + '10',
+                        opacity: pressed ? 0.7 : 1,
+                        height: 42,
+                      },
+                    ]}
+                  >
+                    <Plus size={16} color={theme.colors.primary} />
+                    <Text style={[styles.btnTextSecondary, { color: theme.colors.primary, fontWeight: '700' }]}>
+                      Add All ({filteredProducts.length})
+                    </Text>
+                  </Pressable>
+                </div>
+              </View>
+
+              {/* Category Quick Chips */}
+              {categoryList.length > 0 && (
+                <View style={styles.chipRow}>
+                  <Pressable
+                    onPress={() => setSelectedCategory('all')}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: selectedCategory === 'all' ? theme.colors.primary : theme.colors.background,
+                        borderColor: selectedCategory === 'all' ? theme.colors.primary : theme.colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: selectedCategory === 'all' ? '#FFFFFF' : theme.colors.text },
+                      ]}
+                    >
+                      All ({products.length})
+                    </Text>
+                  </Pressable>
+
+                  {categoryList.slice(0, 8).map((cat) => {
+                    const isSelected = selectedCategory === cat.id;
+                    return (
                       <Pressable
-                        key={p.id}
-                        onPress={() => handleAddProduct(p, 1)}
-                        style={({ pressed }) => [
-                          styles.dropdownItem,
+                        key={cat.id}
+                        onPress={() => setSelectedCategory(cat.id)}
+                        style={[
+                          styles.chip,
                           {
-                            borderBottomColor: theme.colors.border,
-                            backgroundColor: pressed ? theme.colors.primary + '15' : 'transparent',
+                            backgroundColor: isSelected ? theme.colors.primary : theme.colors.background,
+                            borderColor: isSelected ? theme.colors.primary : theme.colors.border,
                           },
                         ]}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.dropdownItemName, { color: theme.colors.text }]}>{p.name}</Text>
-                          <Text style={[styles.dropdownItemSub, { color: theme.colors.textSecondary }]}>
-                            SKU: {p.sku || 'N/A'} • Barcode: {p.barcode || 'N/A'} • Price: {config.currency}{p.price}
-                          </Text>
-                        </View>
-                        <View style={[styles.badge, { backgroundColor: theme.colors.primary + '15' }]}>
-                          <Plus size={14} color={theme.colors.primary} />
-                          <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: '600' }}>Add</Text>
-                        </View>
+                        <Text
+                          style={[
+                            styles.chipText,
+                            { color: isSelected ? '#FFFFFF' : theme.colors.text },
+                          ]}
+                        >
+                          {cat.name}
+                        </Text>
                       </Pressable>
-                    ))
-                  )}
+                    );
+                  })}
                 </View>
               )}
+
+              {/* PRODUCTS LIST TABLE (Filtered by Category & Search) */}
+              <View style={[styles.productListBox, { borderColor: theme.colors.border }]}>
+                {filteredProducts.length === 0 ? (
+                  <View style={styles.emptyProducts}>
+                    <Box size={32} color={theme.colors.textSecondary} />
+                    <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 13 }}>
+                      No products found in this category.
+                    </Text>
+                  </View>
+                ) : (
+                  <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {filteredProducts.map((p) => {
+                      const inQueue = isProductInQueue(p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 14px',
+                            borderBottom: `1px solid ${theme.colors.border}`,
+                            backgroundColor: inQueue ? `${theme.colors.primary}08` : 'transparent',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px', color: theme.colors.text }}>
+                                {p.name}
+                              </span>
+                              {(p.categoryName || p.category?.name) && (
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    backgroundColor: `${theme.colors.primary}18`,
+                                    color: theme.colors.primary,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {p.categoryName || p.category?.name}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '12px', color: theme.colors.textSecondary, marginTop: '2px' }}>
+                              SKU: <span style={{ fontFamily: 'monospace' }}>{p.sku || 'N/A'}</span> • Barcode:{' '}
+                              <span style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || 'N/A'}</span> • Stock:{' '}
+                              <span style={{ fontWeight: 600 }}>{p.stockQuantity ?? 0}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right', marginRight: '16px' }}>
+                            <div style={{ fontWeight: 700, fontSize: '14px', color: theme.colors.text }}>
+                              {config.currency}
+                              {Number(p.retailPrice || p.price || 0).toFixed(2)}
+                            </div>
+                            {p.mrp && p.mrp > (p.retailPrice || p.price || 0) ? (
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  textDecoration: 'line-through',
+                                  color: theme.colors.textSecondary,
+                                }}
+                              >
+                                MRP: {config.currency}
+                                {Number(p.mrp).toFixed(2)}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddProduct(p, 1)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              border: inQueue ? `1px solid ${theme.colors.primary}` : `1px solid ${theme.colors.border}`,
+                              backgroundColor: inQueue ? theme.colors.primary : theme.colors.background,
+                              color: inQueue ? '#FFFFFF' : theme.colors.text,
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {inQueue ? <Check size={13} color="#FFFFFF" /> : <Plus size={13} />}
+                            {inQueue ? 'Added' : 'Add'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </View>
             </View>
 
-            {/* Queue Table */}
+            {/* Print Queue Table */}
             <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, marginTop: 16 }]}>
               <View style={styles.cardHeaderRow}>
                 <View>
-                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Selected Products for Print</Text>
+                  <Text style={[styles.cardTitle, { color: theme.colors.text }]}>2. Print Queue</Text>
                   <Text style={[styles.cardSubTitle, { color: theme.colors.textSecondary }]}>
-                    {items.length} products • {totalLabels} total labels
+                    {items.length} items in batch • {totalLabels} total stickers to print
                   </Text>
                 </View>
 
@@ -349,7 +582,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                       ]}
                     >
                       <Trash2 size={13} color="#DC2626" />
-                      <Text style={{ color: '#DC2626', fontSize: 12 }}>Clear All</Text>
+                      <Text style={{ color: '#DC2626', fontSize: 12 }}>Clear Queue</Text>
                     </Pressable>
                   </View>
                 )}
@@ -357,10 +590,10 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
 
               {items.length === 0 ? (
                 <View style={styles.emptyQueue}>
-                  <Box size={40} color={theme.colors.textSecondary} />
-                  <Text style={[styles.emptyQueueTitle, { color: theme.colors.text }]}>No products in print list</Text>
+                  <Box size={36} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyQueueTitle, { color: theme.colors.text }]}>Print queue is empty</Text>
                   <Text style={[styles.emptyQueueSub, { color: theme.colors.textSecondary }]}>
-                    Use the search bar above to select products, or click "Add Filtered" to bulk add.
+                    Click "+ Add" on products above or "Add All" to populate print list.
                   </Text>
                 </View>
               ) : (
@@ -368,10 +601,10 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                   {/* Table header */}
                   <View style={[styles.tableHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.border }]}>
                     <Text style={[styles.thCell, { flex: 4, color: theme.colors.textSecondary }]}>PRODUCT</Text>
-                    <Text style={[styles.thCell, { flex: 2, color: theme.colors.textSecondary }]}>SKU / BARCODE</Text>
-                    <Text style={[styles.thCell, { flex: 2, color: theme.colors.textSecondary }]}>PRICE / MRP</Text>
-                    <Text style={[styles.thCell, { flex: 3, textAlign: 'center', color: theme.colors.textSecondary }]}>PRINT QUANTITY</Text>
-                    <Text style={[styles.thCell, { width: 50, textAlign: 'center', color: theme.colors.textSecondary }]}>ACTION</Text>
+                    <Text style={[styles.thCell, { flex: 2, color: theme.colors.textSecondary }]}>SKU / CODE</Text>
+                    <Text style={[styles.thCell, { flex: 2, color: theme.colors.textSecondary }]}>PRICE</Text>
+                    <Text style={[styles.thCell, { flex: 3, textAlign: 'center', color: theme.colors.textSecondary }]}>QTY</Text>
+                    <Text style={[styles.thCell, { width: 44, textAlign: 'center', color: theme.colors.textSecondary }]}>DEL</Text>
                   </View>
 
                   {/* Table rows */}
@@ -385,7 +618,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                       </View>
 
                       <View style={{ flex: 2 }}>
-                        <Text style={[styles.rowText, { color: theme.colors.text, fontFamily: 'monospace' }]}>
+                        <Text style={[styles.rowText, { color: theme.colors.text, fontFamily: 'monospace', fontSize: 12 }]}>
                           {it.barcode || it.sku}
                         </Text>
                       </View>
@@ -394,7 +627,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                         <Text style={[styles.rowText, { color: theme.colors.text, fontWeight: '700' }]}>
                           {config.currency}{Number(it.price).toFixed(2)}
                         </Text>
-                        {it.mrp ? (
+                        {it.mrp && it.mrp > it.price ? (
                           <Text style={[styles.rowSubText, { color: theme.colors.textSecondary, textDecorationLine: 'line-through' }]}>
                             {config.currency}{Number(it.mrp).toFixed(2)}
                           </Text>
@@ -429,9 +662,9 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                       </View>
 
                       {/* Remove Button */}
-                      <View style={{ width: 50, alignItems: 'center' }}>
+                      <View style={{ width: 44, alignItems: 'center' }}>
                         <Pressable onPress={() => handleRemoveItem(it.productId)} style={styles.deleteRowBtn}>
-                          <Trash2 size={16} color="#EF4444" />
+                          <Trash2 size={15} color="#EF4444" />
                         </Pressable>
                       </View>
                     </View>
@@ -485,7 +718,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
               </View>
 
               <Text style={[styles.previewDimensionNote, { color: theme.colors.textSecondary }]}>
-                Size: {labelWidthMm}mm × {labelHeightMm}mm • {activePreset.columns} column(s) • Format: {config.symbology}
+                {activePreset.name} • Format: <Text style={{ fontWeight: '700' }}>{config.symbology}</Text>
               </Text>
             </View>
 
@@ -494,6 +727,36 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
                 <Settings2 size={18} color={theme.colors.primary} />
                 <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Label Settings</Text>
+              </View>
+
+              {/* Barcode / QR Symbology Selector */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Barcode / QR Format</Text>
+                <View style={styles.symbologyRow}>
+                  {(['CODE128', 'EAN13', 'CODE39', 'UPC', 'QR'] as BarcodeSymbology[]).map((fmt) => (
+                    <Pressable
+                      key={fmt}
+                      onPress={() => setConfig({ ...config, symbology: fmt })}
+                      style={[
+                        styles.symbologyBtn,
+                        {
+                          backgroundColor: config.symbology === fmt ? theme.colors.primary : theme.colors.background,
+                          borderColor: theme.colors.border,
+                        },
+                      ]}
+                    >
+                      {fmt === 'QR' && <QrCode size={13} color={config.symbology === fmt ? '#FFFFFF' : theme.colors.text} style={{ marginRight: 4 }} />}
+                      <Text
+                        style={[
+                          styles.symbologyBtnText,
+                          { color: config.symbology === fmt ? '#FFFFFF' : theme.colors.text },
+                        ]}
+                      >
+                        {fmt}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
 
               {/* Paper Layout Selector */}
@@ -511,7 +774,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                     color: theme.colors.text,
                     fontSize: '14px',
                     outline: 'none',
-                    marginBottom: '8px',
+                    marginBottom: '6px',
                   }}
                 >
                   {Object.values(PAPER_PRESETS).map((p) => (
@@ -523,56 +786,27 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                 <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{activePreset.description}</Text>
               </View>
 
-              {/* Symbology / Format */}
-              <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>Barcode Symbology</Text>
-                <View style={styles.symbologyRow}>
-                  {(['CODE128', 'EAN13', 'CODE39', 'UPC', 'QR'] as BarcodeSymbology[]).map((fmt) => (
-                    <Pressable
-                      key={fmt}
-                      onPress={() => setConfig({ ...config, symbology: fmt })}
-                      style={[
-                        styles.symbologyBtn,
-                        {
-                          backgroundColor: config.symbology === fmt ? theme.colors.primary : theme.colors.background,
-                          borderColor: theme.colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.symbologyBtnText,
-                          { color: config.symbology === fmt ? '#FFFFFF' : theme.colors.text },
-                        ]}
-                      >
-                        {fmt}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
               {/* Store Name Customization */}
               <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>Store / Business Name on Label</Text>
+                <Text style={[styles.label, { color: theme.colors.text }]}>Store / Brand Name on Sticker</Text>
                 <TextInput
                   value={config.storeName}
                   onChangeText={(val) => setConfig({ ...config, storeName: val })}
                   style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
-                  placeholder="e.g. SUPER MART"
+                  placeholder="e.g. SUPER STORE"
                 />
               </View>
 
               {/* Field Visibility Toggles */}
               <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Label Fields to Include</Text>
+                <Text style={[styles.label, { color: theme.colors.text, marginBottom: 8 }]}>Fields to Include on Label</Text>
                 <View style={styles.toggleGrid}>
                   {[
                     { key: 'showStoreName', label: 'Store Name' },
                     { key: 'showProductName', label: 'Product Name' },
-                    { key: 'showBarcodeValue', label: 'Barcode Number' },
+                    { key: 'showBarcodeValue', label: 'Code String' },
                     { key: 'showPrice', label: 'Selling Price' },
-                    { key: 'showMrp', label: 'MRP (Strikethrough)' },
+                    { key: 'showMrp', label: 'MRP Strike' },
                     { key: 'showDate', label: 'Date (Mfg/Exp)' },
                   ].map((field) => {
                     const isChecked = Boolean((config as any)[field.key]);
@@ -754,18 +988,16 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 10,
-    marginTop: 12,
+    marginTop: 4,
     flexWrap: 'wrap',
   },
   searchInputWrapper: {
-    flex: 1,
-    minWidth: 260,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    height: 42,
     borderRadius: 8,
     borderWidth: 1,
     gap: 8,
@@ -776,59 +1008,51 @@ const styles = StyleSheet.create({
     padding: 0,
     outlineStyle: 'none',
   } as any,
-  dropdownList: {
-    marginTop: 6,
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  productListBox: {
+    marginTop: 14,
     borderRadius: 8,
     borderWidth: 1,
-    maxHeight: 280,
-    overflow: 'scroll' as any,
+    overflow: 'hidden',
   },
-  dropdownItem: {
-    flexDirection: 'row',
+  emptyProducts: {
+    padding: 32,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  dropdownItemName: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dropdownItemSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  dropdownEmpty: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    justifyContent: 'center',
   },
   emptyQueue: {
-    paddingVertical: 48,
+    paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyQueueTitle: {
     fontSize: 15,
     fontWeight: '600',
-    marginTop: 12,
+    marginTop: 10,
   },
   emptyQueueSub: {
     fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
-    maxWidth: 340,
+    maxWidth: 320,
   },
   queueTable: {
-    marginTop: 8,
+    marginTop: 6,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -868,16 +1092,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepperBtn: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: 6,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyInput: {
-    width: 44,
-    height: 28,
+    width: 40,
+    height: 26,
     borderWidth: 1,
     borderRadius: 6,
     textAlign: 'center',
@@ -928,6 +1152,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   symbologyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
