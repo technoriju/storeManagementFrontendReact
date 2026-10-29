@@ -20,13 +20,33 @@ const tables = [
   'outbox',
   'sync_metadata',
   'tombstones',
+  'departments',
+  'designations',
+  'shifts',
+  'employees',
+  'attendances',
+  'leaves',
+  'leave_types',
+  'holidays',
+  'payrolls',
 ];
 
 const load = () => {
   try {
     const saved = JSON.parse(globalThis.localStorage?.getItem(storageKey) || '{}');
     const allTableKeys = Array.from(new Set([...tables, ...Object.keys(saved)]));
-    return Object.fromEntries(allTableKeys.map((table) => [table, saved[table] || []]));
+    const result = Object.fromEntries(
+      allTableKeys.map((table) => {
+        const rows = (saved[table] || []).filter((row) => {
+          if (!row || typeof row !== 'object') return false;
+          // Filter out rows that were saved with all undefined values
+          const values = Object.values(row);
+          return values.length > 0 && values.some((v) => v !== undefined && v !== null);
+        });
+        return [table, rows];
+      })
+    );
+    return result;
   } catch {
     return Object.fromEntries(tables.map((table) => [table, []]));
   }
@@ -45,8 +65,11 @@ export const open = () => {
     if (/^CREATE TABLE|^ALTER TABLE/i.test(sql)) return { rows: [] };
 
     if (/^SELECT COUNT\(\*\)/i.test(sql)) {
-      const rows = data[table].filter((row) => ['PENDING', 'FAILED'].includes(row.status));
-      return { rows: [{ count: rows.length }] };
+      if (/WHERE/i.test(sql)) {
+        const rows = data[table].filter((row) => ['PENDING', 'FAILED'].includes(row.status));
+        return { rows: [{ count: rows.length }] };
+      }
+      return { rows: [{ count: data[table].length }] };
     }
     if (/^SELECT 1 FROM/i.test(sql)) {
       const row = data[table].find((item) => item.entityType === args[0] && item.entityId === args[1]);
@@ -97,10 +120,42 @@ export const open = () => {
 
     if (/^INSERT/i.test(sql)) {
       const columns = sql.match(/\(([^)]+)\)/)?.[1].split(',').map((value) => value.trim()) || [];
-      const row = Object.fromEntries(columns.map((column, index) => [column, args[index]]));
-      const index = data[table].findIndex((item) => String(item.id) === String(row.id));
-      if (index >= 0) data[table][index] = { ...data[table][index], ...row };
-      else data[table].push(row);
+      if (args && args.length > 0) {
+        const row = Object.fromEntries(columns.map((column, index) => [column, args[index]]));
+        if (row.id === undefined || row.id === null) {
+          row.id = data[table].length > 0 ? Math.max(...data[table].map((i) => Number(i.id) || 0)) + 1 : 1;
+        }
+        const index = data[table].findIndex((item) => String(item.id) === String(row.id));
+        if (index >= 0) data[table][index] = { ...data[table][index], ...row };
+        else data[table].push(row);
+      } else {
+        const valuesPart = sql.match(/VALUES\s+([\s\S]+)$/i)?.[1];
+        if (valuesPart) {
+          const tupleRegex = /\(([^)]+)\)/g;
+          let match;
+          while ((match = tupleRegex.exec(valuesPart)) !== null) {
+            const rawVals = match[1].split(',').map((v) => {
+              const trimmed = v.trim();
+              if (trimmed === 'NULL') return null;
+              if (
+                (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+                (trimmed.startsWith('"') && trimmed.endsWith('"'))
+              ) {
+                return trimmed.slice(1, -1).replace(/''/g, "'");
+              }
+              const num = Number(trimmed);
+              return isNaN(num) ? trimmed : num;
+            });
+            const row = Object.fromEntries(columns.map((col, idx) => [col, rawVals[idx]]));
+            if (row.id === undefined || row.id === null) {
+              row.id = data[table].length > 0 ? Math.max(...data[table].map((i) => Number(i.id) || 0)) + 1 : 1;
+            }
+            const index = data[table].findIndex((item) => String(item.id) === String(row.id));
+            if (index >= 0) data[table][index] = { ...data[table][index], ...row };
+            else data[table].push(row);
+          }
+        }
+      }
       save(data);
       return { rows: [] };
     }

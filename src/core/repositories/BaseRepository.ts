@@ -98,10 +98,12 @@ export abstract class BaseRepository<T extends BaseEntity> {
     }
   }
 
-  // Abstract method to be implemented by specific repositories for API interaction
-  protected abstract syncWithApi(entity: T, operation: 'insert' | 'update' | 'delete'): Promise<void>;
+  // Method to be implemented by specific repositories for API interaction
+  protected async syncWithApi(entity: T, operation: 'insert' | 'update' | 'delete'): Promise<void> {}
   
   // Pull from API to Local Database
-  public abstract fetchFromApi(): Promise<unknown>;
+  public async fetchFromApi(): Promise<unknown> {
+    return null;
+  }
 }
 

@@ -19,6 +19,8 @@ interface ButtonProps extends PressableProps {
   variant?: 'primary' | 'secondary' | 'outline' | 'text';
   size?: 'small' | 'medium' | 'large';
   isLoading?: boolean;
+  icon?: React.ReactNode;
+  iconPosition?: 'left' | 'right';
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }
@@ -29,6 +31,8 @@ export const AppButton: React.FC<ButtonProps> = ({
   size = 'medium',
   isLoading = false,
   disabled = false,
+  icon,
+  iconPosition = 'left',
   style,
   textStyle,
   ...props
@@ -122,20 +126,26 @@ export const AppButton: React.FC<ButtonProps> = ({
         isLoading ? (
           <ActivityIndicator size="small" color={getTextColor()} />
         ) : (
-          <Text
-            style={[
-              styles.text,
-              {
-                color: getTextColor(),
-                fontSize: getFontSize(),
-                fontWeight: theme.typography.weights.medium as any,
-                opacity: pressed && !isMouse ? 0.7 : 1, // Touch opacity feedback on mobile
-              },
-              textStyle,
-            ]}
-          >
-            {title}
-          </Text>
+          <>
+            {icon && iconPosition === 'left' ? <>{icon}</> : null}
+            <Text
+              style={[
+                styles.text,
+                {
+                  color: getTextColor(),
+                  fontSize: getFontSize(),
+                  fontWeight: theme.typography.weights.medium as any,
+                  opacity: pressed && !isMouse ? 0.7 : 1, // Touch opacity feedback on mobile
+                  marginLeft: icon && iconPosition === 'left' ? 6 : 0,
+                  marginRight: icon && iconPosition === 'right' ? 6 : 0,
+                },
+                textStyle,
+              ]}
+            >
+              {title}
+            </Text>
+            {icon && iconPosition === 'right' ? <>{icon}</> : null}
+          </>
         )
       )}
     </Pressable>

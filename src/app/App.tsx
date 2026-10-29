@@ -24,6 +24,7 @@ import { SettingsModule } from '../features/settings/SettingsModule';
 import { DashboardModule } from '../features/dashboard/DashboardModule';
 import { ReportsModule } from '../features/reports/ReportsModule';
 import { FinanceModule } from '../features/finance/FinanceModule';
+import { HRMModule } from '../features/hrm/HRMModule';
 import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
 import { LocalDbManager } from '../features/settings/screens/LocalDbManager';
 import { initializeDatabase } from '../core/database/db';
@@ -150,6 +151,35 @@ const AuthenticatedApp = () => {
         />
       );
     }
+    if (
+      activeTab === 'employees' ||
+      activeTab === 'employee_list' ||
+      activeTab === 'add_employee' ||
+      activeTab === 'departments' ||
+      activeTab === 'designation' ||
+      activeTab === 'designations' ||
+      activeTab === 'shifts' ||
+      activeTab === 'shift' ||
+      activeTab === 'attendance' ||
+      activeTab === 'attendance_list' ||
+      activeTab === 'attendance_report' ||
+      activeTab === 'leaves' ||
+      activeTab === 'leave_list' ||
+      activeTab === 'leave_types' ||
+      activeTab === 'holidays' ||
+      activeTab === 'payroll' ||
+      activeTab === 'payroll_list' ||
+      activeTab === 'payroll_process'
+    ) {
+      return (
+        <HRMModule
+          initialScreen={activeTab}
+          onNavigateTab={handleNavigateTab}
+          params={tabParams}
+        />
+      );
+    }
+
     if (
       activeTab === 'settings' ||
       activeTab === 'invoice_preview' ||

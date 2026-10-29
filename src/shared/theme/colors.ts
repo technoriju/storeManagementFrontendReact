@@ -11,6 +11,7 @@ export const colors = {
   
   background: '#F3F4F6',
   surface: '#FFFFFF',
+  card: '#FFFFFF',
   
   text: '#1F2937',
   textSecondary: '#6B7280',
@@ -26,6 +27,7 @@ export const darkColors: typeof colors = {
   ...colors,
   background: '#212332',
   surface: '#2A2D3E',
+  card: '#2A2D3E',
   
   text: '#F3F4F6',
   textSecondary: '#9CA3AF',
