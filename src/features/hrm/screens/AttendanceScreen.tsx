@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Attendance } from '../../../types/models';
 import {
@@ -27,6 +28,7 @@ import {
   Calendar,
   Users,
   AlertCircle,
+  X,
 } from 'lucide-react-native';
 import {
   useAttendance,
@@ -83,6 +85,21 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
 
     return { totalStaff, present, late, absent, onLeave };
   }, [employees, dateAttendances]);
+
+  const employeeOptions = useMemo(() => (
+    employees.map((e) => ({
+      label: `${e.firstName} ${e.lastName} (${e.employeeCode})`,
+      value: e.id,
+    }))
+  ), [employees]);
+
+  const statusOptions = [
+    { label: 'All Statuses', value: 'ALL' },
+    { label: 'Present', value: 'PRESENT' },
+    { label: 'Late', value: 'LATE' },
+    { label: 'On Leave', value: 'ON_LEAVE' },
+    { label: 'Absent', value: 'ABSENT' },
+  ];
 
   // Filtered attendance list
   const filteredAttendances = useMemo(() => {
@@ -312,94 +329,56 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#D1FAE5' }]}>
+              <CheckCircle2 size={18} color="#059669" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Present</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.present}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Present</Text>
+              <Text style={[styles.kpiValue, { color: '#047857' }]}>{kpis.present}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardAmber]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-              <Clock size={20} color="#D97706" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Clock size={18} color="#D97706" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Late</Text>
-              <Text style={[styles.kpiValue, { color: '#D97706' }]}>{kpis.late}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Late</Text>
+              <Text style={[styles.kpiValue, { color: '#B45309' }]}>{kpis.late}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardPurple]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#F3E8FF' }]}>
-              <Calendar size={20} color="#7E22CE" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#EDE9FE' }]}>
+              <Calendar size={18} color="#7C3AED" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>On Leave</Text>
-              <Text style={[styles.kpiValue, { color: '#7E22CE' }]}>{kpis.onLeave}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>On Leave</Text>
+              <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{kpis.onLeave}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardRed]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <XCircle size={20} color="#EF4444" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEE2E2' }]}>
+              <XCircle size={18} color="#DC2626" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Absent</Text>
-              <Text style={[styles.kpiValue, { color: '#EF4444' }]}>{kpis.absent}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Absent</Text>
+              <Text style={[styles.kpiValue, { color: '#B91C1C' }]}>{kpis.absent}</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Date & Filter Row */}
-      <View style={[styles.filtersRow, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.dateSelector}>
-          <Calendar size={16} color={theme.colors.primary} />
-          <Text style={[styles.dateText, { color: theme.colors.text }]}>Date: {selectedDate}</Text>
-          <Pressable
-            onPress={() => setSelectedDate(todayStr)}
-            style={[styles.todayBtn, selectedDate === todayStr && { backgroundColor: theme.colors.primary }]}
-          >
-            <Text style={[styles.todayBtnText, { color: selectedDate === todayStr ? '#FFFFFF' : theme.colors.text }]}>
-              Today
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.filterTabs}>
-          {(['ALL', 'PRESENT', 'LATE', 'ON_LEAVE', 'ABSENT'] as const).map((tab) => (
-            <Pressable
-              key={tab}
-              style={[
-                styles.filterTab,
-                statusFilter === tab && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary },
-              ]}
-              onPress={() => setStatusFilter(tab)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  { color: statusFilter === tab ? theme.colors.primary : theme.colors.textSecondary },
-                ]}
-              >
-                {tab === 'ALL' ? 'All' : tab.replace('_', ' ')}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {/* Table */}
+      {/* Main Table with integrated toolbar filters */}
       <View style={styles.tableContainer}>
         <AdvancedTable
           data={filteredAttendances}
@@ -408,6 +387,42 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
           searchPlaceholder="Search attendance by employee or department..."
           searchValue={searchQuery}
           onSearch={setSearchQuery}
+          filters={
+            <View style={[styles.tableFiltersRow, isMobile && styles.tableFiltersRowMobile]}>
+              <View style={styles.dateSelectorBox}>
+                <Calendar size={14} color={theme.colors.primary} />
+                <Text style={[styles.dateText, { color: theme.colors.text }]}>Date: {selectedDate}</Text>
+                {selectedDate !== todayStr && (
+                  <Pressable
+                    onPress={() => setSelectedDate(todayStr)}
+                    style={styles.todayBtn}
+                  >
+                    <Text style={styles.todayBtnText}>Today</Text>
+                  </Pressable>
+                )}
+              </View>
+              <AppSelect
+                placeholder="All Statuses"
+                value={statusFilter}
+                options={statusOptions}
+                onSelect={(val) => setStatusFilter(val)}
+                fullWidthDropdown={isMobile}
+                containerStyle={[styles.filterSelect, isMobile ? { flex: 1, minWidth: 130 } : { width: 140 }]}
+              />
+              {(statusFilter !== 'ALL' || selectedDate !== todayStr) && (
+                <Pressable
+                  style={[styles.resetFilterBtn, { borderColor: theme.colors.border }]}
+                  onPress={() => {
+                    setSelectedDate(todayStr);
+                    setStatusFilter('ALL');
+                  }}
+                >
+                  <X size={14} color="#EF4444" />
+                  <Text style={styles.resetFilterText}>Reset</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderRowActions={(item) => (
             <View style={styles.actionsRow}>
               <Pressable
@@ -466,8 +481,26 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title={editingAtt ? 'Edit Attendance Record' : 'Log Attendance'}
+        maxWidth={600}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title={editingAtt ? 'Save Changes' : 'Record Attendance'}
+              onPress={handleSave}
+              isLoading={addAttMutation.isPending || updateAttMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <View style={styles.modalBody}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -475,27 +508,15 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
             </View>
           ) : null}
 
-          {!editingAtt && (
-            <View style={styles.formGroup}>
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Select Employee *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {employees.map((e) => (
-                  <Pressable
-                    key={e.id}
-                    style={[
-                      styles.empSelectChip,
-                      employeeId === e.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                    ]}
-                    onPress={() => setEmployeeId(e.id)}
-                  >
-                    <Text style={[styles.deptChipText, { color: employeeId === e.id ? '#FFFFFF' : theme.colors.text }]}>
-                      {e.firstName} {e.lastName} ({e.employeeCode})
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
+          <AppSelect
+            label="Select Employee *"
+            placeholder="Select an employee..."
+            value={employeeId}
+            options={employeeOptions}
+            onSelect={(val) => setEmployeeId(val)}
+            searchable
+            containerStyle={{ marginBottom: 12 }}
+          />
 
           <AppInput
             label="Date (YYYY-MM-DD) *"
@@ -504,7 +525,7 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
             placeholder="2026-10-29"
           />
 
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="Clock In (HH:MM)"
@@ -550,22 +571,7 @@ export const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ initialSubTa
             onChangeText={setNotes}
             placeholder="e.g. Approved remote work or traffic delay"
           />
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title={editingAtt ? 'Save Changes' : 'Record Attendance'}
-              onPress={handleSave}
-              isLoading={addAttMutation.isPending || updateAttMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
-        </ScrollView>
+        </View>
       </AppDialog>
     </View>
   );
@@ -601,68 +607,127 @@ const styles = StyleSheet.create({
   },
   kpiContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 12,
     flexWrap: 'wrap',
   },
   kpiCard: {
     flex: 1,
     minWidth: 140,
-    padding: 14,
-    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  kpiCardPurple: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  kpiCardRed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
-  filtersRow: {
+  tableFiltersRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 10,
-    marginBottom: 12,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  tableFiltersRowMobile: {
+    width: '100%',
+  },
+  dateSelectorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dateSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   todayBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#E2E8F0',
   },
   todayBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  filterSelect: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: '#FFF1F2',
+  },
+  resetFilterText: {
     fontSize: 11,
     fontWeight: '600',
+    color: '#EF4444',
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  dialogBtn: {
+    minWidth: 110,
+  },
+  modalBody: {
+    paddingVertical: 4,
+  },
+  colOnMobile: {
+    flexDirection: 'column',
+    gap: 0,
   },
   filterTabs: {
     flexDirection: 'row',

@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Department } from '../../../types/models';
 import {
@@ -25,6 +26,7 @@ import {
   Briefcase,
   AlertCircle,
   Search,
+  X,
 } from 'lucide-react-native';
 import {
   useDepartments,
@@ -76,6 +78,12 @@ export const DepartmentListScreen: React.FC = () => {
     const totalStaff = employees.length;
     return { total, active, totalStaff };
   }, [departments, employees]);
+
+  const statusOptions = [
+    { label: 'All Departments', value: 'ALL' },
+    { label: 'Active', value: 'ACTIVE' },
+    { label: 'Inactive', value: 'INACTIVE' },
+  ];
 
   // Filtered list
   const filteredDepartments = useMemo(() => {
@@ -273,65 +281,40 @@ export const DepartmentListScreen: React.FC = () => {
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardBlue]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <Briefcase size={20} color="#4F46E5" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DBEAFE' }]}>
+              <Briefcase size={18} color="#2563EB" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Departments</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpis.total}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#1E40AF' }]}>Total Departments</Text>
+              <Text style={[styles.kpiValue, { color: '#1E3A8A' }]}>{kpis.total}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DCFCE7' }]}>
+              <CheckCircle2 size={18} color="#16A34A" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Active Units</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.active}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#166534' }]}>Active Units</Text>
+              <Text style={[styles.kpiValue, { color: '#14532D' }]}>{kpis.active}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardOrange]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFF7ED' }]}>
-              <Users size={20} color="#F97316" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FFEDD5' }]}>
+              <Users size={18} color="#EA580C" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Assigned Staff</Text>
-              <Text style={[styles.kpiValue, { color: '#F97316' }]}>{kpis.totalStaff}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#9A3412' }]}>Assigned Staff</Text>
+              <Text style={[styles.kpiValue, { color: '#7C2D12' }]}>{kpis.totalStaff}</Text>
             </View>
           </View>
-        </View>
-      </View>
-
-      {/* Filters */}
-      <View style={[styles.filtersRow, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.filterTabs}>
-          {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((tab) => (
-            <Pressable
-              key={tab}
-              style={[
-                styles.filterTab,
-                statusFilter === tab && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary },
-              ]}
-              onPress={() => setStatusFilter(tab)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  { color: statusFilter === tab ? theme.colors.primary : theme.colors.textSecondary },
-                ]}
-              >
-                {tab === 'ALL' ? 'All Departments' : tab}
-              </Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 
@@ -344,6 +327,25 @@ export const DepartmentListScreen: React.FC = () => {
           searchPlaceholder="Search departments by name, code or head..."
           searchValue={searchQuery}
           onSearch={setSearchQuery}
+          filters={
+            <View style={styles.tableFiltersRow}>
+              <View style={styles.statusSelectWrapper}>
+                <AppSelect
+                  placeholder="Filter by Status"
+                  value={statusFilter}
+                  options={statusOptions}
+                  onSelect={(val) => setStatusFilter((val as any) || 'ALL')}
+                  containerStyle={styles.tableSelectContainer}
+                />
+              </View>
+              {statusFilter !== 'ALL' && (
+                <Pressable onPress={() => setStatusFilter('ALL')} style={styles.resetFilterBtn}>
+                  <X size={14} color="#64748B" />
+                  <Text style={styles.resetFilterText}>Reset</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderRowActions={(item) => (
             <View style={styles.actionsRow}>
               <Pressable
@@ -404,8 +406,26 @@ export const DepartmentListScreen: React.FC = () => {
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title={editingDept ? 'Edit Department' : 'New Department'}
+        maxWidth={500}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title={editingDept ? 'Update Department' : 'Create Department'}
+              onPress={handleSave}
+              isLoading={addDeptMutation.isPending || updateDeptMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -470,21 +490,6 @@ export const DepartmentListScreen: React.FC = () => {
               </Pressable>
             </View>
           </View>
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title={editingDept ? 'Update Department' : 'Create Department'}
-              onPress={handleSave}
-              isLoading={addDeptMutation.isPending || updateDeptMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
         </ScrollView>
       </AppDialog>
     </View>
@@ -527,56 +532,83 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 160,
-    padding: 14,
-    borderRadius: 12,
+    minWidth: 150,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardBlue: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardOrange: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
-  filtersRow: {
+  tableFiltersRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    gap: 10,
+    flexWrap: 'wrap',
   },
-  filterTabs: {
+  statusSelectWrapper: {
+    minWidth: 160,
+  },
+  tableSelectContainer: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  filterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    backgroundColor: '#F1F5F9',
   },
-  filterTabText: {
-    fontSize: 13,
+  resetFilterText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  dialogBtn: {
+    minWidth: 110,
   },
   tableContainer: {
     flex: 1,

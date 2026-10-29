@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Payroll } from '../../../types/models';
 import {
@@ -29,6 +30,7 @@ import {
   AlertCircle,
   FileText,
   Printer,
+  X,
 } from 'lucide-react-native';
 import {
   usePayroll,
@@ -40,11 +42,14 @@ import { useEmployees } from '../api/useEmployees';
 
 interface PayrollScreenProps {
   initialSubTab?: 'payroll_list' | 'payroll_process';
+  onNavigateTab?: (tab: string, params?: any) => void;
 }
 
-export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'payroll_list' }) => {
+export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'payroll_list', onNavigateTab }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
+
+  const [activeTab, setActiveTab] = useState<'payroll_list' | 'payroll_process'>(initialSubTab);
 
   const { data: payrolls = [], isLoading } = usePayroll();
   const { data: employees = [] } = useEmployees();
@@ -60,6 +65,24 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
   const [isGenerateModalVisible, setIsGenerateModalVisible] = useState(false);
   const [isSlipModalVisible, setIsSlipModalVisible] = useState(false);
   const [viewingPayroll, setViewingPayroll] = useState<Payroll | null>(null);
+
+  // Auto-handle initialSubTab for Process Payroll
+  React.useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+      if (initialSubTab === 'payroll_process') {
+        handleOpenGenerate();
+      }
+    }
+  }, [initialSubTab]);
+
+  const handleTabChange = (tab: 'payroll_list' | 'payroll_process') => {
+    setActiveTab(tab);
+    onNavigateTab?.(tab);
+    if (tab === 'payroll_process') {
+      handleOpenGenerate();
+    }
+  };
 
   // Form states for Generate Payroll
   const [employeeId, setEmployeeId] = useState<number | undefined>(undefined);
@@ -97,6 +120,20 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
 
     return { totalExpense, paidAmount, pendingCount, totalRecords: payrolls.length };
   }, [payrolls]);
+
+  const employeeOptions = useMemo(() => (
+    employees.map((e) => ({
+      label: `${e.firstName} ${e.lastName} (${e.employeeCode}) - ${e.departmentName || 'Staff'}`,
+      value: e.id,
+    }))
+  ), [employees]);
+
+  const statusOptions = [
+    { label: 'All Slips', value: 'ALL' },
+    { label: 'Paid', value: 'PAID' },
+    { label: 'Generated', value: 'GENERATED' },
+    { label: 'Pending', value: 'PENDING' },
+  ];
 
   // Filtered
   const filteredPayrolls = useMemo(() => {
@@ -322,70 +359,67 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardBlue]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <DollarSign size={20} color="#4F46E5" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DBEAFE' }]}>
+              <DollarSign size={18} color="#2563EB" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Payroll</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#1E40AF' }]}>Total Payroll</Text>
+              <Text style={[styles.kpiValue, { color: '#1E3A8A' }]}>
                 ${kpis.totalExpense.toLocaleString()}
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DCFCE7' }]}>
+              <CheckCircle2 size={18} color="#16A34A" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Disbursed / Paid</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#166534' }]}>Disbursed / Paid</Text>
+              <Text style={[styles.kpiValue, { color: '#14532D' }]}>
                 ${kpis.paidAmount.toLocaleString()}
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardAmber]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-              <Clock size={20} color="#D97706" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Clock size={18} color="#D97706" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Pending Slips</Text>
-              <Text style={[styles.kpiValue, { color: '#D97706' }]}>{kpis.pendingCount}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#92400E' }]}>Pending Slips</Text>
+              <Text style={[styles.kpiValue, { color: '#78350F' }]}>{kpis.pendingCount}</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={[styles.filtersRow, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.filterTabs}>
-          {(['ALL', 'GENERATED', 'PAID', 'PENDING'] as const).map((tab) => (
-            <Pressable
-              key={tab}
-              style={[
-                styles.filterTab,
-                statusFilter === tab && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary },
-              ]}
-              onPress={() => setStatusFilter(tab)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  { color: statusFilter === tab ? theme.colors.primary : theme.colors.textSecondary },
-                ]}
-              >
-                {tab === 'ALL' ? 'All Slips' : tab}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* Sub-tab navigation */}
+      <View style={styles.subTabNav}>
+        <Pressable
+          style={[styles.subTabItem, activeTab === 'payroll_list' && styles.subTabItemActive]}
+          onPress={() => handleTabChange('payroll_list')}
+        >
+          <FileText size={15} color={activeTab === 'payroll_list' ? theme.colors.primary : '#64748B'} />
+          <Text style={[styles.subTabText, activeTab === 'payroll_list' && styles.subTabTextActive]}>
+            Salary List ({payrolls.length})
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.subTabItem, activeTab === 'payroll_process' && styles.subTabItemActive]}
+          onPress={() => handleTabChange('payroll_process')}
+        >
+          <CreditCard size={15} color={activeTab === 'payroll_process' ? theme.colors.primary : '#64748B'} />
+          <Text style={[styles.subTabText, activeTab === 'payroll_process' && styles.subTabTextActive]}>
+            Process Payroll
+          </Text>
+        </Pressable>
       </View>
 
       {/* Main Table */}
@@ -397,6 +431,25 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
           searchPlaceholder="Search payroll by employee name, month or year..."
           searchValue={searchQuery}
           onSearch={setSearchQuery}
+          filters={
+            <View style={styles.tableFiltersRow}>
+              <View style={styles.statusSelectWrapper}>
+                <AppSelect
+                  placeholder="Filter by Status"
+                  value={statusFilter}
+                  options={statusOptions}
+                  onSelect={(val) => setStatusFilter((val as any) || 'ALL')}
+                  containerStyle={styles.tableSelectContainer}
+                />
+              </View>
+              {statusFilter !== 'ALL' && (
+                <Pressable onPress={() => setStatusFilter('ALL')} style={styles.resetFilterBtn}>
+                  <X size={14} color="#64748B" />
+                  <Text style={styles.resetFilterText}>Reset</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderRowActions={(item) => (
             <View style={styles.actionsRow}>
               <Pressable
@@ -477,8 +530,26 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
         visible={isGenerateModalVisible}
         onClose={() => setIsGenerateModalVisible(false)}
         title="Generate Salary Voucher"
+        maxWidth={640}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsGenerateModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title="Generate Voucher"
+              onPress={handleSavePayroll}
+              isLoading={addPayrollMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -488,23 +559,14 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
 
           {/* Select Employee */}
           <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Select Staff Member *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {employees.map((e) => (
-                <Pressable
-                  key={e.id}
-                  style={[
-                    styles.empSelectChip,
-                    employeeId === e.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => handleSelectEmployee(e.id)}
-                >
-                  <Text style={[styles.chipText, { color: employeeId === e.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {e.firstName} {e.lastName} ({e.employeeCode})
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <AppSelect
+              label="Select Staff Member *"
+              placeholder="Search and select employee..."
+              value={employeeId}
+              options={employeeOptions}
+              onSelect={(val) => handleSelectEmployee(Number(val))}
+              searchable={true}
+            />
           </View>
 
           <View style={styles.twoColRow}>
@@ -568,21 +630,6 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
             onChangeText={setNotes}
             placeholder="e.g. October monthly salary with performance bonus"
           />
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsGenerateModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title="Generate Voucher"
-              onPress={handleSavePayroll}
-              isLoading={addPayrollMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
         </ScrollView>
       </AppDialog>
 
@@ -591,9 +638,20 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
         visible={isSlipModalVisible}
         onClose={() => setIsSlipModalVisible(false)}
         title="Salary Pay Slip"
+        maxWidth={540}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Close"
+              onPress={() => setIsSlipModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
         {viewingPayroll && (
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
             <View style={styles.slipCard}>
               <View style={styles.slipHeader}>
                 <View>
@@ -641,14 +699,6 @@ export const PayrollScreen: React.FC<PayrollScreenProps> = ({ initialSubTab = 'p
                 </View>
               ) : null}
             </View>
-
-            <View style={styles.modalActions}>
-              <AppButton
-                title="Close"
-                onPress={() => setIsSlipModalVisible(false)}
-                style={styles.modalBtn}
-              />
-            </View>
           </ScrollView>
         )}
       </AppDialog>
@@ -693,55 +743,114 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     minWidth: 150,
-    padding: 14,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardBlue: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
-  filtersRow: {
+  subTabNav: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingBottom: 8,
+  },
+  subTabItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 10,
-    marginBottom: 12,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  filterTabs: {
-    flexDirection: 'row',
-    gap: 8,
+  subTabItemActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
   },
-  filterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  filterTabText: {
+  subTabText: {
     fontSize: 13,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  subTabTextActive: {
+    color: '#4F46E5',
+    fontWeight: '700',
+  },
+  tableFiltersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  statusSelectWrapper: {
+    minWidth: 160,
+  },
+  tableSelectContainer: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  resetFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  dialogBtn: {
+    minWidth: 110,
   },
   tableContainer: {
     flex: 1,

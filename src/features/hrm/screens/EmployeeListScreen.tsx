@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Employee } from '../../../types/models';
 import {
@@ -31,6 +32,7 @@ import {
   Calendar,
   AlertCircle,
   UserX,
+  X,
 } from 'lucide-react-native';
 import {
   useEmployees,
@@ -101,6 +103,37 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
     const totalSalary = employees.reduce((sum, e) => sum + Number(e.salary || 0), 0);
     return { total, active, onLeave, totalSalary };
   }, [employees]);
+
+  // Options for selects
+  const departmentOptions = useMemo(() => [
+    { label: 'All Departments', value: 'ALL' },
+    ...departments.map((d) => ({ label: d.name, value: d.id })),
+  ], [departments]);
+
+  const formDepartmentOptions = useMemo(() => (
+    departments.map((d) => ({ label: d.name, value: d.id }))
+  ), [departments]);
+
+  const formDesignationOptions = useMemo(() => (
+    designations.map((d) => ({ label: d.name, value: d.id }))
+  ), [designations]);
+
+  const formShiftOptions = useMemo(() => (
+    shifts.map((s) => ({ label: `${s.name} (${s.startTime} - ${s.endTime})`, value: s.id }))
+  ), [shifts]);
+
+  const statusOptions = [
+    { label: 'All Statuses', value: 'ALL' },
+    { label: 'Active', value: 'ACTIVE' },
+    { label: 'On Leave', value: 'ON_LEAVE' },
+    { label: 'Inactive', value: 'INACTIVE' },
+  ];
+
+  const employmentTypeOptions = [
+    { label: 'Full Time', value: 'FULL_TIME' },
+    { label: 'Part Time', value: 'PART_TIME' },
+    { label: 'Contract', value: 'CONTRACT' },
+  ];
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
@@ -382,109 +415,56 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardBlue]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <Users size={20} color="#4F46E5" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DBEAFE' }]}>
+              <Users size={18} color="#1D4ED8" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Staff</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpis.total}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Total Staff</Text>
+              <Text style={[styles.kpiValue, { color: '#1E40AF' }]}>{kpis.total}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#D1FAE5' }]}>
+              <CheckCircle2 size={18} color="#059669" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Active Now</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.active}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Active Now</Text>
+              <Text style={[styles.kpiValue, { color: '#047857' }]}>{kpis.active}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardAmber]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-              <Clock size={20} color="#D97706" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Clock size={18} color="#D97706" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>On Leave</Text>
-              <Text style={[styles.kpiValue, { color: '#D97706' }]}>{kpis.onLeave}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>On Leave</Text>
+              <Text style={[styles.kpiValue, { color: '#B45309' }]}>{kpis.onLeave}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardPurple]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFF7ED' }]}>
-              <DollarSign size={20} color="#F97316" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#EDE9FE' }]}>
+              <DollarSign size={18} color="#7C3AED" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Payroll Base</Text>
-              <Text style={[styles.kpiValue, { color: '#F97316' }]}>${kpis.totalSalary.toLocaleString()}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Payroll Base</Text>
+              <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>${kpis.totalSalary.toLocaleString()}</Text>
             </View>
           </View>
         </View>
       </View>
 
-      {/* Filter Tabs & Department Bar */}
-      <View style={[styles.filtersRow, { backgroundColor: theme.colors.card }]}>
-        <View style={styles.filterTabs}>
-          {(['ALL', 'ACTIVE', 'ON_LEAVE', 'INACTIVE'] as const).map((tab) => (
-            <Pressable
-              key={tab}
-              style={[
-                styles.filterTab,
-                statusFilter === tab && { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary },
-              ]}
-              onPress={() => setStatusFilter(tab)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  { color: statusFilter === tab ? theme.colors.primary : theme.colors.textSecondary },
-                ]}
-              >
-                {tab === 'ALL' ? 'All' : tab.replace('_', ' ')}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.deptFilterBar}>
-          <Pressable
-            style={[
-              styles.deptChip,
-              selectedDeptId === 'ALL' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-            ]}
-            onPress={() => setSelectedDeptId('ALL')}
-          >
-            <Text style={[styles.deptChipText, { color: selectedDeptId === 'ALL' ? '#FFFFFF' : theme.colors.text }]}>
-              All Departments
-            </Text>
-          </Pressable>
-          {departments.map((d) => (
-            <Pressable
-              key={d.id}
-              style={[
-                styles.deptChip,
-                selectedDeptId === d.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-              ]}
-              onPress={() => setSelectedDeptId(d.id)}
-            >
-              <Text style={[styles.deptChipText, { color: selectedDeptId === d.id ? '#FFFFFF' : theme.colors.text }]}>
-                {d.name}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Main Table */}
+      {/* Main Table with integrated toolbar filters */}
       <View style={styles.tableContainer}>
         <AdvancedTable
           data={filteredEmployees}
@@ -493,6 +473,39 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
           searchPlaceholder="Search employees by name, code, email, phone..."
           searchValue={searchQuery}
           onSearch={setSearchQuery}
+          filters={
+            <View style={[styles.tableFiltersRow, isMobile && styles.tableFiltersRowMobile]}>
+              <AppSelect
+                placeholder="All Departments"
+                value={selectedDeptId}
+                options={departmentOptions}
+                onSelect={(val) => setSelectedDeptId(val)}
+                fullWidthDropdown={isMobile}
+                searchable
+                containerStyle={[styles.filterSelect, isMobile ? { flex: 1, minWidth: 140 } : { width: 170 }]}
+              />
+              <AppSelect
+                placeholder="All Statuses"
+                value={statusFilter}
+                options={statusOptions}
+                onSelect={(val) => setStatusFilter(val)}
+                fullWidthDropdown={isMobile}
+                containerStyle={[styles.filterSelect, isMobile ? { flex: 1, minWidth: 130 } : { width: 140 }]}
+              />
+              {(selectedDeptId !== 'ALL' || statusFilter !== 'ALL') && (
+                <Pressable
+                  style={[styles.resetFilterBtn, { borderColor: theme.colors.border }]}
+                  onPress={() => {
+                    setSelectedDeptId('ALL');
+                    setStatusFilter('ALL');
+                  }}
+                >
+                  <X size={14} color="#EF4444" />
+                  <Text style={styles.resetFilterText}>Reset</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderRowActions={(item) => (
             <View style={styles.actionsRow}>
               <Pressable
@@ -581,8 +594,26 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title={editingEmp ? 'Edit Employee Details' : 'Add New Employee'}
+        maxWidth={760}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title={editingEmp ? 'Save Changes' : 'Register Employee'}
+              onPress={handleSave}
+              isLoading={addEmpMutation.isPending || updateEmpMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <View style={styles.modalBody}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -590,7 +621,7 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
             </View>
           ) : null}
 
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="First Name *"
@@ -609,7 +640,7 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
             </View>
           </View>
 
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="Employee Code *"
@@ -629,7 +660,7 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
             </View>
           </View>
 
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="Phone Number *"
@@ -650,70 +681,54 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
             </View>
           </View>
 
-          {/* Department Selector */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Department</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {departments.map((d) => (
-                <Pressable
-                  key={d.id}
-                  style={[
-                    styles.deptSelectChip,
-                    departmentId === d.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setDepartmentId(d.id)}
-                >
-                  <Text style={[styles.deptChipText, { color: departmentId === d.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {d.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
+            <View style={styles.col}>
+              <AppSelect
+                label="Department *"
+                placeholder="Select department..."
+                value={departmentId}
+                options={formDepartmentOptions}
+                onSelect={(val) => setDepartmentId(val)}
+                searchable
+                containerStyle={{ marginBottom: 12 }}
+              />
+            </View>
+            <View style={styles.col}>
+              <AppSelect
+                label="Designation *"
+                placeholder="Select designation..."
+                value={designationId}
+                options={formDesignationOptions}
+                onSelect={(val) => setDesignationId(val)}
+                searchable
+                containerStyle={{ marginBottom: 12 }}
+              />
+            </View>
           </View>
 
-          {/* Designation Selector */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Designation</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {designations.map((d) => (
-                <Pressable
-                  key={d.id}
-                  style={[
-                    styles.deptSelectChip,
-                    designationId === d.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setDesignationId(d.id)}
-                >
-                  <Text style={[styles.deptChipText, { color: designationId === d.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {d.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
+            <View style={styles.col}>
+              <AppSelect
+                label="Shift Schedule"
+                placeholder="Select shift..."
+                value={shiftId}
+                options={formShiftOptions}
+                onSelect={(val) => setShiftId(val)}
+                containerStyle={{ marginBottom: 12 }}
+              />
+            </View>
+            <View style={styles.col}>
+              <AppSelect
+                label="Employment Type"
+                value={employmentType}
+                options={employmentTypeOptions}
+                onSelect={(val) => setEmploymentType(val)}
+                containerStyle={{ marginBottom: 12 }}
+              />
+            </View>
           </View>
 
-          {/* Shift Selector */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Shift</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {shifts.map((s) => (
-                <Pressable
-                  key={s.id}
-                  style={[
-                    styles.deptSelectChip,
-                    shiftId === s.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setShiftId(s.id)}
-                >
-                  <Text style={[styles.deptChipText, { color: shiftId === s.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {s.name} ({s.startTime}-{s.endTime})
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="Joining Date (YYYY-MM-DD)"
@@ -743,57 +758,28 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
           <View style={styles.formGroup}>
             <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Status</Text>
             <View style={styles.statusToggleRow}>
-              <Pressable
-                style={[
-                  styles.toggleBtn,
-                  status === 'ACTIVE' && { backgroundColor: '#10B981', borderColor: '#10B981' },
-                ]}
-                onPress={() => setStatus('ACTIVE')}
-              >
-                <Text style={[styles.toggleBtnText, { color: status === 'ACTIVE' ? '#FFFFFF' : theme.colors.text }]}>
-                  Active
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.toggleBtn,
-                  status === 'ON_LEAVE' && { backgroundColor: '#D97706', borderColor: '#D97706' },
-                ]}
-                onPress={() => setStatus('ON_LEAVE')}
-              >
-                <Text style={[styles.toggleBtnText, { color: status === 'ON_LEAVE' ? '#FFFFFF' : theme.colors.text }]}>
-                  On Leave
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.toggleBtn,
-                  status === 'INACTIVE' && { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-                ]}
-                onPress={() => setStatus('INACTIVE')}
-              >
-                <Text style={[styles.toggleBtnText, { color: status === 'INACTIVE' ? '#FFFFFF' : theme.colors.text }]}>
-                  Inactive
-                </Text>
-              </Pressable>
+              {(['ACTIVE', 'ON_LEAVE', 'INACTIVE'] as const).map((st) => {
+                const isSelected = status === st;
+                const label = st === 'ACTIVE' ? 'Active' : st === 'ON_LEAVE' ? 'On Leave' : 'Inactive';
+                const activeColor = st === 'ACTIVE' ? '#10B981' : st === 'ON_LEAVE' ? '#D97706' : '#EF4444';
+                return (
+                  <Pressable
+                    key={st}
+                    style={[
+                      styles.toggleBtn,
+                      isSelected && { backgroundColor: activeColor, borderColor: activeColor },
+                    ]}
+                    onPress={() => setStatus(st)}
+                  >
+                    <Text style={[styles.toggleBtnText, { color: isSelected ? '#FFFFFF' : theme.colors.text }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title={editingEmp ? 'Save Changes' : 'Register Employee'}
-              onPress={handleSave}
-              isLoading={addEmpMutation.isPending || updateEmpMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
-        </ScrollView>
+        </View>
       </AppDialog>
 
       {/* View Details Dialog */}
@@ -801,9 +787,19 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
         visible={isViewModalVisible}
         onClose={() => setIsViewModalVisible(false)}
         title="Employee Profile"
+        maxWidth={540}
+        compact={true}
+        actions={
+          <AppButton
+            title="Close"
+            variant="outline"
+            onPress={() => setIsViewModalVisible(false)}
+            style={{ minWidth: 100 }}
+          />
+        }
       >
         {viewingEmp && (
-          <ScrollView style={styles.modalContent}>
+          <View style={styles.modalBody}>
             <View style={styles.profileHeader}>
               <View style={[styles.profileAvatar, { backgroundColor: theme.colors.primary }]}>
                 <Text style={styles.profileAvatarText}>
@@ -870,15 +866,7 @@ export const EmployeeListScreen: React.FC<EmployeeListScreenProps> = ({ initialA
                 <Text style={[styles.detailVal, { color: theme.colors.text }]}>{viewingEmp.emergencyContact || '—'}</Text>
               </View>
             </View>
-
-            <View style={styles.modalActions}>
-              <AppButton
-                title="Close"
-                onPress={() => setIsViewModalVisible(false)}
-                style={styles.modalBtn}
-              />
-            </View>
-          </ScrollView>
+          </View>
         )}
       </AppDialog>
     </View>
@@ -915,76 +903,85 @@ const styles = StyleSheet.create({
   },
   kpiContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 12,
     flexWrap: 'wrap',
   },
   kpiCard: {
     flex: 1,
-    minWidth: 150,
-    padding: 14,
-    borderRadius: 12,
+    minWidth: 140,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardBlue: {
+    backgroundColor: '#F0F7FF',
+    borderColor: '#BFDBFE',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  kpiCardPurple: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
-  filtersRow: {
-    padding: 8,
-    borderRadius: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 10,
-  },
-  filterTabs: {
+  tableFiltersRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  filterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+  tableFiltersRowMobile: {
+    width: '100%',
+  },
+  filterSelect: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'transparent',
+    backgroundColor: '#FFF1F2',
   },
-  filterTabText: {
-    fontSize: 13,
+  resetFilterText: {
+    fontSize: 11,
     fontWeight: '600',
-  },
-  deptFilterBar: {
-    maxHeight: 40,
-  },
-  deptChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  deptChipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#EF4444',
   },
   tableContainer: {
     flex: 1,
@@ -1145,6 +1142,22 @@ const styles = StyleSheet.create({
   toggleBtnText: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  modalBody: {
+    paddingVertical: 4,
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  dialogBtn: {
+    minWidth: 120,
+  },
+  colOnMobile: {
+    flexDirection: 'column',
+    gap: 0,
   },
   modalActions: {
     flexDirection: 'row',

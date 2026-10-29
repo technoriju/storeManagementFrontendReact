@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { Designation } from '../../../types/models';
 import {
@@ -25,6 +26,7 @@ import {
   Briefcase,
   AlertCircle,
   Building,
+  X,
 } from 'lucide-react-native';
 import {
   useDesignations,
@@ -78,6 +80,15 @@ export const DesignationListScreen: React.FC = () => {
     const linkedDepts = new Set(designations.map((d) => d.departmentId).filter(Boolean)).size;
     return { total, active, linkedDepts };
   }, [designations]);
+
+  const deptFilterOptions = useMemo(() => [
+    { label: 'All Departments', value: 'ALL' },
+    ...departments.map((d) => ({ label: d.name, value: d.id })),
+  ], [departments]);
+
+  const deptModalOptions = useMemo(() => (
+    departments.map((d) => ({ label: d.name, value: d.id }))
+  ), [departments]);
 
   // Filtered list
   const filteredDesignations = useMemo(() => {
@@ -283,71 +294,42 @@ export const DesignationListScreen: React.FC = () => {
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardBlue]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <Briefcase size={20} color="#4F46E5" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DBEAFE' }]}>
+              <Briefcase size={18} color="#2563EB" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Roles</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpis.total}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#1E40AF' }]}>Total Roles</Text>
+              <Text style={[styles.kpiValue, { color: '#1E3A8A' }]}>{kpis.total}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DCFCE7' }]}>
+              <CheckCircle2 size={18} color="#16A34A" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Active Designations</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.active}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#166534' }]}>Active Designations</Text>
+              <Text style={[styles.kpiValue, { color: '#14532D' }]}>{kpis.active}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardOrange]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFF7ED' }]}>
-              <Building size={20} color="#F97316" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FFEDD5' }]}>
+              <Building size={18} color="#EA580C" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Departments Covered</Text>
-              <Text style={[styles.kpiValue, { color: '#F97316' }]}>{kpis.linkedDepts}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={[styles.kpiLabel, { color: '#9A3412' }]}>Departments Covered</Text>
+              <Text style={[styles.kpiValue, { color: '#7C2D12' }]}>{kpis.linkedDepts}</Text>
             </View>
           </View>
         </View>
       </View>
-
-      {/* Department Filter Bar */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.deptFilterBar}>
-        <Pressable
-          style={[
-            styles.deptChip,
-            selectedDeptId === 'ALL' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-          ]}
-          onPress={() => setSelectedDeptId('ALL')}
-        >
-          <Text style={[styles.deptChipText, { color: selectedDeptId === 'ALL' ? '#FFFFFF' : theme.colors.text }]}>
-            All Departments
-          </Text>
-        </Pressable>
-        {departments.map((d) => (
-          <Pressable
-            key={d.id}
-            style={[
-              styles.deptChip,
-              selectedDeptId === d.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-            ]}
-            onPress={() => setSelectedDeptId(d.id)}
-          >
-            <Text style={[styles.deptChipText, { color: selectedDeptId === d.id ? '#FFFFFF' : theme.colors.text }]}>
-              {d.name}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
 
       {/* Main Table */}
       <View style={styles.tableContainer}>
@@ -358,6 +340,25 @@ export const DesignationListScreen: React.FC = () => {
           searchPlaceholder="Search designations by title, code or department..."
           searchValue={searchQuery}
           onSearch={setSearchQuery}
+          filters={
+            <View style={styles.tableFiltersRow}>
+              <View style={styles.deptSelectWrapper}>
+                <AppSelect
+                  placeholder="Filter by Department"
+                  value={selectedDeptId}
+                  options={deptFilterOptions}
+                  onSelect={(val) => setSelectedDeptId((val as any) || 'ALL')}
+                  containerStyle={styles.tableSelectContainer}
+                />
+              </View>
+              {selectedDeptId !== 'ALL' && (
+                <Pressable onPress={() => setSelectedDeptId('ALL')} style={styles.resetFilterBtn}>
+                  <X size={14} color="#64748B" />
+                  <Text style={styles.resetFilterText}>Reset</Text>
+                </Pressable>
+              )}
+            </View>
+          }
           renderRowActions={(item) => (
             <View style={styles.actionsRow}>
               <Pressable
@@ -425,8 +426,26 @@ export const DesignationListScreen: React.FC = () => {
         visible={isModalVisible}
         onClose={() => setIsModalVisible(false)}
         title={editingDesig ? 'Edit Designation' : 'New Designation'}
+        maxWidth={500}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title={editingDesig ? 'Update Designation' : 'Create Designation'}
+              onPress={handleSave}
+              isLoading={addDesigMutation.isPending || updateDesigMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -449,23 +468,13 @@ export const DesignationListScreen: React.FC = () => {
           />
 
           <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Department</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {departments.map((d) => (
-                <Pressable
-                  key={d.id}
-                  style={[
-                    styles.deptSelectChip,
-                    departmentId === d.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setDepartmentId(d.id)}
-                >
-                  <Text style={[styles.deptChipText, { color: departmentId === d.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {d.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <AppSelect
+              label="Department *"
+              placeholder="Select department..."
+              value={departmentId}
+              options={deptModalOptions}
+              onSelect={(val) => setDepartmentId(val ? Number(val) : undefined)}
+            />
           </View>
 
           <AppInput
@@ -503,21 +512,6 @@ export const DesignationListScreen: React.FC = () => {
                 </Text>
               </Pressable>
             </View>
-          </View>
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title={editingDesig ? 'Update Designation' : 'Create Designation'}
-              onPress={handleSave}
-              isLoading={addDesigMutation.isPending || updateDesigMutation.isPending}
-              style={styles.modalBtn}
-            />
           </View>
         </ScrollView>
       </AppDialog>
@@ -561,48 +555,83 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 160,
-    padding: 14,
-    borderRadius: 12,
+    minWidth: 150,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardBlue: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardOrange: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
-  deptFilterBar: {
-    marginBottom: 12,
-    maxHeight: 44,
+  tableFiltersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
   },
-  deptChip: {
-    paddingHorizontal: 14,
+  deptSelectWrapper: {
+    minWidth: 180,
+  },
+  tableSelectContainer: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 8,
     backgroundColor: '#F1F5F9',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  deptChipText: {
+  resetFilterText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  dialogBtn: {
+    minWidth: 110,
   },
   tableContainer: {
     flex: 1,

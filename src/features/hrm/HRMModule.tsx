@@ -23,36 +23,35 @@ export const HRMModule: React.FC<HRMModuleProps> = ({
   const renderContent = () => {
     switch (initialScreen) {
       case 'add_employee':
-        return <EmployeeListScreen initialAction="add" />;
+        return <EmployeeListScreen key="add-emp" initialAction="add" />;
       case 'departments':
-        return <DepartmentListScreen />;
+        return <DepartmentListScreen key="departments" />;
       case 'designation':
       case 'designations':
-        return <DesignationListScreen />;
+        return <DesignationListScreen key="designation" />;
       case 'shifts':
       case 'shift':
-        return <ShiftListScreen />;
+        return <ShiftListScreen key="shifts" />;
       case 'attendance':
       case 'attendance_list':
-        return <AttendanceScreen initialSubTab="attendance_list" />;
       case 'attendance_report':
-        return <AttendanceScreen initialSubTab="attendance_report" />;
+        return <AttendanceScreen key="attendance" />;
       case 'leaves':
       case 'leave_list':
-        return <LeaveScreen initialSubTab="leave_list" />;
+        return <LeaveScreen key="leaves-list" initialSubTab="leave_list" onNavigateTab={onNavigateTab} />;
       case 'leave_types':
-        return <LeaveScreen initialSubTab="leave_types" />;
+        return <LeaveScreen key="leaves-types" initialSubTab="leave_types" onNavigateTab={onNavigateTab} />;
       case 'holidays':
-        return <HolidayScreen />;
+        return <HolidayScreen key="holidays" />;
       case 'payroll':
       case 'payroll_list':
-        return <PayrollScreen initialSubTab="payroll_list" />;
+        return <PayrollScreen key="payroll-list" initialSubTab="payroll_list" onNavigateTab={onNavigateTab} />;
       case 'payroll_process':
-        return <PayrollScreen initialSubTab="payroll_process" />;
+        return <PayrollScreen key="payroll-process" initialSubTab="payroll_process" onNavigateTab={onNavigateTab} />;
       case 'employees':
       case 'employee_list':
       default:
-        return <EmployeeListScreen initialAction="list" />;
+        return <EmployeeListScreen key="employee-list" initialAction="list" />;
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -13,6 +13,7 @@ import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AdvancedTable, AdvancedTableColumn } from '../../../shared/components/data-display/AdvancedTable';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
 import { AppInput } from '../../../shared/components/forms/AppInput';
+import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { LeaveRequest, LeaveType } from '../../../types/models';
 import {
@@ -40,13 +41,25 @@ import { useEmployees } from '../api/useEmployees';
 
 interface LeaveScreenProps {
   initialSubTab?: 'leave_list' | 'leave_types';
+  onNavigateTab?: (tab: string, params?: any) => void;
 }
 
-export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave_list' }) => {
+export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave_list', onNavigateTab }) => {
   const theme = useTheme();
   const { isMobile } = useResponsive();
 
   const [activeTab, setActiveTab] = useState<'leave_list' | 'leave_types'>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
+  const handleTabChange = (tab: 'leave_list' | 'leave_types') => {
+    setActiveTab(tab);
+    onNavigateTab?.(tab);
+  };
 
   const { data: leaves = [], isLoading: isLoadingLeaves } = useLeaves();
   const { data: leaveTypes = [], isLoading: isLoadingTypes } = useLeaveTypes();
@@ -85,6 +98,27 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
     const rejected = leaves.filter((l) => l.status === 'REJECTED').length;
     return { total, pending, approved, rejected };
   }, [leaves]);
+
+  const employeeOptions = useMemo(() => (
+    employees.map((e) => ({
+      label: `${e.firstName} ${e.lastName} (${e.employeeCode})`,
+      value: e.id,
+    }))
+  ), [employees]);
+
+  const leaveTypeOptions = useMemo(() => (
+    leaveTypes.map((lt) => ({
+      label: `${lt.name} (${lt.daysAllowed} days/yr)`,
+      value: lt.id,
+    }))
+  ), [leaveTypes]);
+
+  const statusOptions = [
+    { label: 'All Statuses', value: 'ALL' },
+    { label: 'Pending', value: 'PENDING' },
+    { label: 'Approved', value: 'APPROVED' },
+    { label: 'Rejected', value: 'REJECTED' },
+  ];
 
   // Filtered leaves
   const filteredLeaves = useMemo(() => {
@@ -360,50 +394,50 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
 
       {/* KPI Cards */}
       <View style={styles.kpiContainer}>
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardBlue]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#EEF2FF' }]}>
-              <FileText size={20} color="#4F46E5" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#DBEAFE' }]}>
+              <FileText size={18} color="#1D4ED8" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Total Requests</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{kpis.total}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Total Requests</Text>
+              <Text style={[styles.kpiValue, { color: '#1E40AF' }]}>{kpis.total}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardAmber]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FFFBEB' }]}>
-              <Clock size={20} color="#D97706" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
+              <Clock size={18} color="#D97706" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Pending</Text>
-              <Text style={[styles.kpiValue, { color: '#D97706' }]}>{kpis.pending}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Pending</Text>
+              <Text style={[styles.kpiValue, { color: '#B45309' }]}>{kpis.pending}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardGreen]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CheckCircle2 size={20} color="#10B981" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#D1FAE5' }]}>
+              <CheckCircle2 size={18} color="#059669" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Approved</Text>
-              <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.approved}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Approved</Text>
+              <Text style={[styles.kpiValue, { color: '#047857' }]}>{kpis.approved}</Text>
             </View>
           </View>
         </View>
 
-        <View style={[styles.kpiCard, { backgroundColor: theme.colors.card }]}>
+        <View style={[styles.kpiCard, styles.kpiCardRed]}>
           <View style={styles.kpiRow}>
-            <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <XCircle size={20} color="#EF4444" />
+            <View style={[styles.kpiIconBox, { backgroundColor: '#FEE2E2' }]}>
+              <XCircle size={18} color="#DC2626" />
             </View>
-            <View>
-              <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Rejected</Text>
-              <Text style={[styles.kpiValue, { color: '#EF4444' }]}>{kpis.rejected}</Text>
+            <View style={styles.kpiTextCol}>
+              <Text style={styles.kpiLabel}>Rejected</Text>
+              <Text style={[styles.kpiValue, { color: '#B91C1C' }]}>{kpis.rejected}</Text>
             </View>
           </View>
         </View>
@@ -416,7 +450,7 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             styles.subTabItem,
             activeTab === 'leave_list' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
           ]}
-          onPress={() => setActiveTab('leave_list')}
+          onPress={() => handleTabChange('leave_list')}
         >
           <Text style={[styles.subTabText, { color: activeTab === 'leave_list' ? '#FFFFFF' : theme.colors.text }]}>
             Leave Requests ({leaves.length})
@@ -428,7 +462,7 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             styles.subTabItem,
             activeTab === 'leave_types' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
           ]}
-          onPress={() => setActiveTab('leave_types')}
+          onPress={() => handleTabChange('leave_types')}
         >
           <Text style={[styles.subTabText, { color: activeTab === 'leave_types' ? '#FFFFFF' : theme.colors.text }]}>
             Leave Types & Policies ({leaveTypes.length})
@@ -445,6 +479,27 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             searchPlaceholder="Search leave requests by employee, type or reason..."
             searchValue={searchQuery}
             onSearch={setSearchQuery}
+            filters={
+              <View style={[styles.tableFiltersRow, isMobile && styles.tableFiltersRowMobile]}>
+                <AppSelect
+                  placeholder="All Statuses"
+                  value={statusFilter}
+                  options={statusOptions}
+                  onSelect={(val) => setStatusFilter(val)}
+                  fullWidthDropdown={isMobile}
+                  containerStyle={[styles.filterSelect, isMobile ? { flex: 1, minWidth: 130 } : { width: 150 }]}
+                />
+                {statusFilter !== 'ALL' && (
+                  <Pressable
+                    style={[styles.resetFilterBtn, { borderColor: theme.colors.border }]}
+                    onPress={() => setStatusFilter('ALL')}
+                  >
+                    <X size={14} color="#EF4444" />
+                    <Text style={styles.resetFilterText}>Reset</Text>
+                  </Pressable>
+                )}
+              </View>
+            }
             renderRowActions={(item) => (
               <View style={styles.actionsRow}>
                 {item.status === 'PENDING' && (
@@ -537,8 +592,26 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
         visible={isApplyModalVisible}
         onClose={() => setIsApplyModalVisible(false)}
         title="Apply for Leave"
+        maxWidth={620}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsApplyModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title="Submit Request"
+              onPress={handleSaveLeave}
+              isLoading={addLeaveMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <View style={styles.modalBody}>
           {formError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -546,49 +619,28 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             </View>
           ) : null}
 
-          {/* Select Employee */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Employee *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {employees.map((e) => (
-                <Pressable
-                  key={e.id}
-                  style={[
-                    styles.empSelectChip,
-                    employeeId === e.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setEmployeeId(e.id)}
-                >
-                  <Text style={[styles.chipText, { color: employeeId === e.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {e.firstName} {e.lastName}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+          {/* Select Employee Dropdown */}
+          <AppSelect
+            label="Employee *"
+            placeholder="Select an employee..."
+            value={employeeId}
+            options={employeeOptions}
+            onSelect={(val) => setEmployeeId(val)}
+            searchable
+            containerStyle={{ marginBottom: 12 }}
+          />
 
-          {/* Select Leave Type */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Leave Category *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {leaveTypes.map((lt) => (
-                <Pressable
-                  key={lt.id}
-                  style={[
-                    styles.empSelectChip,
-                    leaveTypeId === lt.id && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setLeaveTypeId(lt.id)}
-                >
-                  <Text style={[styles.chipText, { color: leaveTypeId === lt.id ? '#FFFFFF' : theme.colors.text }]}>
-                    {lt.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+          {/* Select Leave Type Dropdown */}
+          <AppSelect
+            label="Leave Category *"
+            placeholder="Select leave category..."
+            value={leaveTypeId}
+            options={leaveTypeOptions}
+            onSelect={(val) => setLeaveTypeId(val)}
+            containerStyle={{ marginBottom: 12 }}
+          />
 
-          <View style={styles.twoColRow}>
+          <View style={[styles.twoColRow, isMobile && styles.colOnMobile]}>
             <View style={styles.col}>
               <AppInput
                 label="Start Date (YYYY-MM-DD) *"
@@ -623,22 +675,7 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             multiline
             numberOfLines={3}
           />
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsApplyModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title="Submit Request"
-              onPress={handleSaveLeave}
-              isLoading={addLeaveMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
-        </ScrollView>
+        </View>
       </AppDialog>
 
       {/* Add Leave Type Dialog */}
@@ -646,8 +683,26 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
         visible={isTypeModalVisible}
         onClose={() => setIsTypeModalVisible(false)}
         title="Add Leave Policy Type"
+        maxWidth={500}
+        compact={true}
+        actions={
+          <View style={styles.dialogActionsRow}>
+            <AppButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => setIsTypeModalVisible(false)}
+              style={styles.dialogBtn}
+            />
+            <AppButton
+              title="Create Policy"
+              onPress={handleSaveType}
+              isLoading={addLeaveTypeMutation.isPending}
+              style={styles.dialogBtn}
+            />
+          </View>
+        }
       >
-        <ScrollView style={styles.modalContent}>
+        <View style={styles.modalBody}>
           {typeFormError ? (
             <View style={styles.errorBox}>
               <AlertCircle size={16} color="#DC2626" />
@@ -678,22 +733,7 @@ export const LeaveScreen: React.FC<LeaveScreenProps> = ({ initialSubTab = 'leave
             multiline
             numberOfLines={3}
           />
-
-          <View style={styles.modalActions}>
-            <AppButton
-              title="Cancel"
-              variant="outline"
-              onPress={() => setIsTypeModalVisible(false)}
-              style={styles.modalBtn}
-            />
-            <AppButton
-              title="Create Policy"
-              onPress={handleSaveType}
-              isLoading={addLeaveTypeMutation.isPending}
-              style={styles.modalBtn}
-            />
-          </View>
-        </ScrollView>
+        </View>
       </AppDialog>
     </View>
   );
@@ -733,57 +773,122 @@ const styles = StyleSheet.create({
   },
   kpiContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 12,
     flexWrap: 'wrap',
   },
   kpiCard: {
     flex: 1,
     minWidth: 140,
-    padding: 14,
-    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  kpiCardBlue: {
+    backgroundColor: '#F0F7FF',
+    borderColor: '#BFDBFE',
+  },
+  kpiCardAmber: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  kpiCardGreen: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kpiCardRed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   kpiRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  kpiTextCol: {
+    flex: 1,
+  },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
   subTabNav: {
     flexDirection: 'row',
-    padding: 6,
-    borderRadius: 10,
-    marginBottom: 12,
+    padding: 4,
+    borderRadius: 8,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 8,
+    gap: 6,
+    alignSelf: 'flex-start',
   },
   subTabItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   subTabText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+  },
+  tableFiltersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  tableFiltersRowMobile: {
+    width: '100%',
+  },
+  filterSelect: {
+    marginBottom: 0,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: '#FFF1F2',
+  },
+  resetFilterText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  dialogActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'flex-end',
+  },
+  dialogBtn: {
+    minWidth: 110,
+  },
+  modalBody: {
+    paddingVertical: 4,
+  },
+  colOnMobile: {
+    flexDirection: 'column',
+    gap: 0,
   },
   tableContainer: {
     flex: 1,

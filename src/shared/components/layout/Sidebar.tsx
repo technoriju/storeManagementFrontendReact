@@ -135,16 +135,7 @@ const menuSections: MenuSection[] = [
       { id: 'departments', label: 'Departments', icon: 'pie-chart' },
       { id: 'designation', label: 'Designation', icon: 'share-2' },
       { id: 'shifts', label: 'Shifts', icon: 'shuffle' },
-      {
-        id: 'attendance',
-        label: 'Attendance',
-        icon: 'user-check',
-        hasChevron: true,
-        subItems: [
-          { id: 'attendance_list', label: 'Daily Attendance' },
-          { id: 'attendance_report', label: 'Attendance Log' }
-        ]
-      },
+      { id: 'attendance', label: 'Attendance', icon: 'user-check' },
       {
         id: 'leaves',
         label: 'Leaves',
@@ -239,53 +230,58 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   const isActiveGroup = isDirectActive || isSubActive;
   
   const [expanded, setExpanded] = useState(isActiveGroup);
+  const prevActiveRef = useRef(activeItem);
   
   // Animation for smooth sub-heading transition
   const animatedHeight = useRef(new Animated.Value(expanded ? (item.subItems?.length || 0) * 44 : 0)).current;
   const animatedRotate = useRef(new Animated.Value(expanded ? 1 : 0)).current;
 
+  // Auto-expand only when activeItem changes into this group from outside
   useEffect(() => {
-    if (isActiveGroup && !expanded) {
-      setExpanded(true);
-      Animated.parallel([
-        Animated.timing(animatedHeight, {
-          toValue: (item.subItems?.length || 0) * 44,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(animatedRotate, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: Platform.OS !== 'web',
-        })
-      ]).start();
+    if (prevActiveRef.current !== activeItem) {
+      prevActiveRef.current = activeItem;
+      if (isActiveGroup && !expanded) {
+        setExpanded(true);
+        Animated.parallel([
+          Animated.timing(animatedHeight, {
+            toValue: (item.subItems?.length || 0) * 44,
+            duration: 250,
+            useNativeDriver: false,
+          }),
+          Animated.timing(animatedRotate, {
+            toValue: 1,
+            duration: 250,
+            useNativeDriver: false,
+          })
+        ]).start();
+      }
     }
-  }, [isActiveGroup, expanded, item.subItems, animatedHeight, animatedRotate]);
+  }, [activeItem, isActiveGroup, expanded, item.subItems, animatedHeight, animatedRotate]);
 
   const toggleExpand = () => {
-    const toValue = expanded ? 0 : 1;
-    const targetHeight = expanded ? 0 : (item.subItems?.length || 0) * 44;
-    
-    setExpanded(!expanded);
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
     
     Animated.parallel([
       Animated.timing(animatedHeight, {
-        toValue: targetHeight,
-        duration: 300,
+        toValue: nextExpanded ? (item.subItems?.length || 0) * 44 : 0,
+        duration: 250,
         useNativeDriver: false,
       }),
       Animated.timing(animatedRotate, {
-        toValue,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
+        toValue: nextExpanded ? 1 : 0,
+        duration: 250,
+        useNativeDriver: false,
       })
     ]).start();
   };
 
   const handlePress = () => {
     if (hasSubItems) {
-      toggleExpand();
-      if (item.id === 'settings' || item.id === 'employees' || item.id === 'attendance' || item.id === 'leaves' || item.id === 'payroll') {
+      if (expanded) {
+        toggleExpand();
+      } else {
+        toggleExpand();
         onItemPress(item.id);
       }
     } else {
