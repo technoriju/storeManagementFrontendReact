@@ -27,6 +27,7 @@ import { FinanceModule } from '../features/finance/FinanceModule';
 import { HRMModule } from '../features/hrm/HRMModule';
 import { SyncSettingsScreen } from '../features/settings/screens/SyncSettingsScreen';
 import { LocalDbManager } from '../features/settings/screens/LocalDbManager';
+import { PrintBarcodeScreen } from '../features/barcode';
 import { initializeDatabase } from '../core/database/db';
 
 const AuthenticatedApp = () => {
@@ -189,6 +190,9 @@ const AuthenticatedApp = () => {
       activeTab.startsWith('settings_')
     ) {
       return <SettingsModule initialRoute={activeTab} />;
+    }
+    if (activeTab === 'print_barcode' || activeTab === 'print_qr_code') {
+      return <PrintBarcodeScreen onNavigateTab={handleNavigateTab} />;
     }
     if (activeTab === 'sync_queue') {
       return <SyncSettingsScreen />;

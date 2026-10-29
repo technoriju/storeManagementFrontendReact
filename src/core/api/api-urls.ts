@@ -128,4 +128,10 @@ export const API_ENDPOINTS = {
     PAYROLL_BY_ID: (id: string | number) => `/payrolls/${id}`,
     PAYROLL_PAY: (id: string | number) => `/payrolls/${id}/pay`,
   },
+  BARCODE: {
+    PRESETS: '/barcode/presets',
+    PREVIEW_DATA: '/barcode/preview-data',
+    GENERATE_UNIQUE: '/barcode/generate-unique',
+    ASSIGN: (id: string | number) => `/barcode/assign/${id}`,
+  },
 };
