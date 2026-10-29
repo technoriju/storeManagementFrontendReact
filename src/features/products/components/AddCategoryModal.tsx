@@ -3,47 +3,75 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable } from 'reac
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { X } from 'lucide-react-native';
 
 interface AddCategoryModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (categoryName: string) => void;
+  onSubmit: (categoryName: string) => Promise<void> | void;
 }
 
 export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onSubmit }) => {
   const { isMobile } = useResponsive();
   const [categoryName, setCategoryName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    onSubmit(categoryName);
+  const handleClose = () => {
+    setError(null);
     setCategoryName('');
     onClose();
   };
 
+  const handleSubmit = async () => {
+    if (!categoryName.trim()) {
+      setError('Category name is required');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(categoryName.trim());
+      setCategoryName('');
+      setError(null);
+      onClose();
+    } catch (err: any) {
+      setError(formatApiErrorMessage(err, 'Failed to add category'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.overlay} onPress={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable style={{ width: '100%', alignItems: 'center' }} onPress={(e) => e?.stopPropagation?.()}>
           <View style={styles.modalContainer}>
             {/* Header */}
             <View style={styles.header}>
               <Text style={styles.title}>Add Category</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
                 <X size={14} color="#FFF" />
               </TouchableOpacity>
             </View>
 
             {/* Body */}
             <View style={styles.body}>
+              <FormErrorBanner message={error} />
               <View style={{ flexDirection: 'row', marginBottom: 8 }}>
                 <Text style={{ color: '#333', fontSize: 14 }}>Category </Text>
                 <Text style={{ color: 'red', fontSize: 14 }}>*</Text>
               </View>
               <AppInput 
                 value={categoryName}
-                onChangeText={setCategoryName}
+                onChangeText={(val: string) => {
+                  setCategoryName(val);
+                  if (error) setError(null);
+                }}
                 containerStyle={{ marginBottom: 0 }}
+                placeholder="Enter category name"
               />
             </View>
 
@@ -54,13 +82,15 @@ export const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onC
             ]}>
               <AppButton 
                 title="Cancel" 
-                onPress={onClose} 
+                onPress={handleClose} 
                 style={[styles.cancelBtn, isMobile && { width: '100%' }]} 
                 textStyle={{ color: '#FFF' }}
               />
               <AppButton 
                 title="Submit" 
                 onPress={handleSubmit} 
+                disabled={isSubmitting}
+                isLoading={isSubmitting}
                 style={[styles.submitBtn, isMobile && { width: '100%' }]} 
               />
             </View>
@@ -96,39 +126,37 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1A2B3C', // Dark blueish text
+    color: '#1A2B3C',
   },
   closeButton: {
-    backgroundColor: '#FF0000',
+    backgroundColor: '#E74C3C',
+    borderRadius: 50,
     width: 24,
     height: 24,
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   body: {
-    padding: 20,
+    padding: 16,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    gap: 12,
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#EBEBEB',
-    gap: 12,
   },
   cancelBtn: {
-    backgroundColor: '#0F2847', // Dark navy blue from screenshot
-    borderRadius: 6,
-    height: 40,
+    backgroundColor: '#1E293B',
     paddingHorizontal: 20,
+    height: 40,
+    borderRadius: 6,
   },
   submitBtn: {
-    backgroundColor: '#FFA033', // Orange from screenshot
-    borderRadius: 6,
-    height: 40,
+    backgroundColor: '#F97316',
     paddingHorizontal: 20,
-  }
+    height: 40,
+    borderRadius: 6,
+  },
 });
-
-

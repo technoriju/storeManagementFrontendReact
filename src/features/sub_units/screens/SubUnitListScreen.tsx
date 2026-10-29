@@ -8,6 +8,8 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
@@ -57,6 +59,7 @@ export const SubUnitListScreen = () => {
   const [newSubUnitName, setNewSubUnitName] = useState('');
   const [newMultiplier, setNewMultiplier] = useState('');
   const [newSubUnitStatus, setNewSubUnitStatus] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const unitOptions = units.map(u => ({ label: u.name, value: u.id }));
 
@@ -168,6 +171,7 @@ export const SubUnitListScreen = () => {
           setNewSubUnitName('');
           setNewMultiplier('');
           setNewSubUnitStatus(true);
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
       >
@@ -219,6 +223,7 @@ export const SubUnitListScreen = () => {
           setNewSubUnitName(item.name || '');
           setNewMultiplier(item.multiplier ? String(item.multiplier) : '1');
           setNewSubUnitStatus(String(item.status || '').toLowerCase() === 'active');
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
@@ -275,7 +280,12 @@ export const SubUnitListScreen = () => {
   };
 
   const handleSave = () => {
-    if (!newParentUnitId || !newSubUnitName || !newMultiplier) return;
+    if (!newParentUnitId || !newSubUnitName.trim() || !newMultiplier) {
+      setFormError('Parent unit, sub unit name, and multiplier are required');
+      return;
+    }
+    setFormError(null);
+
     if (editingId) {
       updateMutation.mutate({
         id: editingId,
@@ -291,9 +301,10 @@ export const SubUnitListScreen = () => {
           setNewSubUnitStatus(true);
           setEditingId(null);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
         onError: (err: any) => {
-          Alert.alert('Error', err?.message || 'Failed to update sub unit');
+          setFormError(formatApiErrorMessage(err, 'Failed to update sub unit'));
         }
       });
     } else {
@@ -309,9 +320,10 @@ export const SubUnitListScreen = () => {
           setNewMultiplier('');
           setNewSubUnitStatus(true);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
         onError: (err: any) => {
-          Alert.alert('Error', err?.message || 'Failed to add sub unit');
+          setFormError(formatApiErrorMessage(err, 'Failed to add sub unit'));
         }
       });
     }
@@ -347,6 +359,7 @@ export const SubUnitListScreen = () => {
         onClose={() => {
           setIsAddModalVisible(false);
           setEditingId(null);
+          setFormError(null);
         }}
         actions={
           <>
@@ -356,6 +369,7 @@ export const SubUnitListScreen = () => {
               onPress={() => {
                 setIsAddModalVisible(false);
                 setEditingId(null);
+                setFormError(null);
               }} 
               style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
@@ -369,6 +383,7 @@ export const SubUnitListScreen = () => {
           </>
         }
       >
+        <FormErrorBanner message={formError} />
         <View style={{ gap: 16 }}>
           <AppSelect
             label={
@@ -379,7 +394,10 @@ export const SubUnitListScreen = () => {
             placeholder="Select Parent Unit"
             options={unitOptions}
             value={newParentUnitId}
-            onSelect={setNewParentUnitId}
+            onSelect={(val) => {
+              setNewParentUnitId(val);
+              if (formError) setFormError(null);
+            }}
             searchable={true}
           />
           <AppInput
@@ -389,7 +407,10 @@ export const SubUnitListScreen = () => {
               </Text>
             }
             value={newSubUnitName}
-            onChangeText={setNewSubUnitName}
+            onChangeText={(val: string) => {
+              setNewSubUnitName(val);
+              if (formError) setFormError(null);
+            }}
             placeholder="e.g. Gram"
           />
           <AppInput
@@ -399,7 +420,10 @@ export const SubUnitListScreen = () => {
               </Text>
             }
             value={newMultiplier}
-            onChangeText={setNewMultiplier}
+            onChangeText={(val: string) => {
+              setNewMultiplier(val);
+              if (formError) setFormError(null);
+            }}
             placeholder="e.g. 100 (1 Parent = 100 Sub Unit)"
             keyboardType="numeric"
           />

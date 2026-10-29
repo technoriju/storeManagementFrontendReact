@@ -7,6 +7,8 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { 
@@ -41,6 +43,7 @@ export const BrandListScreen = () => {
   const [newBrandName, setNewBrandName] = useState('');
   const [newBrandStatus, setNewBrandStatus] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const isSmallMobile = isMobile && windowWidth < 380;
   const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
@@ -131,6 +134,7 @@ export const BrandListScreen = () => {
           setEditingId(null);
           setNewBrandName('');
           setNewBrandStatus(true);
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
       >
@@ -186,6 +190,7 @@ export const BrandListScreen = () => {
           setEditingId(item.id);
           setNewBrandName(item.name);
           setNewBrandStatus(item.status === 'Active');
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
@@ -232,11 +237,16 @@ export const BrandListScreen = () => {
   };
 
   const handleSave = () => {
-    if (!newBrandName) return;
+    if (!newBrandName.trim()) {
+      setFormError('Brand name is required');
+      return;
+    }
+    setFormError(null);
+
     if (editingId) {
       updateMutation.mutate({
         id: editingId,
-        name: newBrandName,
+        name: newBrandName.trim(),
         status: newBrandStatus ? 'Active' : 'Inactive',
       } as Brand, {
         onSuccess: () => {
@@ -244,18 +254,26 @@ export const BrandListScreen = () => {
           setNewBrandStatus(true);
           setEditingId(null);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
+        onError: (err: any) => {
+          setFormError(formatApiErrorMessage(err, 'Failed to update brand'));
+        }
       });
     } else {
       addMutation.mutate({
-        name: newBrandName,
+        name: newBrandName.trim(),
         status: newBrandStatus ? 'Active' : 'Inactive',
       }, {
         onSuccess: () => {
           setNewBrandName('');
           setNewBrandStatus(true);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
+        onError: (err: any) => {
+          setFormError(formatApiErrorMessage(err, 'Failed to add brand'));
+        }
       });
     }
   };
@@ -286,13 +304,19 @@ export const BrandListScreen = () => {
       <AppDialog
         visible={isAddModalVisible}
         title={editingId ? "Edit Brand" : "Add Brand"}
-        onClose={() => setIsAddModalVisible(false)}
+        onClose={() => {
+          setIsAddModalVisible(false);
+          setFormError(null);
+        }}
         actions={
           <>
             <AppButton 
               title="Cancel" 
               variant="secondary" 
-              onPress={() => setIsAddModalVisible(false)} 
+              onPress={() => {
+                setIsAddModalVisible(false);
+                setFormError(null);
+              }} 
               style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton 
@@ -305,6 +329,7 @@ export const BrandListScreen = () => {
           </>
         }
       >
+        <FormErrorBanner message={formError} />
         <AppInput
           label={
             <Text style={{ color: theme.colors.text, fontWeight: '500' }}>
@@ -312,7 +337,10 @@ export const BrandListScreen = () => {
             </Text>
           }
           value={newBrandName}
-          onChangeText={setNewBrandName}
+          onChangeText={(val: string) => {
+            setNewBrandName(val);
+            if (formError) setFormError(null);
+          }}
           placeholder="e.g. Apple"
         />
         <View style={styles.statusRow}>

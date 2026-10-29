@@ -7,6 +7,8 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AppDialog } from '../../../shared/components/feedback/AppDialog';
+import { FormErrorBanner } from '../../../shared/components/feedback/FormErrorBanner';
+import { formatApiErrorMessage } from '../../../shared/utils/errorUtils';
 import { AppInput } from '../../../shared/components/forms/AppInput';
 import { AppButton } from '../../../shared/components/inputs/AppButton';
 import { 
@@ -52,6 +54,7 @@ export const UnitListScreen = () => {
   const [newShortName, setNewShortName] = useState('');
   const [newUnitStatus, setNewUnitStatus] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const isSmallMobile = isMobile && windowWidth < 380;
   const actionIconSize = isMobile ? (isSmallMobile ? 14 : 15) : 16;
@@ -143,6 +146,7 @@ export const UnitListScreen = () => {
           setNewUnitName('');
           setNewShortName('');
           setNewUnitStatus(true);
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
       >
@@ -193,6 +197,7 @@ export const UnitListScreen = () => {
           setNewUnitName(item.name);
           setNewShortName(item.shortName || '');
           setNewUnitStatus(item.status === 'Active');
+          setFormError(null);
           setIsAddModalVisible(true);
         }}
         style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
@@ -246,12 +251,17 @@ export const UnitListScreen = () => {
   };
 
   const handleSave = () => {
-    if (!newUnitName || !newShortName) return;
+    if (!newUnitName.trim() || !newShortName.trim()) {
+      setFormError('Unit name and short name are required');
+      return;
+    }
+    setFormError(null);
+
     if (editingId) {
       updateMutation.mutate({
         id: editingId,
-        name: newUnitName,
-        shortName: newShortName,
+        name: newUnitName.trim(),
+        shortName: newShortName.trim(),
         status: newUnitStatus ? 'Active' : 'Inactive',
       } as Unit, {
         onSuccess: () => {
@@ -260,12 +270,16 @@ export const UnitListScreen = () => {
           setNewUnitStatus(true);
           setEditingId(null);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
+        onError: (err: any) => {
+          setFormError(formatApiErrorMessage(err, 'Failed to update unit'));
+        }
       });
     } else {
       addMutation.mutate({
-        name: newUnitName,
-        shortName: newShortName,
+        name: newUnitName.trim(),
+        shortName: newShortName.trim(),
         status: newUnitStatus ? 'Active' : 'Inactive',
       }, {
         onSuccess: () => {
@@ -273,7 +287,11 @@ export const UnitListScreen = () => {
           setNewShortName('');
           setNewUnitStatus(true);
           setIsAddModalVisible(false);
+          setFormError(null);
         },
+        onError: (err: any) => {
+          setFormError(formatApiErrorMessage(err, 'Failed to add unit'));
+        }
       });
     }
   };
@@ -303,13 +321,19 @@ export const UnitListScreen = () => {
       <AppDialog
         visible={isAddModalVisible}
         title={editingId ? "Edit Unit" : "Add Unit"}
-        onClose={() => setIsAddModalVisible(false)}
+        onClose={() => {
+          setIsAddModalVisible(false);
+          setFormError(null);
+        }}
         actions={
           <>
             <AppButton 
               title="Cancel" 
               variant="secondary" 
-              onPress={() => setIsAddModalVisible(false)} 
+              onPress={() => {
+                setIsAddModalVisible(false);
+                setFormError(null);
+              }} 
               style={[styles.dialogBtn, { backgroundColor: '#0F172A' }]} 
             />
             <AppButton 
@@ -322,6 +346,7 @@ export const UnitListScreen = () => {
           </>
         }
       >
+        <FormErrorBanner message={formError} />
         <View style={{ gap: 16 }}>
           <AppInput
             label={
@@ -330,7 +355,10 @@ export const UnitListScreen = () => {
               </Text>
             }
             value={newUnitName}
-            onChangeText={setNewUnitName}
+            onChangeText={(val: string) => {
+              setNewUnitName(val);
+              if (formError) setFormError(null);
+            }}
             placeholder="e.g. Kilogram"
           />
           <AppInput
@@ -340,7 +368,10 @@ export const UnitListScreen = () => {
               </Text>
             }
             value={newShortName}
-            onChangeText={setNewShortName}
+            onChangeText={(val: string) => {
+              setNewShortName(val);
+              if (formError) setFormError(null);
+            }}
             placeholder="e.g. Kg"
           />
           <View style={styles.statusRow}>

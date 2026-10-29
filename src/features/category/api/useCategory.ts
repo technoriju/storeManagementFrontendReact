@@ -25,15 +25,7 @@ export const useAddCategory = () => {
   
   return useMutation({
     mutationFn: async (data: Partial<Category>) => {
-      const newCategory = {
-        ...data,
-        id: data.id || Math.floor(Math.random() * -1000000000), // Simple ID gen if not provided
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_insert'
-      } as Category;
-      await categoryRepository.insert(newCategory);
-      return newCategory;
+      return await categoryRepository.createDirect(data);
     },
     onSuccess: (newCategory) => {
       queryClient.setQueryData(CATEGORY_QUERY_KEY, (oldData: Category[] | undefined) => {
@@ -50,19 +42,7 @@ export const useUpdateCategory = () => {
   
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<Category> }) => {
-      const existing = await categoryRepository.getById(id);
-      
-      const updated = {
-        ...(existing || {}),
-        id,
-        ...data,
-        createdAt: existing?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_update'
-      } as Category;
-      
-      await categoryRepository.update(updated);
-      return updated;
+      return await categoryRepository.updateDirect(id, data);
     },
     onSuccess: (updatedCategory) => {
       const syncedCategory = { ...updatedCategory, syncStatus: 'synced' as const };

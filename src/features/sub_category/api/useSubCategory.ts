@@ -21,16 +21,7 @@ export const useAddSubCategory = () => {
 
   return useMutation({
     mutationFn: async (data: Omit<SubCategory, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
-      const newEntity: SubCategory = {
-        ...data,
-        id: Math.floor(Math.random() * -1000000000),
-        status: data.status || 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_insert',
-      };
-      await subCategoryRepository.insert(newEntity, true);
-      return newEntity;
+      return await subCategoryRepository.createDirect(data);
     },
     onSuccess: (newItem) => {
       queryClient.setQueryData(SUBCATEGORY_QUERY_KEY, (old: SubCategory[] | undefined) => {
@@ -46,13 +37,7 @@ export const useUpdateSubCategory = () => {
 
   return useMutation({
     mutationFn: async (data: SubCategory) => {
-      const updatedEntity = {
-        ...data,
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_update' as const,
-      };
-      await subCategoryRepository.update(updatedEntity, true);
-      return updatedEntity;
+      return await subCategoryRepository.updateDirect(data);
     },
     onSuccess: (updatedItem) => {
       queryClient.setQueryData(SUBCATEGORY_QUERY_KEY, (old: SubCategory[] | undefined) => {

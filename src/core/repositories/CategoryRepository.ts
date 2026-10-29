@@ -28,6 +28,93 @@ export class CategoryRepository extends BaseRepository<Category> {
     }
   }
 
+  async createDirect(data: Partial<Category>): Promise<Category> {
+    const apiPayload = {
+      name: data.name,
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.parentId !== undefined && { parentId: data.parentId }),
+    };
+    try {
+      const response = await apiClient.post(API_ENDPOINTS.CATEGORIES.BASE, apiPayload);
+      const serverData = response.data?.data || response.data || {};
+      const serverId = Number(serverData?.id || response.data?.id || data.id || Date.now());
+
+      const entity: Category = {
+        ...data,
+        ...serverData,
+        id: serverId,
+        backendId: serverId,
+        name: serverData.name || data.name || '',
+        description: serverData.description || data.description,
+        createdAt: serverData.createdAt || new Date().toISOString(),
+        updatedAt: serverData.updatedAt || new Date().toISOString(),
+        syncStatus: 'synced',
+      };
+      await super.insert(entity, false);
+      return entity;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallbackId = data.id || Math.floor(Math.random() * -1000000000);
+        const fallbackEntity: Category = {
+          ...data,
+          id: fallbackId,
+          name: data.name || '',
+          description: data.description,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          syncStatus: 'pending_insert',
+        };
+        await this.insert(fallbackEntity, true);
+        return fallbackEntity;
+      }
+      throw error;
+    }
+  }
+
+  async updateDirect(id: number, data: Partial<Category>): Promise<Category> {
+    const existing = await this.getById(id);
+    const serverId = Number((existing as any)?.backendId || id);
+    const apiPayload = {
+      name: data.name ?? existing?.name,
+      description: data.description ?? existing?.description,
+      ...(data.parentId !== undefined && { parentId: data.parentId }),
+    };
+    try {
+      const response = await apiClient.patch(API_ENDPOINTS.CATEGORIES.BY_ID(serverId), apiPayload);
+      const serverData = response.data?.data || response.data || {};
+      const updated: Category = {
+        ...(existing || {}),
+        ...data,
+        ...serverData,
+        id,
+        backendId: serverId,
+        syncStatus: 'synced',
+        updatedAt: new Date().toISOString(),
+      };
+      await super.update(updated, false);
+      return updated;
+    } catch (error: any) {
+      if (error?.response && error.response.status >= 400 && error.response.status < 500) {
+        throw error;
+      }
+      if (!error?.response || error.code === 'ERR_NETWORK') {
+        const fallback: Category = {
+          ...(existing || {}),
+          ...data,
+          id,
+          syncStatus: 'pending_update',
+          updatedAt: new Date().toISOString(),
+        } as Category;
+        await this.update(fallback, true);
+        return fallback;
+      }
+      throw error;
+    }
+  }
+
   async update(entity: Category, shouldSync = true): Promise<void> {
     const localEntity: Category = { ...entity, syncStatus: shouldSync ? 'pending_update' : 'synced' };
     await super.update(localEntity, false);
