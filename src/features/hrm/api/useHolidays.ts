@@ -8,6 +8,10 @@ export const useHolidays = () => {
   return useQuery({
     queryKey: HOLIDAYS_QUERY_KEY,
     queryFn: async () => {
+      try {
+        const apiData = await holidayRepository.fetchFromApi();
+        if (apiData && apiData.length > 0) return apiData;
+      } catch (_) {}
       return holidayRepository.getAll();
     },
   });

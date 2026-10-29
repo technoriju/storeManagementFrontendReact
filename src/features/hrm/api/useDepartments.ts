@@ -8,6 +8,10 @@ export const useDepartments = () => {
   return useQuery({
     queryKey: DEPARTMENTS_QUERY_KEY,
     queryFn: async () => {
+      try {
+        const apiData = await departmentRepository.fetchFromApi();
+        if (apiData && apiData.length > 0) return apiData;
+      } catch (_) {}
       return departmentRepository.getAll();
     },
   });

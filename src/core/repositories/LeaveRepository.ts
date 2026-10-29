@@ -1,6 +1,9 @@
 import { BaseRepository } from './BaseRepository';
 import { LeaveRequest, LeaveType } from '../../types/models';
 import { db } from '../database/db';
+import { apiClient } from '../api/api-client';
+import { API_ENDPOINTS } from '../api/api-urls';
+import { employeeRepository } from './EmployeeRepository';
 
 export class LeaveRepository extends BaseRepository<LeaveRequest> {
   protected tableName = 'leaves';
@@ -13,16 +16,103 @@ export class LeaveRepository extends BaseRepository<LeaveRequest> {
   }
 
   async insert(entity: LeaveRequest): Promise<void> {
+    try {
+      let targetEmpId = entity.employeeId;
+      if (targetEmpId <= 0) {
+        const localEmp = await employeeRepository.getById(targetEmpId);
+        if (localEmp?.backendId) targetEmpId = localEmp.backendId;
+      }
+      let targetTypeId = entity.leaveTypeId;
+      if (targetTypeId <= 0) {
+        const localType = await leaveTypeRepository.getById(targetTypeId);
+        if (localType?.backendId) targetTypeId = localType.backendId;
+      }
+
+      if (targetEmpId > 0 && targetTypeId > 0) {
+        const res = await apiClient.post(API_ENDPOINTS.HRM.LEAVES, {
+          employeeId: targetEmpId,
+          leaveTypeId: targetTypeId,
+          startDate: entity.startDate,
+          endDate: entity.endDate,
+          days: entity.totalDays,
+          reason: entity.reason,
+          status: entity.status,
+        });
+        const data = res.data?.data || res.data;
+        if (data?.id) {
+          entity.id = Number(data.id);
+          entity.backendId = Number(data.id);
+        }
+      }
+    } catch (e: any) {
+      console.warn('[LeaveRepository] API insert failed:', e?.message || e);
+    }
     await super.insert(entity, false);
   }
 
   async update(entity: LeaveRequest): Promise<void> {
+    const targetId = entity.backendId || entity.id;
+    try {
+      if (targetId && targetId > 0) {
+        await apiClient.patch(`${API_ENDPOINTS.HRM.LEAVES}/${targetId}/status`, {
+          status: entity.status,
+          approvedBy: entity.approvedBy,
+        });
+      }
+    } catch (e: any) {
+      console.warn('[LeaveRepository] API update failed:', e?.message || e);
+    }
     await super.update(entity, false);
   }
 
   async delete(itemOrId: number | LeaveRequest): Promise<void> {
     const id = typeof itemOrId === 'number' ? itemOrId : itemOrId.id;
+    const existing = typeof itemOrId === 'number' ? await this.getById(id) : itemOrId;
+    const targetId = existing?.backendId || id;
+    try {
+      if (targetId && targetId > 0) {
+        await apiClient.delete(API_ENDPOINTS.HRM.LEAVE_BY_ID(targetId));
+      }
+    } catch (e) {}
     await db.execute(`DELETE FROM leaves WHERE id = ?`, [id]);
+  }
+
+  public async fetchFromApi(): Promise<LeaveRequest[]> {
+    try {
+      const res = await apiClient.get(API_ENDPOINTS.HRM.LEAVES);
+      const items = res.data?.data || res.data || [];
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const normalized: LeaveRequest = {
+            id: Number(item.id),
+            backendId: Number(item.id),
+            employeeId: Number(item.employeeId),
+            employeeName: item.employeeName || (item.employee ? `${item.employee.firstName} ${item.employee.lastName}` : ''),
+            departmentName: item.departmentName || '',
+            leaveTypeId: Number(item.leaveTypeId),
+            leaveTypeName: item.leaveTypeName || (item.leaveType ? item.leaveType.name : ''),
+            startDate: item.startDate ? String(item.startDate).split('T')[0] : '',
+            endDate: item.endDate ? String(item.endDate).split('T')[0] : '',
+            totalDays: Number(item.days || 1),
+            reason: item.reason || '',
+            status: item.status || 'PENDING',
+            appliedAt: item.appliedAt || item.createdAt || new Date().toISOString(),
+            approvedBy: item.approvedBy,
+            createdAt: item.createdAt || new Date().toISOString(),
+            updatedAt: item.updatedAt || new Date().toISOString(),
+            deletedAt: item.deletedAt || null,
+            syncStatus: 'synced',
+          };
+          const local = await this.getById(normalized.id);
+          if (local) {
+            await super.update(normalized, false);
+          } else {
+            await super.insert(normalized, false);
+          }
+        }
+      }
+    } catch (e) {}
+    return this.getAll();
   }
 
   protected getInsertColumns(): string {
@@ -93,6 +183,19 @@ export class LeaveTypeRepository extends BaseRepository<LeaveType> {
   }
 
   async insert(entity: LeaveType): Promise<void> {
+    try {
+      const res = await apiClient.post(API_ENDPOINTS.HRM.LEAVE_TYPES, {
+        name: entity.name,
+        daysAllowed: entity.daysAllowed,
+        description: entity.description,
+        status: entity.status,
+      });
+      const data = res.data?.data || res.data;
+      if (data?.id) {
+        entity.id = data.id;
+        entity.backendId = data.id;
+      }
+    } catch (e) {}
     await super.insert(entity, false);
   }
 
@@ -102,7 +205,44 @@ export class LeaveTypeRepository extends BaseRepository<LeaveType> {
 
   async delete(itemOrId: number | LeaveType): Promise<void> {
     const id = typeof itemOrId === 'number' ? itemOrId : itemOrId.id;
+    const existing = typeof itemOrId === 'number' ? await this.getById(id) : itemOrId;
+    const targetId = existing?.backendId || id;
+    try {
+      if (targetId && targetId > 0) {
+        await apiClient.delete(API_ENDPOINTS.HRM.LEAVE_TYPE_BY_ID(targetId));
+      }
+    } catch (e) {}
     await db.execute(`DELETE FROM leave_types WHERE id = ?`, [id]);
+  }
+
+  public async fetchFromApi(): Promise<LeaveType[]> {
+    try {
+      const res = await apiClient.get(API_ENDPOINTS.HRM.LEAVE_TYPES);
+      const items = res.data?.data || res.data || [];
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          const normalized: LeaveType = {
+            id: Number(item.id),
+            backendId: Number(item.id),
+            name: item.name || '',
+            daysAllowed: Number(item.daysAllowed || 12),
+            description: item.description || '',
+            status: item.status || 'ACTIVE',
+            createdAt: item.createdAt || new Date().toISOString(),
+            updatedAt: item.updatedAt || new Date().toISOString(),
+            deletedAt: item.deletedAt || null,
+            syncStatus: 'synced',
+          };
+          const local = await this.getById(normalized.id);
+          if (local) {
+            await super.update(normalized, false);
+          } else {
+            await super.insert(normalized, false);
+          }
+        }
+      }
+    } catch (e) {}
+    return this.getAll();
   }
 
   protected getInsertColumns(): string {

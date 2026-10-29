@@ -508,6 +508,7 @@ export interface LeaveRequest extends BaseEntity {
   totalDays: number;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvedBy?: string;
   appliedAt?: string;
   backendId?: number;
 }

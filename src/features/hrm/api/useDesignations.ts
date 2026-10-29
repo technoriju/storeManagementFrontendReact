@@ -8,6 +8,10 @@ export const useDesignations = () => {
   return useQuery({
     queryKey: DESIGNATIONS_QUERY_KEY,
     queryFn: async () => {
+      try {
+        const apiData = await designationRepository.fetchFromApi();
+        if (apiData && apiData.length > 0) return apiData;
+      } catch (_) {}
       return designationRepository.getAll();
     },
   });

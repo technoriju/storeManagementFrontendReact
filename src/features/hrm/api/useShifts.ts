@@ -8,6 +8,10 @@ export const useShifts = () => {
   return useQuery({
     queryKey: SHIFTS_QUERY_KEY,
     queryFn: async () => {
+      try {
+        const apiData = await shiftRepository.fetchFromApi();
+        if (apiData && apiData.length > 0) return apiData;
+      } catch (_) {}
       return shiftRepository.getAll();
     },
   });

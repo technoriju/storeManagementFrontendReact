@@ -8,6 +8,10 @@ export const useEmployees = () => {
   return useQuery({
     queryKey: EMPLOYEES_QUERY_KEY,
     queryFn: async () => {
+      try {
+        const apiData = await employeeRepository.fetchFromApi();
+        if (apiData && apiData.length > 0) return apiData;
+      } catch (_) {}
       return employeeRepository.getAll();
     },
   });
@@ -59,11 +63,20 @@ export const useUpdateEmployee = () => {
         ...(existing || {}),
         ...data,
         id,
+        backendId: data.backendId ?? existing?.backendId ?? (id > 0 ? id : undefined),
         employeeCode: data.employeeCode ?? existing?.employeeCode ?? '',
         firstName: data.firstName ?? existing?.firstName ?? '',
         lastName: data.lastName ?? existing?.lastName ?? '',
         email: data.email ?? existing?.email ?? '',
         phone: data.phone ?? existing?.phone ?? '',
+        departmentId: data.departmentId !== undefined ? data.departmentId : existing?.departmentId,
+        departmentName: data.departmentName ?? existing?.departmentName ?? '',
+        designationId: data.designationId !== undefined ? data.designationId : existing?.designationId,
+        designationName: data.designationName ?? existing?.designationName ?? '',
+        shiftId: data.shiftId !== undefined ? data.shiftId : existing?.shiftId,
+        shiftName: data.shiftName ?? existing?.shiftName ?? '',
+        address: data.address ?? existing?.address ?? '',
+        emergencyContact: data.emergencyContact ?? existing?.emergencyContact ?? '',
         salary: data.salary !== undefined ? Number(data.salary) : Number(existing?.salary || 0),
         status: data.status ?? existing?.status ?? 'ACTIVE',
         joiningDate: data.joiningDate ?? existing?.joiningDate ?? new Date().toISOString().split('T')[0],
@@ -77,7 +90,7 @@ export const useUpdateEmployee = () => {
     },
     onSuccess: (updated) => {
       queryClient.setQueryData(EMPLOYEES_QUERY_KEY, (old: Employee[] = []) =>
-        old.map((e) => (e.id === updated.id ? updated : e))
+        old.map((e) => (e.id === updated.id || (updated.backendId && e.id === updated.backendId) ? updated : e))
       );
       queryClient.invalidateQueries({ queryKey: EMPLOYEES_QUERY_KEY });
     },
@@ -93,7 +106,7 @@ export const useDeleteEmployee = () => {
     },
     onSuccess: (deletedId) => {
       queryClient.setQueryData(EMPLOYEES_QUERY_KEY, (old: Employee[] = []) =>
-        old.filter((e) => e.id !== deletedId)
+        old.filter((e) => e.id !== deletedId && e.backendId !== deletedId)
       );
       queryClient.invalidateQueries({ queryKey: EMPLOYEES_QUERY_KEY });
     },
