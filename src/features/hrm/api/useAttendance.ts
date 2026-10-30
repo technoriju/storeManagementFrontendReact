@@ -9,10 +9,10 @@ export const useAttendance = () => {
     queryKey: ATTENDANCE_QUERY_KEY,
     queryFn: async () => {
       try {
-        const apiData = await attendanceRepository.fetchFromApi();
-        if (apiData && apiData.length > 0) return apiData;
-      } catch (_) {}
-      return attendanceRepository.getAll();
+        return await attendanceRepository.fetchFromApi();
+      } catch (_) {
+        return attendanceRepository.getAll();
+      }
     },
   });
 };

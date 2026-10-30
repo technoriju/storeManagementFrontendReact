@@ -77,7 +77,7 @@ export class AttendanceRepository extends BaseRepository<Attendance> {
         await apiClient.delete(API_ENDPOINTS.HRM.ATTENDANCE_BY_ID(targetId));
       }
     } catch (e) {}
-    await db.execute(`DELETE FROM attendances WHERE id = ?`, [id]);
+    await db.execute(`DELETE FROM attendances WHERE id = ? OR backendId = ?`, [id, targetId]);
   }
 
   public async fetchFromApi(): Promise<Attendance[]> {
@@ -85,6 +85,7 @@ export class AttendanceRepository extends BaseRepository<Attendance> {
       const res = await apiClient.get(API_ENDPOINTS.HRM.ATTENDANCE);
       const items = res.data?.data || res.data || [];
       if (Array.isArray(items)) {
+        const incomingIds: number[] = [];
         for (const item of items) {
           const normalized: Attendance = {
             id: Number(item.id),
@@ -103,12 +104,20 @@ export class AttendanceRepository extends BaseRepository<Attendance> {
             deletedAt: item.deletedAt || null,
             syncStatus: 'synced',
           };
+          incomingIds.push(normalized.id);
           const local = await this.getById(normalized.id);
           if (local) {
             await super.update(normalized, false);
           } else {
             await super.insert(normalized, false);
           }
+        }
+
+        if (incomingIds.length > 0) {
+          const placeholders = incomingIds.map(() => '?').join(',');
+          await db.execute(`DELETE FROM attendances WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`, incomingIds);
+        } else {
+          await db.execute(`DELETE FROM attendances WHERE syncStatus = 'synced'`);
         }
       }
     } catch (e) {}

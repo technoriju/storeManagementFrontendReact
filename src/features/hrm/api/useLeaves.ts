@@ -10,10 +10,10 @@ export const useLeaves = () => {
     queryKey: LEAVES_QUERY_KEY,
     queryFn: async () => {
       try {
-        const apiData = await leaveRepository.fetchFromApi();
-        if (apiData && apiData.length > 0) return apiData;
-      } catch (_) {}
-      return leaveRepository.getAll();
+        return await leaveRepository.fetchFromApi();
+      } catch (_) {
+        return leaveRepository.getAll();
+      }
     },
   });
 };

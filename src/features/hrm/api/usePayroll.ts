@@ -9,10 +9,10 @@ export const usePayroll = () => {
     queryKey: PAYROLL_QUERY_KEY,
     queryFn: async () => {
       try {
-        const apiData = await payrollRepository.fetchFromApi();
-        if (apiData && apiData.length > 0) return apiData;
-      } catch (_) {}
-      return payrollRepository.getAll();
+        return await payrollRepository.fetchFromApi();
+      } catch (_) {
+        return payrollRepository.getAll();
+      }
     },
   });
 };
