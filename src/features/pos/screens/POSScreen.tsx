@@ -8,8 +8,14 @@ import {
   FlatList,
   Platform,
   Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
+import { User, Phone, Search, X, Check, Plus, AlertCircle } from 'lucide-react-native';
 import { usePOSStore } from '../store/posStore';
+import { useCustomers } from '../../customers/api/useCustomer';
+import { customerRepository } from '../../../core/repositories/CustomerRepository';
+import { useCustomerStore } from '../../customers/store/customerStore';
 import { useKeyboardShortcut } from '../../../shared/hooks/useKeyboardShortcut';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { Product } from '../../products/types';
@@ -35,9 +41,11 @@ export const POSScreen = () => {
     getTotalDiscount,
     getTotalGST,
     getGrandTotal,
+    setCustomer,
   } = usePOSStore();
 
   const { products, fetchProducts } = useProductStore();
+  const { data: customerList = [] } = useCustomers();
   const createSaleMutation = useCreateSale();
   const { isMobile, isTablet, isDesktop, windowWidth } = useResponsive();
 
@@ -56,6 +64,24 @@ export const POSScreen = () => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const searchInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+
+  // Customer Selection & Quick Add State
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerMobileInput, setCustomerMobileInput] = useState('');
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [customerSearchFilter, setCustomerSearchFilter] = useState('');
+  const [customerModalError, setCustomerModalError] = useState<string | null>(null);
+  const [isProcessingCustomer, setIsProcessingCustomer] = useState(false);
+
+  const filteredCustomerList = useMemo(() => {
+    if (!customerSearchFilter.trim()) return customerList.slice(0, 30);
+    const q = customerSearchFilter.toLowerCase();
+    return customerList.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(q) ||
+        (c.phone && c.phone.toLowerCase().includes(q))
+    ).slice(0, 30);
+  }, [customerList, customerSearchFilter]);
 
   const totalCartCount = useMemo(() => {
     return cart.reduce((sum, item) => sum + (parseFloat(String(item.quantity)) || 0), 0);
@@ -209,8 +235,80 @@ export const POSScreen = () => {
     }
   };
 
+  const handleSelectWalkIn = () => {
+    setCustomer(null);
+    setShowCustomerModal(false);
+    setCustomerMobileInput('');
+    setCustomerNameInput('');
+    setCustomerModalError(null);
+  };
+
+  const handleSelectCustomer = (c: any) => {
+    setCustomer({
+      id: Number(c.id),
+      name: c.name,
+      phone: c.phone,
+    });
+    setShowCustomerModal(false);
+    setCustomerMobileInput('');
+    setCustomerNameInput('');
+    setCustomerModalError(null);
+  };
+
+  const handleApplyCustomerByMobile = async () => {
+    const trimmedPhone = customerMobileInput.trim();
+    if (!trimmedPhone) {
+      setCustomerModalError('Please enter a mobile number.');
+      return;
+    }
+
+    try {
+      setIsProcessingCustomer(true);
+      setCustomerModalError(null);
+
+      // Check existing customer list by phone
+      const matched = customerList.find((c) =>
+        customerRepository.isPhoneMatch(c.phone, trimmedPhone)
+      );
+
+      if (matched) {
+        setCustomer({
+          id: Number(matched.id),
+          name: matched.name,
+          phone: matched.phone,
+        });
+        setShowCustomerModal(false);
+        setCustomerMobileInput('');
+        setCustomerNameInput('');
+        return;
+      }
+
+      // Not found: create customer with unique mobile number
+      const cust = await customerRepository.findOrCreateByPhone(
+        trimmedPhone,
+        customerNameInput.trim() || `Customer ${trimmedPhone}`
+      );
+      try {
+        useCustomerStore.getState().addCustomer(cust);
+      } catch (_) {}
+
+      setCustomer({
+        id: Number(cust.id),
+        name: cust.name,
+        phone: cust.phone,
+      });
+      setShowCustomerModal(false);
+      setCustomerMobileInput('');
+      setCustomerNameInput('');
+    } catch (err: any) {
+      setCustomerModalError(err?.message || 'Failed to process customer');
+    } finally {
+      setIsProcessingCustomer(false);
+    }
+  };
+
   useKeyboardShortcut('F2', () => {
-    Alert.alert('Customer', 'Customer selection modal would open here.');
+    setShowCustomerModal(true);
   });
 
   useKeyboardShortcut('F4', () => {
@@ -519,6 +617,46 @@ export const POSScreen = () => {
             </View>
           </View>
 
+          {/* POS Customer Bar */}
+          <View style={styles.posCustomerBar}>
+            <TouchableOpacity
+              style={styles.posCustomerBarLeft}
+              onPress={() => setShowCustomerModal(true)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.posCustomerAvatar, customer ? styles.posCustomerAvatarActive : null]}>
+                <User size={14} color={customer ? '#2563EB' : '#64748B'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.posCustomerName} numberOfLines={1}>
+                  {customer ? customer.name : 'Walk-in Customer (Cash)'}
+                </Text>
+                <Text style={styles.posCustomerSubText} numberOfLines={1}>
+                  {customer?.phone ? customer.phone : 'No info required • Tap or F2 to change'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {customer && (
+                <TouchableOpacity
+                  style={styles.posCustomerResetBtn}
+                  onPress={handleSelectWalkIn}
+                >
+                  <X size={14} color="#64748B" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.posCustomerChangeBtn}
+                onPress={() => setShowCustomerModal(true)}
+              >
+                <Text style={styles.posCustomerChangeBtnText}>
+                  {customer ? 'Change' : '+ Customer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <FlatList
             data={cart}
             keyExtractor={(item) => String(item.id)}
@@ -586,6 +724,163 @@ export const POSScreen = () => {
           setPrintReceiptData(null);
         }}
       />
+
+      {/* POS Customer Selection Modal */}
+      <Modal
+        visible={showCustomerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCustomerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.customerModalCard, isMobile && { width: '94%', maxHeight: '90%' }]}>
+            {/* Header */}
+            <View style={styles.customerModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <User size={20} color="#2563EB" />
+                <Text style={styles.customerModalTitle}>Customer Selection</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCustomerModal(false)}
+                style={styles.customerModalCloseBtn}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+              {/* Option 1: Walk-in / Cash Customer */}
+              <TouchableOpacity
+                style={styles.walkInOptionCard}
+                onPress={handleSelectWalkIn}
+                activeOpacity={0.8}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.walkInTitle}>Walk-in Customer (Cash Sale)</Text>
+                  <Text style={styles.walkInSubtitle}>
+                    Proceed without customer info or mobile number
+                  </Text>
+                </View>
+                <View style={styles.walkInSelectBadge}>
+                  <Text style={styles.walkInSelectBadgeText}>Select</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 2: Mobile Number Lookup / Quick Add */}
+              <View style={styles.mobileSectionCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Phone size={15} color="#2563EB" />
+                  <Text style={styles.sectionHeading}>Enter Mobile Number</Text>
+                </View>
+                <Text style={styles.sectionSubtitle}>
+                  Auto-selects existing customer, or creates new one with mobile number.
+                </Text>
+
+                {customerModalError && (
+                  <View style={styles.modalErrorBanner}>
+                    <AlertCircle size={14} color="#DC2626" />
+                    <Text style={styles.modalErrorText}>{customerModalError}</Text>
+                  </View>
+                )}
+
+                <View style={{ gap: 10, marginTop: 10 }}>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Mobile number (e.g. 9876543210)"
+                    value={customerMobileInput}
+                    onChangeText={(val) => {
+                      setCustomerMobileInput(val);
+                      if (customerModalError) setCustomerModalError(null);
+                    }}
+                    keyboardType="phone-pad"
+                  />
+                  {customerMobileInput.trim().length >= 4 && (() => {
+                    const match = customerList.find((c) =>
+                      customerRepository.isPhoneMatch(c.phone, customerMobileInput.trim())
+                    );
+                    if (match) {
+                      return (
+                        <Text style={{ color: '#16A34A', fontSize: 12, fontWeight: '600' }}>
+                          Found existing customer: {match.name}
+                        </Text>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Customer Name (optional if mobile given)"
+                    value={customerNameInput}
+                    onChangeText={setCustomerNameInput}
+                  />
+
+                  <TouchableOpacity
+                    style={[styles.applyMobileBtn, isProcessingCustomer && { opacity: 0.6 }]}
+                    onPress={handleApplyCustomerByMobile}
+                    disabled={isProcessingCustomer}
+                  >
+                    <Text style={styles.applyMobileBtnText}>
+                      {isProcessingCustomer ? 'Checking...' : 'Apply Customer'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Option 3: Search Existing Customers */}
+              <View style={styles.existingSectionCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Search size={15} color="#475569" />
+                  <Text style={styles.sectionHeading}>Select Existing Customer</Text>
+                </View>
+                <TextInput
+                  style={[styles.modalInput, { marginBottom: 10 }]}
+                  placeholder="Search by name or mobile..."
+                  value={customerSearchFilter}
+                  onChangeText={setCustomerSearchFilter}
+                />
+
+                <View style={{ maxHeight: 220, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8 }}>
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {filteredCustomerList.length === 0 ? (
+                      <View style={{ padding: 16, alignItems: 'center' }}>
+                        <Text style={{ color: '#94A3B8', fontSize: 13 }}>No customers found</Text>
+                      </View>
+                    ) : (
+                      filteredCustomerList.map((c) => {
+                        const bal = Number(c.outstandingBalance || 0);
+                        return (
+                          <TouchableOpacity
+                            key={c.id}
+                            style={styles.customerListItem}
+                            onPress={() => handleSelectCustomer(c)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.customerListItemName}>{c.name}</Text>
+                              {c.phone && <Text style={styles.customerListItemPhone}>{c.phone}</Text>}
+                            </View>
+                            {bal !== 0 && (
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: '600',
+                                  color: bal > 0 ? '#DC2626' : '#16A34A',
+                                }}
+                              >
+                                {bal > 0 ? `Due: ₹${bal.toFixed(2)}` : `Adv: ₹${Math.abs(bal).toFixed(2)}`}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </ScrollView>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -901,6 +1196,206 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#334155',
+  },
+  posCustomerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  posCustomerBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  posCustomerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posCustomerAvatarActive: {
+    backgroundColor: '#DBEAFE',
+  },
+  posCustomerName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  posCustomerSubText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  posCustomerResetBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  posCustomerChangeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 6,
+  },
+  posCustomerChangeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customerModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    width: 480,
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  customerModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  customerModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  customerModalCloseBtn: {
+    padding: 6,
+  },
+  walkInOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 14,
+  },
+  walkInTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  walkInSubtitle: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 2,
+  },
+  walkInSelectBadge: {
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  walkInSelectBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  mobileSectionCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 14,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  modalInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  modalErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 6,
+  },
+  modalErrorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    flex: 1,
+  },
+  applyMobileBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 9,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyMobileBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  existingSectionCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 14,
+  },
+  customerListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  customerListItemName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  customerListItemPhone: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
   },
 });
 

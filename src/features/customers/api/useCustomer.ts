@@ -41,6 +41,27 @@ export const useAddCustomer = () => {
   });
 };
 
+export const useFindOrCreateCustomerByPhone = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ phone, name }: { phone: string; name?: string }) => {
+      return await customerRepository.findOrCreateByPhone(phone, name);
+    },
+    onSuccess: (newItem) => {
+      queryClient.setQueryData(CUSTOMER_QUERY_KEY, (old: Customer[] | undefined) => {
+        if (!old) return [newItem];
+        const filtered = old.filter(
+          item => String(item.id) !== String(newItem.id) &&
+            (!item.phone || item.phone !== newItem.phone)
+        );
+        return [newItem, ...filtered];
+      });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY, refetchType: 'none' });
+    },
+  });
+};
+
 export const useUpdateCustomer = () => {
   const queryClient = useQueryClient();
 
@@ -79,6 +100,3 @@ export const useDeleteCustomer = () => {
     },
   });
 };
-
-
-
