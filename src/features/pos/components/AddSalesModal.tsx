@@ -97,7 +97,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [supplierId, setSupplierId] = useState<string>('');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [reference, setReference] = useState<string>(() => `SL-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [status, setStatus] = useState<'Completed' | 'Pending' | 'Ordered'>('Completed');
+  const [status, setStatus] = useState<'Completed' | 'Pending' | 'Ordered'>('Pending');
   const [orderTax, setOrderTax] = useState<string>('0');
   const [orderDiscount, setOrderDiscount] = useState<string>('0');
   const [shipping, setShipping] = useState<string>('0');
@@ -134,7 +134,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
 
   // Payment Status & Received Amount State
-  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Paid');
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Unpaid');
   const [amountReceived, setAmountReceived] = useState<string>('');
 
   // Product Search & Items Table
@@ -267,11 +267,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         setItems([]);
         setCustomerId('');
         setSupplierId('');
+        setStatus('Pending');
         setOrderTax('0');
         setOrderDiscount('0');
         setShipping('0');
         setNotes('');
-        setPaymentStatus('Paid');
+        setPaymentStatus('Unpaid');
         setAmountReceived('');
         setShowPreviousBalance(false);
         setPreviousBalanceAmount('0');
@@ -971,7 +972,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       setPreviousBalanceAmount('0');
       setCustomerRawBalance(0);
       setUnpaidInvoicesCount(0);
-      setPaymentStatus('Paid');
+      setPaymentStatus('Unpaid');
+      setStatus('Pending');
       setAmountReceived('');
       onClose();
 
