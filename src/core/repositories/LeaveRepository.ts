@@ -74,7 +74,7 @@ export class LeaveRepository extends BaseRepository<LeaveRequest> {
         await apiClient.delete(API_ENDPOINTS.HRM.LEAVE_BY_ID(targetId));
       }
     } catch (e) {}
-    await db.execute(`DELETE FROM leaves WHERE id = ?`, [id]);
+    await db.execute(`DELETE FROM leaves WHERE id = ? OR backendId = ?`, [id, targetId]);
   }
 
   public async fetchFromApi(): Promise<LeaveRequest[]> {
@@ -82,6 +82,7 @@ export class LeaveRepository extends BaseRepository<LeaveRequest> {
       const res = await apiClient.get(API_ENDPOINTS.HRM.LEAVES);
       const items = res.data?.data || res.data || [];
       if (Array.isArray(items)) {
+        const incomingIds: number[] = [];
         for (const item of items) {
           const normalized: LeaveRequest = {
             id: Number(item.id),
@@ -103,12 +104,20 @@ export class LeaveRepository extends BaseRepository<LeaveRequest> {
             deletedAt: item.deletedAt || null,
             syncStatus: 'synced',
           };
+          incomingIds.push(normalized.id);
           const local = await this.getById(normalized.id);
           if (local) {
             await super.update(normalized, false);
           } else {
             await super.insert(normalized, false);
           }
+        }
+
+        if (incomingIds.length > 0) {
+          const placeholders = incomingIds.map(() => '?').join(',');
+          await db.execute(`DELETE FROM leaves WHERE syncStatus = 'synced' AND id NOT IN (${placeholders})`, incomingIds);
+        } else {
+          await db.execute(`DELETE FROM leaves WHERE syncStatus = 'synced'`);
         }
       }
     } catch (e) {}

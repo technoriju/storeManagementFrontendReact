@@ -6,12 +6,43 @@ export interface BaseEntity {
   syncStatus?: 'synced' | 'pending_insert' | 'pending_update' | 'pending_delete';
 }
 
+export interface Permission {
+  id: number;
+  action: string;
+  description?: string;
+  module?: string;
+}
+
+export interface RolePermissionItem {
+  id: number;
+  roleId: number;
+  permissionId: number;
+  permission?: Permission;
+}
+
+export interface Role extends BaseEntity {
+  name: string;
+  description?: string;
+  status?: string;
+  permissions?: (RolePermissionItem | Permission | string)[];
+  permissionCount?: number;
+  userCount?: number;
+}
+
 export interface User extends BaseEntity {
   username: string;
-  email: string;
-  role: string;
+  email?: string;
+  fullName?: string;
   firstName?: string;
   lastName?: string;
+  role?: string;
+  roleId?: number;
+  branchId?: number | null;
+  companyId?: number;
+  phone?: string;
+  isActive?: boolean;
+  roleData?: Role;
+  permissions?: string[];
 }
 
 export interface Category extends BaseEntity {

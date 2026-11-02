@@ -1,25 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Animated, useWindowDimensions, Platform } from 'react-native';
 import { useTheme } from '../../theme/theme';
 import { useAuthStore } from '../../../core/auth/auth.store';
+import { usePermissions, hasPermission } from '../../../core/auth/usePermissions';
 import { Icon, IconName } from '../Icon';
 
 // Types
 type SubItem = {
   id: string;
   label: string;
+  permission?: string;
 };
 
 type MenuItem = {
   id: string;
   label: string;
   icon: IconName;
+  permission?: string;
   subItems?: SubItem[];
   hasChevron?: boolean;
 };
 
 type MenuSection = {
   title: string;
+  permission?: string;
   items: MenuItem[];
 };
 
@@ -28,53 +32,50 @@ const menuSections: MenuSection[] = [
   {
     title: 'Main',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: 'grid', hasChevron: false },
-      // { id: 'super_admin', label: 'Super Admin', icon: 'user', hasChevron: true },
-      // { id: 'application', label: 'Application', icon: 'layers', hasChevron: true },
-      // { id: 'layouts', label: 'Layouts', icon: 'layout', hasChevron: true },
+      { id: 'dashboard', label: 'Dashboard', icon: 'grid', permission: 'dashboard:view', hasChevron: false },
     ]
   },
   {
     title: 'Inventory',
     items: [
-      { id: 'products', label: 'Products', icon: 'box' },
-      { id: 'add_product', label: 'Add Product', icon: 'plus-square' },
-      { id: 'expired_products', label: 'Expired Products', icon: 'alert-circle' },
-      { id: 'low_stocks', label: 'Low Stocks', icon: 'trending-down' },
-      { id: 'category', label: 'Category', icon: 'list' },
-      { id: 'sub_category', label: 'Sub Category', icon: 'columns' },
-      { id: 'brands', label: 'Brands', icon: 'triangle' },
-      { id: 'units', label: 'Units', icon: 'box' },
-      { id: 'sub_units', label: 'Sub Units', icon: 'copy' },
-      { id: 'variant_attributes', label: 'Variant Attributes', icon: 'file-text' },
-      { id: 'warranties', label: 'Warranties', icon: 'award' },
-      { id: 'print_barcode', label: 'Print Barcode', icon: 'maximize' },
-      { id: 'print_qr_code', label: 'Print QR Code', icon: 'grid' },
+      { id: 'products', label: 'Products', icon: 'box', permission: 'inventory:view' },
+      { id: 'add_product', label: 'Add Product', icon: 'plus-square', permission: 'products:create' },
+      { id: 'expired_products', label: 'Expired Products', icon: 'alert-circle', permission: 'inventory:view' },
+      { id: 'low_stocks', label: 'Low Stocks', icon: 'trending-down', permission: 'inventory:view' },
+      { id: 'category', label: 'Category', icon: 'list', permission: 'inventory:view' },
+      { id: 'sub_category', label: 'Sub Category', icon: 'columns', permission: 'inventory:view' },
+      { id: 'brands', label: 'Brands', icon: 'triangle', permission: 'inventory:view' },
+      { id: 'units', label: 'Units', icon: 'box', permission: 'inventory:view' },
+      { id: 'sub_units', label: 'Sub Units', icon: 'copy', permission: 'inventory:view' },
+      { id: 'variant_attributes', label: 'Variant Attributes', icon: 'file-text', permission: 'inventory:view' },
+      { id: 'warranties', label: 'Warranties', icon: 'award', permission: 'inventory:view' },
+      { id: 'print_barcode', label: 'Print Barcode', icon: 'maximize', permission: 'barcode:print' },
+      { id: 'print_qr_code', label: 'Print QR Code', icon: 'grid', permission: 'barcode:print' },
     ]
   },
   {
     title: 'Stock',
     items: [
-      { id: 'manage_stock', label: 'Manage Stock', icon: 'layers' },
-      { id: 'stock_adjustment', label: 'Stock Adjustment', icon: 'git-merge' },
-      { id: 'stock_transfer', label: 'Stock Transfer', icon: 'upload' },
+      { id: 'manage_stock', label: 'Manage Stock', icon: 'layers', permission: 'stock:manage' },
+      { id: 'stock_adjustment', label: 'Stock Adjustment', icon: 'git-merge', permission: 'stock:adjustment' },
+      { id: 'stock_transfer', label: 'Stock Transfer', icon: 'upload', permission: 'stock:transfer' },
     ]
   },
   {
     title: 'Sales',
     items: [
-      { id: 'pos', label: 'Sales', icon: 'monitor' },     
-      { id: 'invoices', label: 'Invoices', icon: 'file-text' },
-      { id: 'sales_return', label: 'Sales Return', icon: 'corner-down-left' },
-      { id: 'quotation', label: 'Quotation', icon: 'file' }      
+      { id: 'pos', label: 'Sales', icon: 'monitor', permission: 'pos:create' },     
+      { id: 'invoices', label: 'Invoices', icon: 'file-text', permission: 'invoices:view' },
+      { id: 'sales_return', label: 'Sales Return', icon: 'corner-down-left', permission: 'sales:return' },
+      { id: 'quotation', label: 'Quotation', icon: 'file', permission: 'quotations:view' }      
     ]
   },
   {
     title: 'Purchases',
     items: [
-      { id: 'purchases', label: 'Purchases', icon: 'shopping-bag' },
-      { id: 'purchase_order', label: 'Purchase Order', icon: 'file-text' },
-      { id: 'purchase_return', label: 'Purchase Return', icon: 'corner-up-left' },
+      { id: 'purchases', label: 'Purchases', icon: 'shopping-bag', permission: 'purchases:view' },
+      { id: 'purchase_order', label: 'Purchase Order', icon: 'file-text', permission: 'purchase_orders:manage' },
+      { id: 'purchase_return', label: 'Purchase Return', icon: 'corner-up-left', permission: 'purchases:return' },
     ]
   },
   {
@@ -85,9 +86,10 @@ const menuSections: MenuSection[] = [
         label: 'Expenses', 
         icon: 'file-minus', 
         hasChevron: true,
+        permission: 'expenses:manage',
         subItems: [
-          { id: 'expense_list', label: 'Expenses' },
-          { id: 'expense_category', label: 'Expense Category' }
+          { id: 'expense_list', label: 'Expenses', permission: 'expenses:manage' },
+          { id: 'expense_category', label: 'Expense Category', permission: 'expenses:manage' }
         ]
       },
       { 
@@ -95,28 +97,29 @@ const menuSections: MenuSection[] = [
         label: 'Income', 
         icon: 'file-plus', 
         hasChevron: true,
+        permission: 'income:manage',
         subItems: [
-          { id: 'income_list', label: 'Income' },
-          { id: 'income_category', label: 'Income Category' }
+          { id: 'income_list', label: 'Income', permission: 'income:manage' },
+          { id: 'income_category', label: 'Income Category', permission: 'income:manage' }
         ]
       },
-      { id: 'bank_accounts', label: 'Bank Accounts', icon: 'briefcase' },
-      { id: 'money_transfer', label: 'Money Transfer', icon: 'refresh-cw' },
-      { id: 'balance_sheet', label: 'Balance Sheet', icon: 'file-text' },
-      { id: 'trial_balance', label: 'Trial Balance', icon: 'alert-circle' },
-      { id: 'cash_flow', label: 'Cash Flow', icon: 'dollar-sign' },
-      { id: 'account_statement', label: 'Account Statement', icon: 'file' },
+      { id: 'bank_accounts', label: 'Bank Accounts', icon: 'briefcase', permission: 'banking:manage' },
+      { id: 'money_transfer', label: 'Money Transfer', icon: 'refresh-cw', permission: 'banking:manage' },
+      { id: 'balance_sheet', label: 'Balance Sheet', icon: 'file-text', permission: 'reports:financial' },
+      { id: 'trial_balance', label: 'Trial Balance', icon: 'alert-circle', permission: 'reports:financial' },
+      { id: 'cash_flow', label: 'Cash Flow', icon: 'dollar-sign', permission: 'reports:financial' },
+      { id: 'account_statement', label: 'Account Statement', icon: 'file', permission: 'reports:financial' },
     ]
   },
   {
     title: 'Peoples',
     items: [
-      { id: 'customers', label: 'Customers', icon: 'users' },
-      { id: 'customer_payment', label: 'Customer Payment', icon: 'dollar-sign' },
-      { id: 'suppliers', label: 'Suppliers', icon: 'user' },
-      { id: 'supplier_payment', label: 'Supplier Payment', icon: 'dollar-sign' },
-      { id: 'stores', label: 'Stores', icon: 'home' },
-      { id: 'warehouses', label: 'Warehouses', icon: 'archive' },
+      { id: 'customers', label: 'Customers', icon: 'users', permission: 'customers:manage' },
+      { id: 'customer_payment', label: 'Customer Payment', icon: 'dollar-sign', permission: 'customers:manage' },
+      { id: 'suppliers', label: 'Suppliers', icon: 'user', permission: 'suppliers:manage' },
+      { id: 'supplier_payment', label: 'Supplier Payment', icon: 'dollar-sign', permission: 'suppliers:manage' },
+      { id: 'stores', label: 'Stores', icon: 'home', permission: 'branches:manage' },
+      { id: 'warehouses', label: 'Warehouses', icon: 'archive', permission: 'warehouses:manage' },
     ]
   },
   {
@@ -127,34 +130,37 @@ const menuSections: MenuSection[] = [
         label: 'Employees',
         icon: 'user',
         hasChevron: true,
+        permission: 'employees:manage',
         subItems: [
-          { id: 'employees', label: 'Employee List' },
-          { id: 'add_employee', label: 'Add Employee' }
+          { id: 'employees', label: 'Employee List', permission: 'employees:manage' },
+          { id: 'add_employee', label: 'Add Employee', permission: 'employees:manage' }
         ]
       },
-      { id: 'departments', label: 'Departments', icon: 'pie-chart' },
-      { id: 'designation', label: 'Designation', icon: 'share-2' },
-      { id: 'shifts', label: 'Shifts', icon: 'shuffle' },
-      { id: 'attendance', label: 'Attendance', icon: 'user-check' },
+      { id: 'departments', label: 'Departments', icon: 'pie-chart', permission: 'departments:manage' },
+      { id: 'designation', label: 'Designation', icon: 'share-2', permission: 'designations:manage' },
+      { id: 'shifts', label: 'Shifts', icon: 'shuffle', permission: 'shifts:manage' },
+      { id: 'attendance', label: 'Attendance', icon: 'user-check', permission: 'attendance:manage' },
       {
         id: 'leaves',
         label: 'Leaves',
         icon: 'calendar',
         hasChevron: true,
+        permission: 'leaves:manage',
         subItems: [
-          { id: 'leave_list', label: 'Leave Requests' },
-          { id: 'leave_types', label: 'Leave Types' }
+          { id: 'leave_list', label: 'Leave Requests', permission: 'leaves:manage' },
+          { id: 'leave_types', label: 'Leave Types', permission: 'leaves:manage' }
         ]
       },
-      { id: 'holidays', label: 'Holidays', icon: 'calendar' },
+      { id: 'holidays', label: 'Holidays', icon: 'calendar', permission: 'hrm:view' },
       {
         id: 'payroll',
         label: 'Payroll',
         icon: 'dollar-sign',
         hasChevron: true,
+        permission: 'payroll:manage',
         subItems: [
-          { id: 'payroll_list', label: 'Salary List' },
-          { id: 'payroll_process', label: 'Process Payroll' }
+          { id: 'payroll_list', label: 'Salary List', permission: 'payroll:manage' },
+          { id: 'payroll_process', label: 'Process Payroll', permission: 'payroll:manage' }
         ]
       },
     ]
@@ -162,32 +168,32 @@ const menuSections: MenuSection[] = [
   {
     title: 'Reports',
     items: [
-      { id: 'sales_report', label: 'Sales Report', icon: 'bar-chart-2' },
-      { id: 'customer_wise', label: 'Customer-Wise Report', icon: 'users' },
-      { id: 'purchase_report', label: 'Purchase Report', icon: 'shopping-bag' },
-      { id: 'supplier_wise', label: 'Supplier-Wise Report', icon: 'user-check' },
-      { id: 'inventory_report', label: 'Inventory Report', icon: 'filter' },
-      { id: 'invoice_report', label: 'Invoice Report', icon: 'file-text' },
-      { id: 'customer_report', label: 'Customer Report', icon: 'clipboard' },
-      { id: 'supplier_report', label: 'Supplier Report', icon: 'user' },
-      { id: 'product_report', label: 'Product Report', icon: 'box' },
-      { id: 'payment_report', label: 'Payment Report', icon: 'dollar-sign' },
-      { id: 'expense_report', label: 'Expense Report', icon: 'file-minus' },
-      { id: 'income_report', label: 'Income Report', icon: 'file-plus' },
-      { id: 'tax_report', label: 'Tax Report', icon: 'activity' },
-      { id: 'profit_loss', label: 'Profit & Loss', icon: 'pie-chart' },
-      { id: 'annual_report', label: 'Annual Report', icon: 'calendar' },
+      { id: 'sales_report', label: 'Sales Report', icon: 'bar-chart-2', permission: 'reports:view' },
+      { id: 'customer_wise', label: 'Customer-Wise Report', icon: 'users', permission: 'reports:view' },
+      { id: 'purchase_report', label: 'Purchase Report', icon: 'shopping-bag', permission: 'reports:view' },
+      { id: 'supplier_wise', label: 'Supplier-Wise Report', icon: 'user-check', permission: 'reports:view' },
+      { id: 'inventory_report', label: 'Inventory Report', icon: 'filter', permission: 'reports:view' },
+      { id: 'invoice_report', label: 'Invoice Report', icon: 'file-text', permission: 'reports:view' },
+      { id: 'customer_report', label: 'Customer Report', icon: 'clipboard', permission: 'reports:view' },
+      { id: 'supplier_report', label: 'Supplier Report', icon: 'user', permission: 'reports:view' },
+      { id: 'product_report', label: 'Product Report', icon: 'box', permission: 'reports:view' },
+      { id: 'payment_report', label: 'Payment Report', icon: 'dollar-sign', permission: 'reports:view' },
+      { id: 'expense_report', label: 'Expense Report', icon: 'file-minus', permission: 'reports:view' },
+      { id: 'income_report', label: 'Income Report', icon: 'file-plus', permission: 'reports:view' },
+      { id: 'tax_report', label: 'Tax Report', icon: 'activity', permission: 'reports:view' },
+      { id: 'profit_loss', label: 'Profit & Loss', icon: 'pie-chart', permission: 'reports:view' },
+      { id: 'annual_report', label: 'Annual Report', icon: 'calendar', permission: 'reports:view' },
     ]
   },
   {
     title: 'User Management',
     items: [
-      { id: 'users', label: 'Users', icon: 'shield' },
-      { id: 'roles_permissions', label: 'Roles & Permissions', icon: 'key' },
-      { id: 'sync_queue', label: 'Sync Queue', icon: 'refresh-cw' },
-      { id: 'delete_account_request', label: 'Delete Account Request', icon: 'trash-2' },
-      { id: 'view_local_db', label: 'View Local DB', icon: 'list' },
-      { id: 'delete_local_db', label: 'Delete Local DB', icon: 'trash-2' },
+      { id: 'users', label: 'Users', icon: 'shield', permission: 'users:view' },
+      { id: 'roles_permissions', label: 'Roles & Permissions', icon: 'key', permission: 'roles:view' },
+      { id: 'sync_queue', label: 'Sync Queue', icon: 'refresh-cw', permission: 'sync:manage' },
+      { id: 'delete_account_request', label: 'Delete Account Request', icon: 'trash-2', permission: 'users:manage' },
+      { id: 'view_local_db', label: 'View Local DB', icon: 'list', permission: 'settings:general' },
+      { id: 'delete_local_db', label: 'Delete Local DB', icon: 'trash-2', permission: 'settings:general' },
     ]
   },
   {
@@ -198,11 +204,12 @@ const menuSections: MenuSection[] = [
         label: 'Settings',
         icon: 'settings',
         hasChevron: true,
+        permission: 'settings:general',
         subItems: [
-          { id: 'invoice_preview', label: 'Invoice Preview' },
-          { id: 'invoice', label: 'Invoice Format' },
-          { id: 'business', label: 'Business Profile' },
-          { id: 'printers', label: 'Printers' },
+          { id: 'invoice_preview', label: 'Invoice Preview', permission: 'settings:general' },
+          { id: 'invoice', label: 'Invoice Format', permission: 'settings:general' },
+          { id: 'business', label: 'Business Profile', permission: 'settings:general' },
+          { id: 'printers', label: 'Printers', permission: 'printers:manage' },
         ]
       }
     ]
@@ -369,9 +376,42 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
 export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
   const theme = useTheme();
   const { logout } = useAuthStore();
+  const { permissions, userRole, isAdmin } = usePermissions();
   const { width } = useWindowDimensions();
   
   const isMobile = width < 768;
+
+  const visibleSections = useMemo(() => {
+    return menuSections
+      .map((section) => {
+        const items = section.items
+          .map((item) => {
+            const itemAllowed = !item.permission || isAdmin || hasPermission(permissions, item.permission, userRole);
+            if (!itemAllowed) return null;
+
+            if (item.subItems && item.subItems.length > 0) {
+              const visibleSub = item.subItems.filter((sub) => {
+                if (!sub.permission) return true;
+                if (isAdmin) return true;
+                return hasPermission(permissions, sub.permission, userRole);
+              });
+              if (visibleSub.length === 0 && !item.permission) {
+                return null;
+              }
+              return { ...item, subItems: visibleSub };
+            }
+
+            return item;
+          })
+          .filter((item): item is MenuItem => item !== null);
+
+        return {
+          ...section,
+          items,
+        };
+      })
+      .filter((section) => section.items.length > 0);
+  }, [permissions, userRole, isAdmin]);
 
   return (
     <View style={[
@@ -382,7 +422,7 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
     ]}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         <View style={styles.paddingContainer}>
-          {menuSections.map((section, index) => (
+          {visibleSections.map((section, index) => (
             <View key={index} style={styles.section}>
               <Text style={styles.sectionTitle}>
                 {section.title}
@@ -398,7 +438,7 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
                 />
               ))}
               
-              {index < menuSections.length - 1 && (
+              {index < visibleSections.length - 1 && (
                 <View style={styles.divider} />
               )}
             </View>

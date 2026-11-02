@@ -9,10 +9,10 @@ export const useEmployees = () => {
     queryKey: EMPLOYEES_QUERY_KEY,
     queryFn: async () => {
       try {
-        const apiData = await employeeRepository.fetchFromApi();
-        if (apiData && apiData.length > 0) return apiData;
-      } catch (_) {}
-      return employeeRepository.getAll();
+        return await employeeRepository.fetchFromApi();
+      } catch (_) {
+        return employeeRepository.getAll();
+      }
     },
   });
 };

@@ -28,11 +28,13 @@ import {
   User,
   Check,
   Package,
+  Phone,
 } from 'lucide-react-native';
 import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
 import { useCustomerStore } from '../../customers/store/customerStore';
 import { Customer } from '../../../types/models';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
+import { customerRepository } from '../../../core/repositories/CustomerRepository';
 import { productRepository } from '../../../core/repositories/ProductRepository';
 import { useSuppliers } from '../../suppliers/api/useSupplier';
 import { useProductStore } from '../../products/store/productStore';
@@ -95,7 +97,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [supplierId, setSupplierId] = useState<string>('');
   const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [reference, setReference] = useState<string>(() => `SL-${Math.floor(100000 + Math.random() * 900000)}`);
-  const [status, setStatus] = useState<'Completed' | 'Pending' | 'Ordered'>('Completed');
+  const [status, setStatus] = useState<'Completed' | 'Pending' | 'Ordered'>('Pending');
   const [orderTax, setOrderTax] = useState<string>('0');
   const [orderDiscount, setOrderDiscount] = useState<string>('0');
   const [shipping, setShipping] = useState<string>('0');
@@ -106,6 +108,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   // Quick Add Customer State
   const [showAddCustomerModal, setShowAddCustomerModal] = useState<boolean>(false);
   const [newCustomerName, setNewCustomerName] = useState<string>('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState<string>('');
   const [customerModalError, setCustomerModalError] = useState<string | null>(null);
   const [isSavingCustomer, setIsSavingCustomer] = useState<boolean>(false);
   const [localAddedCustomers, setLocalAddedCustomers] = useState<Customer[]>([]);
@@ -131,7 +134,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
 
   // Payment Status & Received Amount State
-  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Paid');
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Unpaid');
   const [amountReceived, setAmountReceived] = useState<string>('');
 
   // Product Search & Items Table
@@ -149,6 +152,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
       setNewCustomerName('');
+      setNewCustomerPhone('');
       setCustomerModalError(null);
       setShowAddProductModal(false);
       setNewProductName('');
@@ -263,11 +267,12 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         setItems([]);
         setCustomerId('');
         setSupplierId('');
+        setStatus('Pending');
         setOrderTax('0');
         setOrderDiscount('0');
         setShipping('0');
         setNotes('');
-        setPaymentStatus('Paid');
+        setPaymentStatus('Unpaid');
         setAmountReceived('');
         setShowPreviousBalance(false);
         setPreviousBalanceAmount('0');
@@ -306,9 +311,11 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
   // Quick Add Customer Handler
   const handleQuickAddCustomer = async () => {
-    const trimmed = newCustomerName.trim();
-    if (!trimmed) {
-      setCustomerModalError('Please enter customer name.');
+    const trimmedName = newCustomerName.trim();
+    const trimmedPhone = newCustomerPhone.trim();
+
+    if (!trimmedName && !trimmedPhone) {
+      setCustomerModalError('Please enter customer mobile number or name.');
       return;
     }
 
@@ -316,37 +323,52 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       setIsSavingCustomer(true);
       setCustomerModalError(null);
 
-      // 1. If customer already exists in list, select immediately
-      const existing = allCustomers.find(
-        (c) => c.name?.trim().toLowerCase() === trimmed.toLowerCase()
-      );
-      if (existing) {
-        setCustomerId(String(existing.id));
-        setNewCustomerName('');
-        setShowAddCustomerModal(false);
-        return;
+      let targetCustomer: Customer | null = null;
+
+      // 1. If mobile number is provided, check unique phone first
+      if (trimmedPhone) {
+        const existingPhone = allCustomers.find((c) =>
+          customerRepository.isPhoneMatch(c.phone, trimmedPhone)
+        );
+        if (existingPhone) {
+          targetCustomer = existingPhone;
+        } else {
+          targetCustomer = await customerRepository.findOrCreateByPhone(
+            trimmedPhone,
+            trimmedName || `Customer ${trimmedPhone}`
+          );
+        }
+      } else if (trimmedName) {
+        // 2. Check by name
+        const existingName = allCustomers.find(
+          (c) => c.name?.trim().toLowerCase() === trimmedName.toLowerCase()
+        );
+        if (existingName) {
+          targetCustomer = existingName;
+        } else {
+          targetCustomer = await addCustomerMutation.mutateAsync({
+            name: trimmedName,
+          });
+        }
       }
 
-      const created = await addCustomerMutation.mutateAsync({
-        name: trimmed,
-      });
-
-      if (created && created.id) {
+      if (targetCustomer && targetCustomer.id) {
         setLocalAddedCustomers((prev) => {
           const filtered = prev.filter(
             (p) =>
-              String(p.id) !== String(created.id) &&
-              p.name?.trim().toLowerCase() !== created.name?.trim().toLowerCase()
+              String(p.id) !== String(targetCustomer!.id) &&
+              p.name?.trim().toLowerCase() !== targetCustomer!.name?.trim().toLowerCase()
           );
-          return [...filtered, created];
+          return [...filtered, targetCustomer!];
         });
         try {
-          useCustomerStore.getState().addCustomer(created);
+          useCustomerStore.getState().addCustomer(targetCustomer);
         } catch (_) {}
 
-        setCustomerId(String(created.id));
+        setCustomerId(String(targetCustomer.id));
       }
       setNewCustomerName('');
+      setNewCustomerPhone('');
       setShowAddCustomerModal(false);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to add customer.';
@@ -461,16 +483,24 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   }, [customers, customerId, localAddedCustomers]);
 
   const customerOptions = useMemo(() => {
-    return allCustomers.map((c) => {
-      const bal = Number(c.outstandingBalance || 0);
-      let balText = '';
-      if (bal > 0) balText = ` (Due: ₹${bal.toFixed(2)})`;
-      else if (bal < 0) balText = ` (Advance: ₹${Math.abs(bal).toFixed(2)})`;
-      return {
-        label: `${c.name}${balText}`,
-        value: String(c.id),
-      };
-    });
+    const list = [
+      {
+        label: 'Walk-in Customer (No info / Cash)',
+        value: 'walkin',
+      },
+      ...allCustomers.map((c) => {
+        const phoneDisplay = c.phone ? ` (${c.phone})` : '';
+        const bal = Number(c.outstandingBalance || 0);
+        let balText = '';
+        if (bal > 0) balText = ` (Due: ₹${bal.toFixed(2)})`;
+        else if (bal < 0) balText = ` (Advance: ₹${Math.abs(bal).toFixed(2)})`;
+        return {
+          label: `${c.name}${phoneDisplay}${balText}`,
+          value: String(c.id),
+        };
+      }),
+    ];
+    return list;
   }, [allCustomers]);
 
   const supplierOptions = useMemo(() => {
@@ -488,6 +518,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   }, [unitList]);
 
   const selectedCustomer = useMemo(() => {
+    if (!customerId || customerId === 'walkin') return null;
     return allCustomers.find((c) => String(c.id) === String(customerId));
   }, [allCustomers, customerId]);
 
@@ -748,10 +779,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const handleSubmit = async () => {
     if (isSubmitting || createSaleMutation.isPending) return;
     setErrorMessage(null);
-    if (!customerId) {
-      setErrorMessage('Please select a customer.');
-      return;
-    }
     if (items.length === 0) {
       setErrorMessage('Please add at least one product to the sale.');
       return;
@@ -795,16 +822,23 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         effectivePaymentStatus = status === 'Completed' ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
       }
 
-      let effectiveCustomerId = Number(customerId);
-      const custName = selectedCustomer?.name;
-      if (effectiveCustomerId < 0 && custName) {
-        const positiveMatch = customers.find(
-          (c) =>
-            c.name?.trim().toLowerCase() === custName.trim().toLowerCase() &&
-            Number(c.id) > 0
-        );
-        if (positiveMatch) {
-          effectiveCustomerId = Number(positiveMatch.id);
+      const isWalkIn = !customerId || customerId === 'walkin';
+      let effectiveCustomerId: number | undefined = undefined;
+      let custName = 'Walk-in Customer';
+
+      if (!isWalkIn) {
+        const numId = Number(customerId);
+        effectiveCustomerId = !isNaN(numId) ? numId : undefined;
+        custName = selectedCustomer?.name || 'Walk-in Customer';
+        if (effectiveCustomerId !== undefined && effectiveCustomerId < 0 && custName) {
+          const positiveMatch = customers.find(
+            (c) =>
+              c.name?.trim().toLowerCase() === custName.trim().toLowerCase() &&
+              Number(c.id) > 0
+          );
+          if (positiveMatch) {
+            effectiveCustomerId = Number(positiveMatch.id);
+          }
         }
       }
 
@@ -812,7 +846,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         invoiceNumber: reference || `SL-${Date.now().toString().slice(-6)}`,
         reference: reference || `SL-${Date.now().toString().slice(-6)}`,
         customerId: effectiveCustomerId,
-        customerName: custName || 'Walk-in Customer',
+        customerName: isWalkIn ? 'Walk-in Customer' : (custName || 'Walk-in Customer'),
         supplierId: supplierId ? Number(supplierId) : undefined,
         supplierName: selectedSupplier?.name || undefined,
         date: date || new Date().toISOString().split('T')[0],
@@ -938,7 +972,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       setPreviousBalanceAmount('0');
       setCustomerRawBalance(0);
       setUnpaidInvoicesCount(0);
-      setPaymentStatus('Paid');
+      setPaymentStatus('Unpaid');
+      setStatus('Pending');
       setAmountReceived('');
       onClose();
 
@@ -1001,8 +1036,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                 <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <AppSelect
-                      label="Customer Name *"
-                      placeholder={allCustomers.length === 0 ? 'No customers available' : 'Select Customer'}
+                      label="Customer (Walk-in by default)"
+                      placeholder={allCustomers.length === 0 ? 'Walk-in Customer (Cash)' : 'Select / Walk-in Customer'}
                       options={customerOptions}
                       value={customerId}
                       onSelect={(val) => setCustomerId(String(val))}
@@ -1858,9 +1893,48 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               </View>
             )}
 
+            {/* Mobile / Phone Input */}
             <View>
               <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
-                Customer Name *
+                Mobile Number
+              </Text>
+              <TextInput
+                style={[
+                  styles.customerInput,
+                  {
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+                placeholder="Enter mobile number"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={newCustomerPhone}
+                keyboardType="phone-pad"
+                onChangeText={(val) => {
+                  setNewCustomerPhone(val);
+                  if (customerModalError) setCustomerModalError(null);
+                }}
+                autoFocus
+              />
+              {newCustomerPhone.trim().length >= 4 && (() => {
+                const matched = allCustomers.find((c) =>
+                  customerRepository.isPhoneMatch(c.phone, newCustomerPhone.trim())
+                );
+                if (matched) {
+                  return (
+                    <Text style={{ color: '#16A34A', fontSize: 12, marginTop: 4, fontWeight: '600' }}>
+                      Existing customer found: {matched.name} (will auto-select)
+                    </Text>
+                  );
+                }
+                return null;
+              })()}
+            </View>
+
+            <View>
+              <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: '600', marginBottom: 8 }}>
+                Customer Name (Optional if mobile entered)
               </Text>
               <TextInput
                 style={[
@@ -1878,7 +1952,6 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   setNewCustomerName(val);
                   if (customerModalError) setCustomerModalError(null);
                 }}
-                autoFocus
               />
             </View>
 

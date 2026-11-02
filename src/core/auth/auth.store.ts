@@ -2,10 +2,15 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface User {
-  id: string;
-  email: string;
-  name: string;
+  id: string | number;
+  email?: string;
+  name?: string;
+  fullName?: string;
+  username?: string;
   role: string;
+  permissions?: string[];
+  companyId?: number;
+  branchId?: number | null;
 }
 
 interface AuthState {
@@ -28,7 +33,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: false,
   permissions: [],
 
-  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  setUser: (user) =>
+    set((state) => ({
+      user,
+      isAuthenticated: !!user,
+      permissions: Array.isArray(user?.permissions) ? user.permissions : state.permissions,
+    })),
   
   setPermissions: (permissions) => set({ permissions }),
   
@@ -40,9 +50,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       const accessToken = await AsyncStorage.getItem('accessToken');
       
       if (userStr && userStr !== 'undefined' && accessToken) {
+        const user = JSON.parse(userStr);
         set({ 
-          user: JSON.parse(userStr), 
+          user, 
           isAuthenticated: true,
+          permissions: Array.isArray(user?.permissions) ? user.permissions : [],
         });
       }
     } catch (e) {

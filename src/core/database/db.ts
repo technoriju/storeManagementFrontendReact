@@ -955,7 +955,13 @@ export const initializeDatabase = () => {
       );
     `);
 
-    // Seed initial HRM data if empty
+    // Clean up any demo HRM data
+    db.execute(`DELETE FROM payrolls;`);
+    db.execute(`DELETE FROM attendances;`);
+    db.execute(`DELETE FROM leaves;`);
+    db.execute(`DELETE FROM employees WHERE employeeCode IN ('EMP-001', 'EMP-002', 'EMP-003', 'EMP-004', 'EMP-005', 'EMP-0001', 'TEST-5595');`);
+
+    // Seed initial HRM structure (departments, designations, shifts, leave types, holidays) if empty
     seedHrmDefaults();
 
     console.log('Database tables created successfully');
@@ -1032,21 +1038,6 @@ const seedHrmDefaults = async () => {
       );
     }
 
-    // Default Employees
-    const emps = [
-      ['EMP-001', 'Alex', 'Morgan', 'alex.morgan@example.com', '+1 555-0101', 1, 'Sales & Marketing', 1, 'Sales Executive', 1, 'Morning General', '2023-01-15', 45000, 'FULL_TIME', 'ACTIVE', '123 Market Street, Suite 4', '+1 555-9001', now, now],
-      ['EMP-002', 'David', 'Miller', 'david.miller@example.com', '+1 555-0102', 2, 'Accounts & Finance', 2, 'Senior Accountant', 1, 'Morning General', '2022-06-10', 58000, 'FULL_TIME', 'ACTIVE', '456 Financial Ave', '+1 555-9002', now, now],
-      ['EMP-003', 'Rachel', 'Green', 'rachel.green@example.com', '+1 555-0103', 3, 'Inventory & Warehouse', 3, 'Warehouse Manager', 1, 'Morning General', '2023-03-20', 52000, 'FULL_TIME', 'ACTIVE', '789 Logistics Way', '+1 555-9003', now, now],
-      ['EMP-004', 'James', 'Wilson', 'james.wilson@example.com', '+1 555-0104', 4, 'Human Resources', 4, 'HR Executive', 1, 'Morning General', '2023-08-01', 48000, 'FULL_TIME', 'ACTIVE', '321 People Blvd', '+1 555-9004', now, now],
-      ['EMP-005', 'Sophia', 'Taylor', 'sophia.taylor@example.com', '+1 555-0105', 1, 'Sales & Marketing', 5, 'Store Supervisor', 2, 'Early Shift', '2024-02-15', 42000, 'FULL_TIME', 'ON_LEAVE', '654 Retail Road', '+1 555-9005', now, now],
-    ];
-    for (const e of emps) {
-      await db.execute(
-        'INSERT INTO employees (employeeCode, firstName, lastName, email, phone, departmentId, departmentName, designationId, designationName, shiftId, shiftName, joiningDate, salary, employmentType, status, address, emergencyContact, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-        e
-      );
-    }
-
     // Default Leave Types
     const ltypes = [
       ['Casual Leave', 12, 'Paid leave for personal matters', 'ACTIVE', now, now],
@@ -1073,48 +1064,6 @@ const seedHrmDefaults = async () => {
       await db.execute(
         'INSERT INTO holidays (name, date, dayOfWeek, type, description, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?);',
         h
-      );
-    }
-
-    // Default Attendances for today
-    const today = new Date().toISOString().split('T')[0];
-    const atts = [
-      [1, 'Alex Morgan', 'Sales & Marketing', today, '09:02', '18:05', 'PRESENT', 9.0, 'On time', now, now],
-      [2, 'David Miller', 'Accounts & Finance', today, '09:12', '18:10', 'PRESENT', 8.9, 'On time', now, now],
-      [3, 'Rachel Green', 'Inventory & Warehouse', today, '09:35', '18:15', 'LATE', 8.6, 'Traffic delay', now, now],
-      [4, 'James Wilson', 'Human Resources', today, '08:58', '18:00', 'PRESENT', 9.0, 'Regular shift', now, now],
-      [5, 'Sophia Taylor', 'Sales & Marketing', today, null, null, 'ON_LEAVE', 0, 'Medical leave approved', now, now],
-    ];
-    for (const a of atts) {
-      await db.execute(
-        'INSERT INTO attendances (employeeId, employeeName, departmentName, date, clockIn, clockOut, status, totalHours, notes, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-        a
-      );
-    }
-
-    // Default Leave Requests
-    const lreqs = [
-      [5, 'Sophia Taylor', 'Sales & Marketing', 2, 'Sick Leave', today, today, 1, 'Doctor appointment and recovery', 'APPROVED', now, now, now],
-      [1, 'Alex Morgan', 'Sales & Marketing', 1, 'Casual Leave', '2026-11-10', '2026-11-12', 3, 'Family event travel', 'PENDING', now, now, now],
-    ];
-    for (const lr of lreqs) {
-      await db.execute(
-        'INSERT INTO leaves (employeeId, employeeName, departmentName, leaveTypeId, leaveTypeName, startDate, endDate, totalDays, reason, status, appliedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-        lr
-      );
-    }
-
-    // Default Payroll
-    const pays = [
-      [1, 'Alex Morgan', 'Sales & Marketing', 'Sales Executive', 'October', 2026, 45000, 3500, 2000, 46500, today, 'BANK_TRANSFER', 'PAID', 'Disbursed via Direct Deposit', now, now],
-      [2, 'David Miller', 'Accounts & Finance', 'Senior Accountant', 'October', 2026, 58000, 4000, 3000, 59000, today, 'BANK_TRANSFER', 'PAID', 'Disbursed via Direct Deposit', now, now],
-      [3, 'Rachel Green', 'Inventory & Warehouse', 'Warehouse Manager', 'October', 2026, 52000, 3000, 2500, 52500, null, null, 'GENERATED', 'Generated pending approval', now, now],
-      [4, 'James Wilson', 'Human Resources', 'HR Executive', 'October', 2026, 48000, 2500, 2000, 48500, null, null, 'PENDING', 'Draft payroll', now, now],
-    ];
-    for (const p of pays) {
-      await db.execute(
-        'INSERT INTO payrolls (employeeId, employeeName, departmentName, designationName, month, year, basicSalary, allowances, deductions, netSalary, paymentDate, paymentMethod, status, notes, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);',
-        p
       );
     }
   } catch (err) {
