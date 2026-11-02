@@ -12,7 +12,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Search, X, PackageCheck, AlertCircle, Edit2, Layers } from 'lucide-react-native';
+import { Search, X, PackageCheck, AlertCircle, Edit2, Layers, Check, Minus, Plus } from 'lucide-react-native';
 import { useTheme } from '../../theme/theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useProductStore } from '../../../features/products/store/productStore';
@@ -25,9 +25,10 @@ export interface ProductSearchSelectProps {
   mode?: 'search-add' | 'select'; // 'search-add' for transactions; 'select' for single product pick
   selectedProduct?: Product | null;
   selectedProductId?: string | number | null;
-  onSelectProduct: (product: Product) => void;
+  onSelectProduct: (product: Product, quantity?: number) => void;
   onClearSelection?: () => void;
   clearOnSelect?: boolean;
+  enableQtyPrompt?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
   dropdownStyle?: StyleProp<ViewStyle>;
@@ -51,6 +52,7 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
   onSelectProduct,
   onClearSelection,
   clearOnSelect = mode === 'search-add',
+  enableQtyPrompt = false,
   containerStyle,
   inputStyle,
   dropdownStyle,
@@ -76,10 +78,40 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
   const [isChangingSelection, setIsChangingSelection] = useState(false);
   const [internalSelectedProduct, setInternalSelectedProduct] = useState<Product | null>(null);
 
+  // Qty prompt state for fast billing
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
+  const [pendingQty, setPendingQty] = useState<string>('1');
+  const qtyInputRef = useRef<any>(null);
+  const canSubmitQtyRef = useRef<boolean>(false);
+
   const inputRef = useRef<any>(null);
   const scrollViewRef = useRef<any>(null);
   const itemRefs = useRef<{ [key: number]: any }>({});
   const debounceTimerRef = useRef<any>(null);
+
+  // Auto-focus and select quantity input when pendingProduct is activated
+  useEffect(() => {
+    if (pendingProduct) {
+      canSubmitQtyRef.current = false;
+      const enableTimer = setTimeout(() => {
+        canSubmitQtyRef.current = true;
+      }, 150);
+
+      const focusTimer = setTimeout(() => {
+        qtyInputRef.current?.focus();
+        if (Platform.OS === 'web' && qtyInputRef.current) {
+          try {
+            qtyInputRef.current.select();
+          } catch (_) {}
+        }
+      }, 50);
+
+      return () => {
+        clearTimeout(enableTimer);
+        clearTimeout(focusTimer);
+      };
+    }
+  }, [pendingProduct]);
 
   // Auto-scroll when highlightedIndex changes
   useEffect(() => {
@@ -178,8 +210,50 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
     inputRef.current?.focus();
   };
 
+  // Confirm pending product with quantity
+  const confirmPendingProduct = useCallback(() => {
+    if (!pendingProduct) return;
+    if (!canSubmitQtyRef.current) return;
+
+    const num = parseFloat(pendingQty);
+    const finalQty = !isNaN(num) && num > 0 ? num : 1;
+    const prod = pendingProduct;
+
+    setPendingProduct(null);
+    setPendingQty('1');
+
+    if (clearOnSelect) {
+      setQuery('');
+      setDebouncedQuery('');
+      setResults([]);
+      setHighlightedIndex(-1);
+    }
+
+    onSelectProduct(prod, finalQty);
+
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  }, [pendingProduct, pendingQty, clearOnSelect, onSelectProduct]);
+
+  // Cancel pending product
+  const cancelPendingProduct = useCallback(() => {
+    setPendingProduct(null);
+    setPendingQty('1');
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 60);
+  }, []);
+
   // Select item
   const handleItemSelect = (product: Product) => {
+    if (enableQtyPrompt) {
+      setPendingProduct(product);
+      setPendingQty('1');
+      setIsOpen(false);
+      return;
+    }
+
     onSelectProduct(product);
     if (mode === 'select') {
       setInternalSelectedProduct(product);
@@ -369,53 +443,193 @@ export const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({
 
       {/* Input & Dropdown Relative Container */}
       <View style={{ position: 'relative', width: '100%', zIndex: isOpen ? 99999 : 1 }}>
-        {/* Search Input Box */}
-        <View
-          style={[
-            styles.inputContainer,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: error ? '#EF4444' : isOpen ? theme.colors.primary : theme.colors.border,
-              height: isMouse ? 36 : 40,
-            },
-            disabled && { opacity: 0.6 },
-          ]}
-        >
-          <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-          <TextInput
-            ref={inputRef}
-            value={query}
-            onChangeText={handleQueryChange}
-            onKeyPress={handleKeyDown}
-            {...(Platform.OS === 'web' ? ({ onKeyDown: handleKeyDown } as any) : {})}
-            onFocus={() => {
-              if (query.trim().length >= minSearchLength || results.length > 0) {
-                setIsOpen(true);
-              }
-            }}
-            onSubmitEditing={handleSubmitEditing}
-            placeholder={placeholder}
-            placeholderTextColor={theme.colors.textSecondary}
-            editable={!disabled}
-            autoFocus={autoFocus}
+        {pendingProduct ? (
+          /* Fast Qty Put Area */
+          <View
             style={[
-              styles.textInput,
-              { color: theme.colors.text, fontSize: isMouse ? 13 : 14 },
-              inputStyle,
+              styles.qtyContainer,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.primary,
+              },
             ]}
-          />
-          {isLoading && (
-            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 6 }} />
-          )}
-          {query.length > 0 && !isLoading && (
-            <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <X size={15} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
+          >
+            {/* Product Summary */}
+            <View style={{ flex: 1, minWidth: isMobile ? '100%' : 160 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <PackageCheck size={16} color={theme.colors.primary} />
+                <Text
+                  style={[styles.qtyProductName, { color: theme.colors.text }]}
+                  numberOfLines={1}
+                >
+                  {pendingProduct.name}
+                </Text>
+              </View>
+              <View style={styles.qtyProductMetaRow}>
+                <Text style={[styles.qtyMetaText, { color: getPriceDisplay(pendingProduct).color, fontWeight: '700' }]}>
+                  {getPriceDisplay(pendingProduct).label}: {getPriceDisplay(pendingProduct).value}
+                </Text>
+                <Text style={[styles.metaDot, { color: theme.colors.textSecondary }]}>•</Text>
+                <Text
+                  style={[
+                    styles.qtyMetaText,
+                    {
+                      color:
+                        Number(pendingProduct.stockQuantity ?? pendingProduct.openingStock ?? 0) > 0
+                          ? '#10B981'
+                          : '#EF4444',
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
+                  Stock: {Number((pendingProduct.stockQuantity ?? pendingProduct.openingStock ?? 0).toFixed(4))}{' '}
+                  {pendingProduct.baseUnit?.shortName || pendingProduct.unit || 'Pc'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Qty Input & Controls */}
+            <View style={styles.qtyActionRow}>
+              <Text style={[styles.qtyInputLabel, { color: theme.colors.textSecondary }]}>Qty:</Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.qtyStepperBtn,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+                ]}
+                onPress={() => {
+                  const val = parseFloat(pendingQty) || 1;
+                  setPendingQty(String(Math.max(1, Number((val - 1).toFixed(4)))));
+                  qtyInputRef.current?.focus();
+                }}
+                activeOpacity={0.7}
+              >
+                <Minus size={13} color={theme.colors.text} />
+              </TouchableOpacity>
+
+              <TextInput
+                ref={qtyInputRef}
+                value={pendingQty}
+                onChangeText={(text) => setPendingQty(text)}
+                keyboardType="decimal-pad"
+                autoFocus={true}
+                selectTextOnFocus={true}
+                onSubmitEditing={confirmPendingProduct}
+                onKeyPress={(e: any) => {
+                  const key = e.nativeEvent?.key || e.key;
+                  if (key === 'Enter') {
+                    if (e.preventDefault) e.preventDefault();
+                    confirmPendingProduct();
+                  } else if (key === 'Escape') {
+                    if (e.preventDefault) e.preventDefault();
+                    cancelPendingProduct();
+                  }
+                }}
+                {...(Platform.OS === 'web'
+                  ? ({
+                      onKeyDown: (e: any) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          confirmPendingProduct();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelPendingProduct();
+                        }
+                      },
+                    } as any)
+                  : {})}
+                style={[
+                  styles.qtyInputBox,
+                  {
+                    color: theme.colors.text,
+                    borderColor: theme.colors.primary,
+                    backgroundColor: theme.colors.background,
+                  },
+                ]}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.qtyStepperBtn,
+                  { borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+                ]}
+                onPress={() => {
+                  const val = parseFloat(pendingQty) || 1;
+                  setPendingQty(String(Number((val + 1).toFixed(4))));
+                  qtyInputRef.current?.focus();
+                }}
+                activeOpacity={0.7}
+              >
+                <Plus size={13} color={theme.colors.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.qtyConfirmBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={confirmPendingProduct}
+                activeOpacity={0.8}
+              >
+                <Check size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.qtyConfirmBtnText}>Add (↵)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.qtyCancelBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}
+                onPress={cancelPendingProduct}
+                activeOpacity={0.8}
+              >
+                <X size={14} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          /* Search Input Box */
+          <View
+            style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: error ? '#EF4444' : isOpen ? theme.colors.primary : theme.colors.border,
+                height: isMouse ? 36 : 40,
+              },
+              disabled && { opacity: 0.6 },
+            ]}
+          >
+            <Search size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
+            <TextInput
+              ref={inputRef}
+              value={query}
+              onChangeText={handleQueryChange}
+              onKeyPress={handleKeyDown}
+              {...(Platform.OS === 'web' ? ({ onKeyDown: handleKeyDown } as any) : {})}
+              onFocus={() => {
+                if (query.trim().length >= minSearchLength || results.length > 0) {
+                  setIsOpen(true);
+                }
+              }}
+              onSubmitEditing={handleSubmitEditing}
+              placeholder={placeholder}
+              placeholderTextColor={theme.colors.textSecondary}
+              editable={!disabled}
+              autoFocus={autoFocus}
+              style={[
+                styles.textInput,
+                { color: theme.colors.text, fontSize: isMouse ? 13 : 14 },
+                inputStyle,
+              ]}
+            />
+            {isLoading && (
+              <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginRight: 6 }} />
+            )}
+            {query.length > 0 && !isLoading && (
+              <TouchableOpacity onPress={handleClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={15} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* Floating Dropdown Results */}
-        {isOpen && (
+        {isOpen && !pendingProduct && (
           <View
             style={[
               styles.dropdown,
@@ -549,6 +763,78 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     height: '100%',
   },
+  qtyContainer: {
+    borderWidth: 1.5,
+    borderRadius: 8,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  qtyProductName: {
+    fontSize: 13,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  qtyProductMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 4,
+  },
+  qtyMetaText: {
+    fontSize: 11,
+  },
+  qtyActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  qtyInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  qtyStepperBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyInputBox: {
+    width: 60,
+    height: 32,
+    borderWidth: 1.5,
+    borderRadius: 6,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    paddingVertical: 0,
+    paddingHorizontal: 4,
+  },
+  qtyConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 6,
+  },
+  qtyConfirmBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  qtyCancelBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dropdown: {
     position: 'absolute',
     left: 0,
@@ -676,3 +962,4 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
 });
+
