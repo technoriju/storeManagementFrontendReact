@@ -62,15 +62,19 @@ export class SettingRepository {
   public async fetchFromApi(): Promise<void> {
     try {
       const response = await apiClient.get(API_ENDPOINTS.SETTINGS.BASE);
-      // Assume API returns an object of key-value pairs or an array of Setting objects
-      const items = response.data;
+      const rawData = response.data?.data !== undefined ? response.data.data : response.data;
+      const items = rawData;
       if (Array.isArray(items)) {
         for (const item of items) {
-          await this.set(item.key, item.value);
+          if (item && item.key) {
+            await this.set(item.key, item.value ?? '');
+          }
         }
-      } else {
+      } else if (items && typeof items === 'object') {
         for (const key of Object.keys(items)) {
-          await this.set(key, items[key]);
+          if (typeof items[key] === 'string' || typeof items[key] === 'number') {
+            await this.set(key, String(items[key]));
+          }
         }
       }
     } catch (error) {
