@@ -146,7 +146,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const qtyInputRefs = useRef<(TextInput | null)[]>([]);
+  const qtyInputRefs = useRef<(any | null)[]>([]);
 
   const focusQtyInput = (idx: number) => {
     const target = qtyInputRefs.current[idx];
@@ -662,12 +662,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
 
   // Add Product to Table
-  const handleAddProduct = (product: Product) => {
+  const handleAddProduct = (product: Product, initialQuantity: number = 1) => {
+    const qtyToAdd = typeof initialQuantity === 'number' && initialQuantity > 0 ? initialQuantity : 1;
     const existingIndex = items.findIndex((i) => i.productId === product.id);
     if (existingIndex >= 0) {
       const updated = [...items];
       const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
-      updated[existingIndex].quantity = Number((curr + 1).toFixed(4));
+      updated[existingIndex].quantity = Number((curr + qtyToAdd).toFixed(4));
       setItems(updated);
     } else {
       const wholesaleP = getProductPriceByType(product, 'wholesale');
@@ -708,7 +709,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           brandName: brandName,
           subUnit: resolvedSubUnitName,
           subUnitName: resolvedSubUnitName || 'Pcs',
-          quantity: 1,
+          quantity: qtyToAdd,
           unitPrice: initialPrice,
           basePrice,
           subPrice,
@@ -1329,6 +1330,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     priceType={priceType}
                     placeholder={`Search by product name, SKU or barcode (${priceType} price)...`}
                     onSelectProduct={handleAddProduct}
+                    enableQtyPrompt={true}
                   />
                 </View>
                 <TouchableOpacity
