@@ -4,6 +4,7 @@ import { useTheme } from '../../theme/theme';
 import { useAuthStore } from '../../../core/auth/auth.store';
 import { usePermissions, hasPermission } from '../../../core/auth/usePermissions';
 import { Icon, IconName } from '../Icon';
+import { useShortcutSettingsStore } from '../../../features/settings/store/shortcutSettings.store';
 
 // Types
 type SubItem = {
@@ -210,6 +211,7 @@ const menuSections: MenuSection[] = [
           { id: 'invoice', label: 'Invoice Format', permission: 'settings:general' },
           { id: 'business', label: 'Business Profile', permission: 'settings:general' },
           { id: 'printers', label: 'Printers', permission: 'printers:manage' },
+          { id: 'shortcuts', label: 'Shortcuts', permission: 'settings:general' },
         ]
       }
     ]
@@ -224,6 +226,8 @@ const CUSTOM_COLORS = {
 };
 
 const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: MenuItem, activeItem: string, onItemPress: (id: string) => void, theme: any }) => {
+  const { getShortcutBadgeForAction, showShortcutBadges } = useShortcutSettingsStore();
+  const shortcutBadge = showShortcutBadges ? getShortcutBadgeForAction(item.id) : null;
   const hasSubItems = item.subItems && item.subItems.length > 0;
   const hasChevron = item.hasChevron || hasSubItems;
   const isDirectActive = activeItem === item.id ||
@@ -327,43 +331,75 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
           </Text>
         </View>
         
-        {hasChevron && (
-          <Animated.View style={{ transform: [{ rotate: hasSubItems ? spin : '0deg' }] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {shortcutBadge && (
             <View style={[
-              styles.chevronContainer,
-              isActiveGroup && { backgroundColor: '#FFE4CC' }
+              styles.sidebarShortcutBadge,
+              isActiveGroup && { backgroundColor: '#FFE4CC', borderColor: '#FDBA74' }
             ]}>
-              <Icon 
-                name="chevron-right" 
-                size={12} 
-                color={isActiveGroup ? CUSTOM_COLORS.activeText : "#64748B"} 
-              />
+              <Text style={[
+                styles.sidebarShortcutBadgeText,
+                isActiveGroup && { color: CUSTOM_COLORS.activeText }
+              ]}>
+                {shortcutBadge}
+              </Text>
             </View>
-          </Animated.View>
-        )}
+          )}
+
+          {hasChevron && (
+            <Animated.View style={{ transform: [{ rotate: hasSubItems ? spin : '0deg' }] }}>
+              <View style={[
+                styles.chevronContainer,
+                isActiveGroup && { backgroundColor: '#FFE4CC' }
+              ]}>
+                <Icon 
+                  name="chevron-right" 
+                  size={12} 
+                  color={isActiveGroup ? CUSTOM_COLORS.activeText : "#64748B"} 
+                />
+              </View>
+            </Animated.View>
+          )}
+        </View>
       </TouchableOpacity>
 
       {hasSubItems && (
         <Animated.View style={{ height: animatedHeight, overflow: 'hidden' }}>
           {item.subItems!.map((subItem) => {
             const isSubItemActive = activeItem === subItem.id;
+            const subShortcutBadge = showShortcutBadges ? getShortcutBadgeForAction(subItem.id) : null;
             return (
               <TouchableOpacity
                 key={subItem.id}
                 style={styles.subItem}
                 onPress={() => onItemPress(subItem.id)}
               >
-                <View style={[
-                  styles.subItemDot, 
-                  { backgroundColor: isSubItemActive ? CUSTOM_COLORS.activeText : '#CBD5E1' }
-                ]} />
-                <Text style={[
-                  styles.subItemText,
-                  { color: isSubItemActive ? CUSTOM_COLORS.activeText : theme.colors.textSecondary },
-                  isSubItemActive && styles.subItemTextActive
-                ]}>
-                  {subItem.label}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
+                  <View style={[
+                    styles.subItemDot, 
+                    { backgroundColor: isSubItemActive ? CUSTOM_COLORS.activeText : '#CBD5E1' }
+                  ]} />
+                  <Text style={[
+                    styles.subItemText,
+                    { color: isSubItemActive ? CUSTOM_COLORS.activeText : theme.colors.textSecondary },
+                    isSubItemActive && styles.subItemTextActive
+                  ]}>
+                    {subItem.label}
+                  </Text>
+                </View>
+                {subShortcutBadge && (
+                  <View style={[
+                    styles.sidebarShortcutBadge,
+                    isSubItemActive && { backgroundColor: '#FFE4CC', borderColor: '#FDBA74' }
+                  ]}>
+                    <Text style={[
+                      styles.sidebarShortcutBadgeText,
+                      isSubItemActive && { color: CUSTOM_COLORS.activeText }
+                    ]}>
+                      {subShortcutBadge}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -544,6 +580,21 @@ const styles = StyleSheet.create({
   },
   subItemTextActive: {
     fontWeight: '500',
+  },
+  sidebarShortcutBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sidebarShortcutBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
   divider: {
     height: 1,

@@ -33,6 +33,7 @@ import { usePermissions } from '../core/auth/usePermissions';
 import { ShieldAlert } from 'lucide-react-native';
 import { AppButton } from '../shared/components/inputs/AppButton';
 import { initializeDatabase } from '../core/database/db';
+import { useGlobalShortcuts } from '../shared/hooks/useGlobalShortcuts';
 
 const getRequiredPermissionForTab = (tab: string): string | null => {
   if (tab === 'dashboard') return 'dashboard:view';
@@ -153,6 +154,7 @@ const getRequiredPermissionForTab = (tab: string): string | null => {
     tab === 'invoice' ||
     tab === 'business' ||
     tab === 'printers' ||
+    tab === 'shortcuts' ||
     tab.startsWith('settings_')
   ) return 'settings:general';
 
@@ -170,6 +172,8 @@ const AuthenticatedApp = () => {
     setTabParams(params || null);
     setActiveTab(tab);
   };
+
+  useGlobalShortcuts(handleNavigateTab);
 
   useEffect(() => {
     const loadPerms = async () => {
@@ -342,6 +346,7 @@ const AuthenticatedApp = () => {
       activeTab === 'invoice' ||
       activeTab === 'business' ||
       activeTab === 'printers' ||
+      activeTab === 'shortcuts' ||
       activeTab.startsWith('settings_')
     ) {
       return <SettingsModule initialRoute={activeTab} />;

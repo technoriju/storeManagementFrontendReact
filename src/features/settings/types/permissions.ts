@@ -9,6 +9,7 @@ export const SETTINGS_PERMISSIONS = {
   VIEW_PRINTERS: 'view_printers',
   VIEW_INVOICE: 'view_invoice',
   VIEW_SYNC: 'view_sync',
+  VIEW_SHORTCUTS: 'view_shortcuts',
 };
 
 export const hasPermission = (userPermissions: string[], permission: string) => {
