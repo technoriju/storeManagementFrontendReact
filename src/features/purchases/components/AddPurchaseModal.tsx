@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -123,6 +123,40 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [items, setItems] = useState<PurchaseItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const qtyInputRefs = useRef<(TextInput | null)[]>([]);
+
+  const focusQtyInput = (idx: number) => {
+    const target = qtyInputRefs.current[idx];
+    if (target) {
+      target.focus();
+      try {
+        (target as any)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      } catch {}
+      setTimeout(() => {
+        try {
+          (target as any)?.select?.();
+        } catch {}
+      }, 0);
+    }
+  };
+
+  const handleQtyKeyPress = (index: number, e: any) => {
+    const key = e?.nativeEvent?.key || e?.key;
+    if (key === 'ArrowUp' || key === 'Up') {
+      e?.preventDefault?.();
+      e?.nativeEvent?.preventDefault?.();
+      if (index > 0) {
+        focusQtyInput(index - 1);
+      }
+    } else if (key === 'ArrowDown' || key === 'Down') {
+      e?.preventDefault?.();
+      e?.nativeEvent?.preventDefault?.();
+      if (index < items.length - 1) {
+        focusQtyInput(index + 1);
+      }
+    }
+  };
 
   useEffect(() => {
     if (visible) {
@@ -1155,6 +1189,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                           {/* Qty */}
                           <View style={{ width: 70, paddingRight: 6 }}>
                             <TextInput
+                              ref={(el) => {
+                                qtyInputRefs.current[index] = el;
+                              }}
                               style={[
                                 styles.cellInput,
                                 {
@@ -1168,6 +1205,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                               value={item.quantity === 0 || item.quantity === '' ? '' : String(item.quantity)}
                               placeholder="1"
                               placeholderTextColor={theme.colors.textSecondary}
+                              onKeyPress={(e) => handleQtyKeyPress(index, e)}
                               onChangeText={(v) => {
                                 const clean = v.replace(/[^0-9.]/g, '');
                                 const parts = clean.split('.');

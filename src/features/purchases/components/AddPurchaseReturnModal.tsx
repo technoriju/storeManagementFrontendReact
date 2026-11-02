@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -65,6 +65,40 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [items, setItems] = useState<ReturnItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const qtyInputRefs = useRef<(TextInput | null)[]>([]);
+
+  const focusQtyInput = (index: number) => {
+    const target = qtyInputRefs.current[index];
+    if (target) {
+      target.focus();
+      try {
+        (target as any)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      } catch {}
+      setTimeout(() => {
+        try {
+          (target as any)?.select?.();
+        } catch {}
+      }, 0);
+    }
+  };
+
+  const handleQtyKeyPress = (index: number, e: any) => {
+    const key = e?.nativeEvent?.key || e?.key;
+    if (key === 'ArrowUp' || key === 'Up') {
+      e?.preventDefault?.();
+      e?.nativeEvent?.preventDefault?.();
+      if (index > 0) {
+        focusQtyInput(index - 1);
+      }
+    } else if (key === 'ArrowDown' || key === 'Down') {
+      e?.preventDefault?.();
+      e?.nativeEvent?.preventDefault?.();
+      if (index < items.length - 1) {
+        focusQtyInput(index + 1);
+      }
+    }
+  };
 
   useEffect(() => {
     if (visible) {
@@ -330,6 +364,9 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                             <Text style={{ color: theme.colors.text }}>-</Text>
                           </TouchableOpacity>
                           <TextInput
+                            ref={(el) => {
+                              qtyInputRefs.current[idx] = el;
+                            }}
                             style={{
                               minWidth: 44,
                               height: 28,
@@ -349,6 +386,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
                             value={row.quantity === 0 || row.quantity === '' ? '' : String(row.quantity)}
                             placeholder="1"
                             placeholderTextColor={theme.colors.textSecondary}
+                            onKeyPress={(e) => handleQtyKeyPress(idx, e)}
                             onChangeText={(v) => {
                               const clean = v.replace(/[^0-9.]/g, '');
                               const parts = clean.split('.');
