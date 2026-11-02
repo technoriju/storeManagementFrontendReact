@@ -50,6 +50,8 @@ export const BarcodeSingleLabel: React.FC<BarcodeSingleLabelProps> = ({
         height: `${heightMm * 3.78 * scale}px`,
         maxHeight: `${heightMm * 3.78 * scale}px`,
         boxSizing: 'border-box',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
         padding: `${Math.round(2 * scale)}px ${Math.round(3 * scale)}px`,
         backgroundColor: '#FFFFFF',
         color: '#000000',

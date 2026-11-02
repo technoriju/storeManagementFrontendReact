@@ -12,8 +12,10 @@ import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { useProductStore } from '../../products/store/productStore';
 import { categoryRepository } from '../../../core/repositories/CategoryRepository';
+import { productRepository } from '../../../core/repositories/ProductRepository';
 import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
+import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 import {
   BarcodePrintItem,
   BarcodeLabelConfig,
@@ -54,27 +56,45 @@ interface CategoryOption {
 export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNavigateTab }) => {
   const theme = useTheme();
   const { isDesktop, windowWidth } = useResponsive();
-  const { products, fetchProducts } = useProductStore();
+  const { products, fetchProducts, fetchPaginatedProducts } = useProductStore();
+  const { settings } = useInvoiceSettingsStore();
+  const business = settings?.businessProfile;
 
   // Categories list
   const [categoryList, setCategoryList] = useState<CategoryOption[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('none');
+
+  // Products loaded on-demand for selected category (prevents fetching all products)
+  const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
+
+  // Toggle for loading all data on demand (default: false, never loads all products by default)
+  const [showAllData, setShowAllData] = useState<boolean>(false);
 
   // Print Queue
   const [items, setItems] = useState<BarcodePrintItem[]>([]);
   // Search Query
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Label Configuration
-  const [config, setConfig] = useState<BarcodeLabelConfig>(DEFAULT_LABEL_CONFIG);
+  // Label Configuration (defaults store name to business profile)
+  const [config, setConfig] = useState<BarcodeLabelConfig>(() => ({
+    ...DEFAULT_LABEL_CONFIG,
+    storeName: business?.businessName || DEFAULT_LABEL_CONFIG.storeName,
+  }));
+
+  // Sync store name when business settings update
+  useEffect(() => {
+    if (business?.businessName && config.storeName === DEFAULT_LABEL_CONFIG.storeName) {
+      setConfig((prev) => ({ ...prev, storeName: business.businessName }));
+    }
+  }, [business?.businessName]);
 
   // Preview Modal
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(1.5);
 
-  // Load products & categories on mount
+  // Load ONLY categories on mount. Do NOT fetch all products by default!
   useEffect(() => {
-    fetchProducts();
     loadCategories();
   }, []);
 
@@ -136,15 +156,108 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
     }
   }, [products]);
 
-  // Filter products based on selected Category and Search Query
-  const filteredProducts = useMemo(() => {
-    if (!products || products.length === 0) return [];
+  // Handle selecting a category: load only this category's products on-demand
+  const handleSelectCategory = async (catId: string) => {
+    setSelectedCategory(catId);
 
-    return products.filter((p) => {
+    if (catId === 'none') {
+      setCategoryProducts([]);
+      return;
+    }
+
+    if (catId === 'all') {
+      return;
+    }
+
+    // If store already has all products loaded, local filter handles it
+    if (products && products.length > 0) {
+      return;
+    }
+
+    // Fetch products for chosen category only
+    setIsLoadingProducts(true);
+    try {
+      const numCat = Number(catId);
+      // 1. Try local SQLite query first
+      const local = await productRepository.getPaginated({
+        categoryId: !isNaN(numCat) ? numCat : undefined,
+        limit: 500,
+      });
+      if (local?.data && local.data.length > 0) {
+        setCategoryProducts(local.data);
+      }
+
+      // 2. Query API for this category
+      const res = await fetchPaginatedProducts({
+        categoryId: !isNaN(numCat) ? numCat : undefined,
+        limit: 500,
+      });
+      if (res?.data && res.data.length > 0) {
+        setCategoryProducts(res.data);
+      }
+    } catch (e) {
+      console.warn('Error loading category products:', e);
+    } finally {
+      setIsLoadingProducts(false);
+    }
+  };
+
+  // Handle clicking "All Data": ONLY then fetch all products from API
+  const handleToggleAllData = async () => {
+    if (showAllData) {
+      setShowAllData(false);
+      return;
+    }
+
+    setShowAllData(true);
+    setSelectedCategory('all');
+
+    if (!products || products.length === 0) {
+      setIsLoadingProducts(true);
+      try {
+        await fetchProducts(true);
+      } catch (e) {
+        console.warn('Failed to fetch all products:', e);
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    }
+  };
+
+  // Product pool: use global store products if available, else on-demand category products
+  const productPool = useMemo(() => {
+    if (products && products.length > 0) {
+      return products;
+    }
+    return categoryProducts;
+  }, [products, categoryProducts]);
+
+  // Selected category display name
+  const chosenCategoryName = useMemo(() => {
+    if (selectedCategory === 'all') return showAllData ? 'All Categories' : '';
+    if (selectedCategory === 'none') return '';
+    const found = categoryList.find((c) => c.id === selectedCategory);
+    return found ? found.name : selectedCategory;
+  }, [selectedCategory, categoryList, showAllData]);
+
+  // Filter products based on selected Category, Search Query, and showAllData
+  const filteredProducts = useMemo(() => {
+    if (!productPool || productPool.length === 0) return [];
+
+    const q = searchQuery.toLowerCase().trim();
+    const hasSearch = q.length > 0;
+    const hasSpecificCategory = selectedCategory !== 'all' && selectedCategory !== 'none';
+
+    // Requirement: Do NOT show all products by default.
+    // Only show if user searches, selects a specific category, or clicks "All Data" (showAllData === true).
+    if (!showAllData && !hasSearch && !hasSpecificCategory) {
+      return [];
+    }
+
+    return productPool.filter((p) => {
       // Search matching
-      const q = searchQuery.toLowerCase().trim();
       const matchSearch =
-        !q ||
+        !hasSearch ||
         (p.name && p.name.toLowerCase().includes(q)) ||
         (p.sku && p.sku.toLowerCase().includes(q)) ||
         (p.barcode && p.barcode.toLowerCase().includes(q));
@@ -152,7 +265,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
       if (!matchSearch) return false;
 
       // Category matching
-      if (selectedCategory === 'all') return true;
+      if (!hasSpecificCategory) return true;
 
       const pCatId = String(p.categoryId || p.category?.id || '');
       const pCatName = String(p.categoryName || p.category?.name || '').toLowerCase();
@@ -167,7 +280,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
         pCatName === selectedCategory.toLowerCase()
       );
     });
-  }, [products, searchQuery, selectedCategory, categoryList]);
+  }, [productPool, searchQuery, selectedCategory, categoryList, showAllData]);
 
   // Add product to queue
   const handleAddProduct = (product: any, qty: number = 1) => {
@@ -315,7 +428,11 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                   <Text style={[styles.cardTitle, { color: theme.colors.text }]}>1. Browse & Filter Products</Text>
                 </View>
                 <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>
-                  Showing {filteredProducts.length} of {products.length} products
+                  {chosenCategoryName
+                    ? `Total: ${filteredProducts.length} products in ${chosenCategoryName}`
+                    : showAllData
+                    ? `Total: ${filteredProducts.length} products (All Data)`
+                    : 'Choose a category or click "All Data" to show products'}
                 </Text>
               </View>
 
@@ -328,7 +445,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                   </label>
                   <select
                     value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    onChange={(e) => handleSelectCategory(e.target.value)}
                     style={{
                       padding: '10px 14px',
                       borderRadius: '8px',
@@ -341,20 +458,19 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="all">📁 All Categories ({products.length})</option>
-                    {categoryList.map((c) => {
-                      const count = products.filter(
-                        (p) =>
-                          String(p.categoryId || p.category?.id) === c.id ||
-                          String(p.categoryName || p.category?.name).toLowerCase() === c.name.toLowerCase()
-                      ).length;
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({count})
-                        </option>
-                      );
-                    })}
+                    <option value="none">— Select Category —</option>
+                    <option value="all">📁 All Categories</option>
+                    {categoryList.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                   </select>
+                  {chosenCategoryName ? (
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: theme.colors.primary, marginTop: '4px' }}>
+                      Total in {chosenCategoryName}: {filteredProducts.length}
+                    </span>
+                  ) : null}
                 </div>
 
                 {/* Search Text Input */}
@@ -377,6 +493,35 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                       </Pressable>
                     ) : null}
                   </View>
+                </div>
+
+                {/* All Data Button */}
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <Pressable
+                    onPress={handleToggleAllData}
+                    style={({ pressed }) => [
+                      styles.secondaryBtn,
+                      {
+                        borderColor: showAllData ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: showAllData ? `${theme.colors.primary}18` : theme.colors.background,
+                        opacity: pressed ? 0.7 : 1,
+                        height: 42,
+                      },
+                    ]}
+                  >
+                    <Layers size={16} color={showAllData ? theme.colors.primary : theme.colors.text} />
+                    <Text
+                      style={[
+                        styles.btnTextSecondary,
+                        {
+                          color: showAllData ? theme.colors.primary : theme.colors.text,
+                          fontWeight: showAllData ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {showAllData ? 'Showing All Data' : 'All Data'}
+                    </Text>
+                  </Pressable>
                 </div>
 
                 {/* Bulk Add Button */}
@@ -406,22 +551,22 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
               {categoryList.length > 0 && (
                 <View style={styles.chipRow}>
                   <Pressable
-                    onPress={() => setSelectedCategory('all')}
+                    onPress={handleToggleAllData}
                     style={[
                       styles.chip,
                       {
-                        backgroundColor: selectedCategory === 'all' ? theme.colors.primary : theme.colors.background,
-                        borderColor: selectedCategory === 'all' ? theme.colors.primary : theme.colors.border,
+                        backgroundColor: showAllData ? theme.colors.primary : theme.colors.background,
+                        borderColor: showAllData ? theme.colors.primary : theme.colors.border,
                       },
                     ]}
                   >
                     <Text
                       style={[
                         styles.chipText,
-                        { color: selectedCategory === 'all' ? '#FFFFFF' : theme.colors.text },
+                        { color: showAllData ? '#FFFFFF' : theme.colors.text },
                       ]}
                     >
-                      All ({products.length})
+                      📁 All Data
                     </Text>
                   </Pressable>
 
@@ -430,7 +575,7 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
                     return (
                       <Pressable
                         key={cat.id}
-                        onPress={() => setSelectedCategory(cat.id)}
+                        onPress={() => handleSelectCategory(cat.id)}
                         style={[
                           styles.chip,
                           {
@@ -455,13 +600,44 @@ export const PrintBarcodeScreen: React.FC<PrintBarcodeScreenProps> = ({ onNaviga
 
               {/* PRODUCTS LIST TABLE (Filtered by Category & Search) */}
               <View style={[styles.productListBox, { borderColor: theme.colors.border }]}>
-                {filteredProducts.length === 0 ? (
+                {isLoadingProducts ? (
                   <View style={styles.emptyProducts}>
-                    <Box size={32} color={theme.colors.textSecondary} />
-                    <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 13 }}>
-                      No products found in this category.
+                    <RefreshCw size={28} color={theme.colors.primary} />
+                    <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                      Loading products...
                     </Text>
                   </View>
+                ) : filteredProducts.length === 0 ? (
+                  !showAllData && !searchQuery.trim() && (selectedCategory === 'all' || selectedCategory === 'none') ? (
+                    <View style={styles.emptyProducts}>
+                      <Box size={36} color={theme.colors.primary} />
+                      <Text style={[styles.emptyProductsTitle, { color: theme.colors.text }]}>
+                        Products Hidden by Default
+                      </Text>
+                      <Text style={[styles.emptyProductsSub, { color: theme.colors.textSecondary }]}>
+                        Choose a category from dropdown/chips, or click &quot;All Data&quot; to fetch and display all products.
+                      </Text>
+                      <Pressable
+                        onPress={handleToggleAllData}
+                        style={({ pressed }) => [
+                          styles.loadAllBtn,
+                          { backgroundColor: theme.colors.primary, opacity: pressed ? 0.8 : 1 },
+                        ]}
+                      >
+                        <Layers size={16} color="#FFFFFF" />
+                        <Text style={styles.loadAllBtnText}>
+                          Show All Data
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.emptyProducts}>
+                      <Box size={32} color={theme.colors.textSecondary} />
+                      <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 13 }}>
+                        No products found in this category.
+                      </Text>
+                    </View>
+                  )
                 ) : (
                   <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
                     {filteredProducts.map((p) => {
@@ -1034,6 +1210,32 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyProductsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  emptyProductsSub: {
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: 'center',
+    maxWidth: 380,
+    lineHeight: 18,
+  },
+  loadAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  loadAllBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
   emptyQueue: {
     paddingVertical: 40,
