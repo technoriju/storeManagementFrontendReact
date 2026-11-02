@@ -17,6 +17,7 @@ import { WarehousesScreen } from './WarehousesScreen';
 import { GstSettingsScreen } from './GstSettingsScreen';
 import { PrinterSettingsScreen } from './PrinterSettingsScreen';
 import { SyncSettingsScreen } from './SyncSettingsScreen';
+import { ShortcutSettingsScreen } from './ShortcutSettingsScreen';
 
 interface SettingRoute {
   id: string;
@@ -70,6 +71,13 @@ export const SettingsLayout: React.FC<SettingsLayoutProps> = ({ initialRoute }) 
       group: 'General',
       permission: SETTINGS_PERMISSIONS.VIEW_BUSINESS,
       component: <BusinessSettingsScreen />,
+    },
+    {
+      id: 'shortcuts',
+      label: 'Keyboard Shortcuts',
+      group: 'General',
+      permission: SETTINGS_PERMISSIONS.VIEW_SHORTCUTS,
+      component: <ShortcutSettingsScreen />,
     },
     {
       id: 'gst',

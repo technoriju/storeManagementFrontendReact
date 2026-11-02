@@ -81,7 +81,8 @@ const isTabActive = (tabId: string, currentTab: string) => {
     currentTab === 'invoice_preview' || 
     currentTab === 'invoice' || 
     currentTab === 'business' || 
-    currentTab === 'printers'
+    currentTab === 'printers' ||
+    currentTab === 'shortcuts'
   )) return true;
   return false;
 };
@@ -173,6 +174,7 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   const formatTabTitle = (tab: string) => {
     const found = TABS.find(t => t.id === tab);
     if (found) return found.label;
+    if (tab === 'shortcuts') return 'Keyboard Shortcuts';
     if (tab === 'profit_loss' || tab === 'balance_sheet' || tab === 'balancesheet') return 'Balance Sheet';
     if (tab === 'add_product' || tab === 'create_product') return 'Add Product';
     if (tab === 'customer_payment' || tab === 'payment') return 'Customer Payments';
