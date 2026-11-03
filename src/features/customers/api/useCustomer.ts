@@ -9,6 +9,7 @@ export const useCustomers = () => {
 
   return useQuery({
     queryKey: CUSTOMER_QUERY_KEY,
+    staleTime: 0,
     queryFn: async () => {
       const localItems = await customerRepository.getAll();
 

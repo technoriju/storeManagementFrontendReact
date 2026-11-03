@@ -97,11 +97,13 @@ export class SaleRepository extends BaseRepository<Sale> {
                 p.name as fallbackProductName, 
                 p.sku as productSku,
                 COALESCE(NULLIF(si.brandName, ''), NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
-                COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName
+                COALESCE(NULLIF(si.subUnitName, ''), su.name) as fallbackSubUnitName,
+                u.name as fallbackBaseUnitName
          FROM sale_items si
          LEFT JOIN products p ON (si.productId = p.id OR (si.productId IS NULL AND si.productName = p.name))
          LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
          LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
+         LEFT JOIN units u ON (p.unitId = u.id OR p.unitId = u.backendId OR p.baseUnitId = u.id OR p.baseUnitId = u.backendId)
          WHERE si.saleId = ?
          ORDER BY si.id ASC`,
         [saleId]
@@ -145,7 +147,8 @@ export class SaleRepository extends BaseRepository<Sale> {
           taxAmount: Number(row.taxAmount || 0),
           unitCost: Number(row.unitCost || 0),
           unit: row.unit ? String(row.unit) : undefined,
-          unitType: row.unitType || 'sub',
+          unitType: row.unitType || undefined,
+          baseUnitName: (row.baseUnitName || row.fallbackBaseUnitName || '').trim() || undefined,
           conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
           brand: brand && brand !== 'N/A' ? brand : undefined,
           brandName: brand && brand !== 'N/A' ? brand : undefined,
@@ -585,15 +588,21 @@ export class SaleRepository extends BaseRepository<Sale> {
 
     const prevDue = s.previousDue !== undefined && Number(s.previousDue) > 0
       ? Number(s.previousDue)
-      : Number(existingSale?.previousDue || 0);
+      : (s.previous_due !== undefined && Number(s.previous_due) > 0
+        ? Number(s.previous_due)
+        : Number(existingSale?.previousDue || 0));
 
     const advPay = s.advancePayment !== undefined && Number(s.advancePayment) > 0
       ? Number(s.advancePayment)
-      : Number(existingSale?.advancePayment || 0);
+      : (s.advance_payment !== undefined && Number(s.advance_payment) > 0
+        ? Number(s.advance_payment)
+        : Number(existingSale?.advancePayment || 0));
 
     const showPrev = s.showPreviousBalance !== undefined
       ? Boolean(s.showPreviousBalance)
-      : Boolean(existingSale?.showPreviousBalance || (prevDue > 0 || advPay > 0));
+      : (s.show_previous_balance !== undefined
+        ? Boolean(s.show_previous_balance)
+        : Boolean(existingSale?.showPreviousBalance || (prevDue > 0 || advPay > 0)));
 
     const shippingVal = s.shipping !== undefined && Number(s.shipping) > 0
       ? Number(s.shipping)
@@ -633,7 +642,12 @@ export class SaleRepository extends BaseRepository<Sale> {
       for (const it of s.items) {
         const itemId = Number(it.id || Date.now() + Math.floor(Math.random() * 10000));
         const conversionRate = Number(it.conversionRate || it.productUnit?.conversionFactor || 1);
-        const unitType = it.unitType || 'sub';
+        const existingItem = existingSale?.items?.find(
+          (x) => x.productId === Number(it.productId) || (x.id && it.id && Number(x.id) === Number(it.id))
+        );
+        const unitType = it.unitType || existingItem?.unitType || undefined;
+        const unit = (typeof it.unit === 'string' && it.unit) ? it.unit : (it.unit?.name || existingItem?.unit || undefined);
+        const baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName) ? it.baseUnitName : (existingItem?.baseUnitName || undefined);
         const unitPrice = Number(it.unitPrice || 0);
         const quantity = Number(it.quantity || 1);
         const discount = Number(it.discount || 0);
@@ -641,9 +655,6 @@ export class SaleRepository extends BaseRepository<Sale> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
-        const existingItem = existingSale?.items?.find(
-          (x) => x.productId === Number(it.productId) || (x.id && it.id && Number(x.id) === Number(it.id))
-        );
 
         const rawBrand =
           it.brandName ||
@@ -678,8 +689,9 @@ export class SaleRepository extends BaseRepository<Sale> {
           gst: Number(it.gst || 0),
           taxAmount,
           unitCost: Number(it.unitCost || 0),
-          unit: it.unit ? String(it.unit) : undefined,
+          unit,
           unitType,
+          baseUnitName,
           conversionRate,
           brand,
           brandName: brand,
@@ -1119,27 +1131,28 @@ export class SaleRepository extends BaseRepository<Sale> {
     const custId = saleData.customerId || existingSale?.customerId;
     if (custId && Number(custId) > 0) {
       try {
-        const isShowPrev = saleData.showPreviousBalance !== undefined ? saleData.showPreviousBalance : existingSale?.showPreviousBalance;
-        if (isShowPrev) {
-          const pDue = saleData.previousDue !== undefined ? saleData.previousDue : (existingSale?.previousDue || 0);
-          const advP = saleData.advancePayment !== undefined ? saleData.advancePayment : (existingSale?.advancePayment || 0);
-          const tot = saleData.total !== undefined ? saleData.total : (existingSale?.total || 0);
-          const pd = saleData.paid !== undefined ? saleData.paid : (existingSale?.paid || 0);
-          const newBalance = (Number(pDue) - Number(advP)) + Number(tot) - Number(pd);
+        const oldPaid = Number(existingSale?.paid || 0);
+        const oldTotal = Number(existingSale?.total || 0);
+        const oldPrevDue = Number(existingSale?.previousDue || 0);
+        const oldAdv = Number(existingSale?.advancePayment || 0);
+        const oldShowPrev = Boolean(existingSale?.showPreviousBalance);
+
+        const newPaid = Number(saleData.paid !== undefined ? saleData.paid : oldPaid);
+        const newTotal = Number(saleData.total !== undefined ? saleData.total : oldTotal);
+        const newPrevDue = Number(saleData.previousDue !== undefined ? saleData.previousDue : oldPrevDue);
+        const newAdv = Number(saleData.advancePayment !== undefined ? saleData.advancePayment : oldAdv);
+        const newShowPrev = Boolean(saleData.showPreviousBalance !== undefined ? saleData.showPreviousBalance : oldShowPrev);
+
+        // Net balance impact from this sale
+        const oldImpact = (oldShowPrev ? (oldPrevDue - oldAdv) : 0) + oldTotal - oldPaid;
+        const newImpact = (newShowPrev ? (newPrevDue - newAdv) : 0) + newTotal - newPaid;
+        const diff = Number((newImpact - oldImpact).toFixed(2));
+
+        if (Math.abs(diff) > 0.001) {
           await db.execute(
-            `UPDATE customers SET outstandingBalance = ?, updatedAt = ? WHERE id = ?`,
-            [newBalance, now, Number(custId)]
+            `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+            [diff, now, Number(custId)]
           );
-        } else {
-          const oldDue = Number(existingSale?.due || 0);
-          const newDue = Number(saleData.due !== undefined ? saleData.due : oldDue);
-          const dueDiff = newDue - oldDue;
-          if (dueDiff !== 0) {
-            await db.execute(
-              `UPDATE customers SET outstandingBalance = MAX(0, COALESCE(outstandingBalance, 0) + ?), updatedAt = ? WHERE id = ?`,
-              [dueDiff, now, Number(custId)]
-            );
-          }
         }
       } catch (e) {
         console.warn('Customer balance update err:', e);
@@ -1206,12 +1219,12 @@ export class SaleRepository extends BaseRepository<Sale> {
     }
 
     // 5. Update or insert payment record if paid amount is set
+    const invNum = updatedSale.invoiceNumber || updatedSale.reference || `SL-${saleId}`;
     if (saleData.paid !== undefined) {
       try {
-        const invNum = updatedSale.invoiceNumber || updatedSale.reference;
         const newPaid = Number(saleData.paid || 0);
         const existingRes = await db.execute(
-          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' LIMIT 1`,
+          `SELECT id FROM payments WHERE reference = ? AND type = 'receive' AND method != 'adjustment' LIMIT 1`,
           [invNum]
         );
         let existingRows: any[] = [];
@@ -1252,6 +1265,54 @@ export class SaleRepository extends BaseRepository<Sale> {
       }
     }
 
+    // Record or update explicit balance adjustment payment if manual previous due was adjusted
+    const adjDelta = Number((saleData as any).balanceAdjustment || 0);
+    if (updatedSale.customerId && Number(updatedSale.customerId) > 0) {
+      try {
+        const adjRes = await db.execute(
+          `SELECT id FROM payments WHERE reference = ? AND method = 'adjustment' LIMIT 1`,
+          [invNum]
+        );
+        let adjRows: any[] = [];
+        if (adjRes.rows && Array.isArray(adjRes.rows)) adjRows = adjRes.rows;
+        else if (adjRes.rows && typeof adjRes.rows === 'object' && '_array' in adjRes.rows) adjRows = (adjRes.rows as any)._array;
+
+        if (Boolean(updatedSale.showPreviousBalance) && Math.abs(adjDelta) > 0.001) {
+          const adjAmount = Math.abs(adjDelta);
+          const adjType = adjDelta > 0 ? 'pay' : 'receive';
+          if (adjRows.length > 0) {
+            await db.execute(
+              `UPDATE payments SET amount = ?, type = ?, customerId = ?, notes = ?, updatedAt = ?, syncStatus = 'pending_update' WHERE id = ?`,
+              [adjAmount, adjType, Number(updatedSale.customerId), `Mutual balance adjustment (${adjDelta > 0 ? '+' : '-'}₹${adjAmount.toFixed(2)}) on ${invNum}`, now, adjRows[0].id]
+            );
+          } else {
+            const adjPaymentId = Date.now() + Math.floor(Math.random() * 10000) + 1;
+            await db.execute(
+              `INSERT INTO payments (id, backendId, amount, method, type, reference, notes, customerId, createdAt, updatedAt, syncStatus)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                adjPaymentId,
+                null,
+                adjAmount,
+                'adjustment',
+                adjType,
+                invNum,
+                `Mutual balance adjustment (${adjDelta > 0 ? '+' : '-'}₹${adjAmount.toFixed(2)}) on ${invNum}`,
+                Number(updatedSale.customerId),
+                now,
+                now,
+                'pending_insert'
+              ]
+            );
+          }
+        } else if (adjRows.length > 0) {
+          await db.execute(`DELETE FROM payments WHERE id = ?`, [adjRows[0].id]);
+        }
+      } catch (adjErr) {
+        console.warn('Failed to update adjustment payment for sale update:', adjErr);
+      }
+    }
+
     // 6. Outbox & API sync
     await outboxRepo.add(this.tableName, saleId, 'UPDATE', { sale: updatedSale, items: fullItems });
     this.requestSync();
@@ -1267,7 +1328,10 @@ export class SaleRepository extends BaseRepository<Sale> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unit: it.unit,
           unitType: it.unitType,
+          subUnitName: it.subUnitName,
+          brandName: it.brandName,
           conversionRate: Number(it.conversionRate || 1),
         })),
       };

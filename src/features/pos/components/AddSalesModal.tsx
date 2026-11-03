@@ -30,7 +30,8 @@ import {
   Package,
   Phone,
 } from 'lucide-react-native';
-import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCustomers, useAddCustomer, CUSTOMER_QUERY_KEY } from '../../customers/api/useCustomer';
 import { useCustomerStore } from '../../customers/store/customerStore';
 import { Customer } from '../../../types/models';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
@@ -82,7 +83,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const { isMobile, windowHeight } = useResponsive();
 
   // Queries & Mutations
-  const { data: customers = [] } = useCustomers();
+  const queryClient = useQueryClient();
+  const { data: customers = [], refetch: refetchCustomers } = useCustomers();
   const { data: suppliers = [] } = useSuppliers();
   const { products, fetchProducts } = useProductStore();
   const { data: unitList = [] } = useUnits();
@@ -132,6 +134,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const [customerRawBalance, setCustomerRawBalance] = useState<number>(0);
   const [unpaidInvoicesCount, setUnpaidInvoicesCount] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState<boolean>(false);
+  const loadedEditCustomerRef = useRef<string | null>(null);
 
   // Payment Status & Received Amount State
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Unpaid' | 'Partial'>('Unpaid');
@@ -182,6 +185,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
   useEffect(() => {
     if (visible) {
+      refetchCustomers();
       setErrorMessage(null);
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
@@ -225,7 +229,9 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
             }
 
             if (existingSale) {
-              setCustomerId(existingSale.customerId ? String(existingSale.customerId) : '');
+              const custIdStr = existingSale.customerId ? String(existingSale.customerId) : '';
+              loadedEditCustomerRef.current = custIdStr || 'walkin';
+              setCustomerId(custIdStr);
               setSupplierId(existingSale.supplierId ? String(existingSale.supplierId) : '');
               setDate(existingSale.date ? existingSale.date.split('T')[0] : new Date().toISOString().split('T')[0]);
               setReference(existingSale.reference || existingSale.invoiceNumber || `SL-${numericId}`);
@@ -234,22 +240,48 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               setOrderDiscount(String(existingSale.discount || 0));
               setShipping(String(existingSale.shipping || 0));
               setBiller(existingSale.biller || 'Admin');
-              setNotes(existingSale.notes || '');
+
+              // Detect price tier from notes or customer
+              let detectedPriceType: PriceType = 'wholesale';
+              const rawNotes = String(existingSale.notes || '');
+              if (rawNotes.includes('[Retail]')) {
+                detectedPriceType = 'retail';
+              } else if (rawNotes.includes('[Wholesale]')) {
+                detectedPriceType = 'wholesale';
+              } else if ((existingSale as any).customerType === 'retail') {
+                detectedPriceType = 'retail';
+              }
+              setPriceType(detectedPriceType);
+              setNotes(rawNotes.replace(/\s*\[(Wholesale|Retail)\]\s*/gi, '').trim());
+
               const paidNum = Number(existingSale.paid || 0);
               const totalNum = Number(existingSale.total || 0);
               setPaymentStatus((existingSale.paymentStatus as any) || (paidNum >= totalNum && totalNum > 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Unpaid'));
               setAmountReceived(paidNum > 0 ? String(paidNum) : '');
 
-              const prevDueVal = Number(existingSale.previousDue || 0);
-              const advVal = Number(existingSale.advancePayment || 0);
-              if (existingSale.showPreviousBalance && prevDueVal > 0) {
+              const prevDueVal = Number(existingSale.previousDue ?? (existingSale as any).previous_due ?? 0);
+              const advVal = Number(existingSale.advancePayment ?? (existingSale as any).advance_payment ?? 0);
+              const isShowBal = Boolean(
+                existingSale.showPreviousBalance ??
+                (existingSale as any).show_previous_balance ??
+                (prevDueVal > 0 || advVal > 0)
+              );
+
+              if (isShowBal && prevDueVal > 0) {
                 setShowPreviousBalance(true);
                 setBalanceType('due');
                 setPreviousBalanceAmount(String(prevDueVal));
-              } else if (existingSale.showPreviousBalance && advVal > 0) {
+                setCustomerRawBalance(prevDueVal);
+              } else if (isShowBal && advVal > 0) {
                 setShowPreviousBalance(true);
                 setBalanceType('advance');
                 setPreviousBalanceAmount(String(advVal));
+                setCustomerRawBalance(-advVal);
+              } else {
+                setShowPreviousBalance(false);
+                setBalanceType('due');
+                setPreviousBalanceAmount('0');
+                setCustomerRawBalance(0);
               }
 
               if (existingItems && existingItems.length > 0) {
@@ -261,7 +293,71 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
                   const brandRaw = item.brandName || item.brand || (prod ? getBrandName(prod) : undefined);
                   const brandName = brandRaw && brandRaw !== 'N/A' ? brandRaw : undefined;
-                  const resolvedSubUnitName = item.subUnitName || item.subUnit || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+
+                  const baseUnit = unitList.find((u: any) => 
+                    String(u.id) === String(prod?.unitId || prod?.baseUnitId) || 
+                    String(u.backendId) === String(prod?.unitId || prod?.baseUnitId)
+                  );
+                  const subUnit = subUnitList.find((s: any) => 
+                    (prod?.subUnitId && (String(s.id) === String(prod?.subUnitId) || String(s.backendId) === String(prod?.subUnitId))) ||
+                    (prod?.subunitId && (String(s.id) === String(prod?.subunitId) || String(s.backendId) === String(prod?.subunitId)))
+                  );
+
+                  const resolvedBaseUnitName = (item.baseUnitName && item.baseUnitName !== 'Box')
+                    ? item.baseUnitName
+                    : (baseUnit?.name || baseUnit?.shortName || (prod as any)?.baseUnitName || (prod as any)?.unit || (prod as any)?.unitName || (item.unit && item.unit !== 'Box' && item.unit !== 'Pcs' ? item.unit : 'Unit'));
+
+                  const resolvedSubUnitName = item.subUnitName || subUnit?.name || (subUnit as any)?.shortName || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
+                  const fallbackSubName = resolvedSubUnitName || 'Pcs';
+
+                  // Accurately determine whether item was originally in base or sub unit
+                  const rawItemUnit = (item.unit || '').trim().toLowerCase();
+                  const isSubByName = Boolean(rawItemUnit && (
+                    (resolvedSubUnitName && rawItemUnit === resolvedSubUnitName.toLowerCase()) ||
+                    (subUnit?.name && rawItemUnit === subUnit.name.toLowerCase()) ||
+                    ((subUnit as any)?.shortName && rawItemUnit === (subUnit as any).shortName.toLowerCase())
+                  ));
+                  const isBaseByName = Boolean(rawItemUnit && (
+                    (resolvedBaseUnitName && rawItemUnit === resolvedBaseUnitName.toLowerCase()) ||
+                    (baseUnit?.name && rawItemUnit === baseUnit.name.toLowerCase()) ||
+                    (baseUnit?.shortName && rawItemUnit === baseUnit.shortName.toLowerCase())
+                  ));
+
+                  let effectiveUnitType: 'base' | 'sub';
+                  if (isSubByName) {
+                    effectiveUnitType = 'sub';
+                  } else if (isBaseByName) {
+                    effectiveUnitType = 'base';
+                  } else if (item.unitType === 'base' || item.unitType === 'sub') {
+                    effectiveUnitType = item.unitType;
+                  } else {
+                    const baseRef = detectedPriceType === 'retail' ? retailP : wholesaleP;
+                    const subRef = cRate > 0 ? baseRef / cRate : baseRef;
+                    if (cRate > 1 && Math.abs(Number(item.unitPrice) - subRef) < Math.abs(Number(item.unitPrice) - baseRef)) {
+                      effectiveUnitType = 'sub';
+                    } else {
+                      effectiveUnitType = 'base';
+                    }
+                  }
+
+                  const effectiveUnit = effectiveUnitType === 'sub' ? fallbackSubName : resolvedBaseUnitName;
+                  const effectivePrice = Number(item.unitPrice || 0);
+
+                  let basePrice: number;
+                  let subPrice: number;
+                  if (effectiveUnitType === 'base') {
+                    basePrice = effectivePrice;
+                    subPrice = cRate > 0 ? Number((effectivePrice / cRate).toFixed(2)) : effectivePrice;
+                  } else {
+                    subPrice = effectivePrice;
+                    basePrice = cRate > 0 ? Number((effectivePrice * cRate).toFixed(2)) : effectivePrice;
+                    if (prod && Math.abs(retailP - basePrice) < 0.05) basePrice = retailP;
+                    if (prod && Math.abs(wholesaleP - basePrice) < 0.05) basePrice = wholesaleP;
+                  }
+
+                  const itemCost = Number(item.unitCost || prod?.cost || prod?.purchasePrice || 0);
+                  const baseCost = effectiveUnitType === 'base' ? itemCost : (cRate > 0 ? Number((itemCost * cRate).toFixed(4)) : itemCost);
+                  const subCost = effectiveUnitType === 'sub' ? itemCost : (cRate > 0 ? Number((itemCost / cRate).toFixed(4)) : itemCost);
 
                   return {
                     productId: Number(item.productId),
@@ -270,20 +366,22 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     brand: brandName,
                     brandName: brandName,
                     subUnit: resolvedSubUnitName,
-                    subUnitName: resolvedSubUnitName || 'Pcs',
+                    subUnitName: fallbackSubName,
                     quantity: Number(item.quantity || 1),
-                    unitPrice: Number(item.unitPrice || 0),
+                    unitPrice: effectivePrice,
                     discount: Number(item.discount || 0),
                     gst: Number(item.gst || item.taxRate || item.tax || 0),
-                    unit: item.unit || (item.unitType === 'sub' ? (resolvedSubUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
-                    unitType: item.unitType ? (item.unitType as any) : 'base',
-                    baseUnitName: item.baseUnitName || 'Box',
+                    unit: effectiveUnit,
+                    unitType: effectiveUnitType,
+                    baseUnitName: resolvedBaseUnitName,
                     conversionRate: cRate,
-                    basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
-                    subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
+                    basePrice,
+                    subPrice,
+                    baseCost,
+                    subCost,
                     wholesalePrice: wholesaleP,
                     retailPrice: retailP,
-                    unitCost: Number(item.unitCost || 0),
+                    unitCost: itemCost,
                   };
                 });
                 setItems(mappedItems);
@@ -557,6 +655,13 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   }, [allCustomers, customerId]);
 
   useEffect(() => {
+    // If editSaleId is active and we are loading the initial customer of the existing sale,
+    // do not wipe out or overwrite the existing sale's stored previous balance
+    if (editSaleId && loadedEditCustomerRef.current === String(customerId)) {
+      setIsLoadingBalance(false);
+      return;
+    }
+
     // Immediately clear previous balance states so new customer doesn't show old customer's dues
     setShowPreviousBalance(false);
     setPreviousBalanceAmount('0');
@@ -580,6 +685,17 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       .then((res) => {
         if (!isCurrent) return;
         setUnpaidInvoicesCount(res.unpaidCount || 0);
+
+        const computedBal = res.totalDue > 0 ? res.totalDue : (res.advance > 0 ? -res.advance : 0);
+        queryClient.setQueryData<Customer[]>(CUSTOMER_QUERY_KEY, (old) => {
+          if (!old) return old;
+          return old.map((c) =>
+            String(c.id) === String(selectedCustomer.id)
+              ? { ...c, outstandingBalance: computedBal }
+              : c
+          );
+        });
+
         if (res.totalDue > 0) {
           setCustomerRawBalance(res.totalDue);
           setBalanceType('due');
@@ -734,7 +850,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const handleToggleUnit = (index: number) => {
     const item = items[index];
     const nextType: 'base' | 'sub' = item.unitType === 'base' ? 'sub' : 'base';
-    const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Box') : (item.subUnitName || 'Pcs');
+    const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Unit') : (item.subUnitName || 'Pcs');
     const nextPrice = nextType === 'base' ? (item.basePrice || Number(item.unitPrice)) : (item.subPrice || Number(((parseFloat(String(item.unitPrice)) || 0) / (item.conversionRate || 1)).toFixed(2)));
     const nextCost = nextType === 'base' ? (item.baseCost || 0) : (item.subCost || Number(((item.baseCost || 0) / (item.conversionRate || 1)).toFixed(4)));
 
@@ -1432,7 +1548,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                               </Text>
                               {item.conversionRate && item.conversionRate > 1 ? (
                                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 9 }}>
-                                  1 {item.baseUnitName || 'Box'} = {item.conversionRate} {item.subUnitName || 'Pcs'}
+                                  1 {item.baseUnitName || 'Unit'} = {item.conversionRate} {item.subUnitName || 'Pcs'}
                                 </Text>
                               ) : null}
                             </TouchableOpacity>

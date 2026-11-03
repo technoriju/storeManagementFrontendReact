@@ -4,6 +4,7 @@ import { Sale, SaleItem } from '../../../types/models';
 import { useProductStore } from '../../products/store/productStore';
 import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
+import { CUSTOMER_QUERY_KEY } from '../../customers/api/useCustomer';
 
 export const SALE_QUERY_KEY = ['sales'] as const;
 
@@ -15,19 +16,32 @@ export interface PaginatedSalesResult {
   totalPages: number;
 }
 
-const normalizePaginatedSale = (s: any): Sale => ({
-  ...s,
-  customerName: s.customer?.name || s.customerName || 'Walk-in Customer',
-  customerPhone: (s as any).customer?.phone || (s as any).customerPhone || '',
-  customerAddress: (s as any).customer?.address || (s as any).customerAddress || '',
-  customerGstin: (s as any).customer?.taxNumber || (s as any).customer?.taxId || (s as any).customer?.gstin || (s as any).customerGstin || '',
-  subtotal: Number(s.subtotal ?? s.subTotal ?? 0),
-  total: Number(s.total ?? s.grandTotal ?? 0),
-  discount: Number(s.discount ?? s.discountTotal ?? 0),
-  gst: Number(s.gst ?? s.taxTotal ?? 0),
-  paid: Number(s.paid ?? s.paymentAmount ?? 0),
-  due: Number(s.due ?? 0),
-});
+const normalizePaginatedSale = (s: any): Sale => {
+  const prevDue = Number(s.previousDue ?? s.previous_due ?? s.previousBalance ?? 0);
+  const advPay = Number(s.advancePayment ?? s.advance_payment ?? 0);
+  const showPrev = s.showPreviousBalance !== undefined
+    ? Boolean(s.showPreviousBalance)
+    : (s.show_previous_balance !== undefined
+      ? Boolean(s.show_previous_balance)
+      : (prevDue > 0 || advPay > 0));
+
+  return {
+    ...s,
+    customerName: s.customer?.name || s.customerName || 'Walk-in Customer',
+    customerPhone: (s as any).customer?.phone || (s as any).customerPhone || '',
+    customerAddress: (s as any).customer?.address || (s as any).customerAddress || '',
+    customerGstin: (s as any).customer?.taxNumber || (s as any).customer?.taxId || (s as any).customer?.gstin || (s as any).customerGstin || '',
+    subtotal: Number(s.subtotal ?? s.subTotal ?? 0),
+    total: Number(s.total ?? s.grandTotal ?? 0),
+    discount: Number(s.discount ?? s.discountTotal ?? 0),
+    gst: Number(s.gst ?? s.taxTotal ?? 0),
+    paid: Number(s.paid ?? s.paymentAmount ?? 0),
+    due: Number(s.due ?? 0),
+    previousDue: prevDue,
+    advancePayment: advPay,
+    showPreviousBalance: showPrev,
+  };
+};
 
 export const fetchPaginatedSales = async (params: {
   page?: number;
@@ -159,6 +173,7 @@ export const useCreateSale = () => {
         return [newSale, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
     },
   });
 };
@@ -184,6 +199,7 @@ export const useUpdateSale = () => {
         return old.map((item) => (item.id === updatedSale.id ? { ...item, ...updatedSale } : item));
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}
@@ -204,6 +220,7 @@ export const useDeleteSale = () => {
         return old ? old.filter((item) => item.id !== deletedId) : [];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}

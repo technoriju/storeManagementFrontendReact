@@ -228,6 +228,9 @@ export class OfflineCrudRepository<T extends BaseEntity> extends BaseRepository<
         const item = this.config.normalize(raw);
         const existing = await super.getById(item.id);
         if (existing) {
+          if ((item as any).outstandingBalance === undefined && (existing as any).outstandingBalance !== undefined) {
+            (item as any).outstandingBalance = (existing as any).outstandingBalance;
+          }
           // Pull must not overwrite local insert/update waiting in outbox.
           if (existing.syncStatus === 'synced') await super.update(item, false);
           const duplicateResult = await db.execute(

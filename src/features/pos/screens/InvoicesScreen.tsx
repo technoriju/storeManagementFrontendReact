@@ -105,9 +105,13 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
             biller: s.biller || 'Admin',
             notes: s.notes,
             items: s.items || [],
-            previousDue: s.previousDue,
-            advancePayment: s.advancePayment,
-            showPreviousBalance: s.showPreviousBalance,
+            previousDue: Number(s.previousDue ?? (s as any).previous_due ?? (s as any).previousBalance ?? 0),
+            advancePayment: Number(s.advancePayment ?? (s as any).advance_payment ?? 0),
+            showPreviousBalance: s.showPreviousBalance !== undefined
+              ? Boolean(s.showPreviousBalance)
+              : ((s as any).show_previous_balance !== undefined
+                ? Boolean((s as any).show_previous_balance)
+                : (Number(s.previousDue || 0) > 0 || Number(s.advancePayment || 0) > 0)),
             syncStatus: s.syncStatus || 'synced',
           });
         }
