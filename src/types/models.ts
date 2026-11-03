@@ -171,6 +171,7 @@ export interface PurchaseItem {
   unitCost?: number;
   unit?: string;
   unitType?: string;
+  baseUnitName?: string;
   conversionRate?: number;
   total: number;
   createdAt?: string;
@@ -214,6 +215,7 @@ export interface SaleItem {
   unitCost?: number;
   unit?: string;
   unitType?: string;
+  baseUnitName?: string;
   conversionRate?: number;
   brand?: string;
   brandName?: string;
