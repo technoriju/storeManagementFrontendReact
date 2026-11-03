@@ -30,7 +30,8 @@ import {
   Package,
   Phone,
 } from 'lucide-react-native';
-import { useCustomers, useAddCustomer } from '../../customers/api/useCustomer';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCustomers, useAddCustomer, CUSTOMER_QUERY_KEY } from '../../customers/api/useCustomer';
 import { useCustomerStore } from '../../customers/store/customerStore';
 import { Customer } from '../../../types/models';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
@@ -82,7 +83,8 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   const { isMobile, windowHeight } = useResponsive();
 
   // Queries & Mutations
-  const { data: customers = [] } = useCustomers();
+  const queryClient = useQueryClient();
+  const { data: customers = [], refetch: refetchCustomers } = useCustomers();
   const { data: suppliers = [] } = useSuppliers();
   const { products, fetchProducts } = useProductStore();
   const { data: unitList = [] } = useUnits();
@@ -183,6 +185,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
 
   useEffect(() => {
     if (visible) {
+      refetchCustomers();
       setErrorMessage(null);
       setPriceType('wholesale');
       setShowAddCustomerModal(false);
@@ -682,6 +685,17 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
       .then((res) => {
         if (!isCurrent) return;
         setUnpaidInvoicesCount(res.unpaidCount || 0);
+
+        const computedBal = res.totalDue > 0 ? res.totalDue : (res.advance > 0 ? -res.advance : 0);
+        queryClient.setQueryData<Customer[]>(CUSTOMER_QUERY_KEY, (old) => {
+          if (!old) return old;
+          return old.map((c) =>
+            String(c.id) === String(selectedCustomer.id)
+              ? { ...c, outstandingBalance: computedBal }
+              : c
+          );
+        });
+
         if (res.totalDue > 0) {
           setCustomerRawBalance(res.totalDue);
           setBalanceType('due');

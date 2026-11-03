@@ -4,6 +4,7 @@ import { Sale, SaleItem } from '../../../types/models';
 import { useProductStore } from '../../products/store/productStore';
 import { apiClient } from '../../../core/api/api-client';
 import { API_ENDPOINTS } from '../../../core/api/api-urls';
+import { CUSTOMER_QUERY_KEY } from '../../customers/api/useCustomer';
 
 export const SALE_QUERY_KEY = ['sales'] as const;
 
@@ -172,6 +173,7 @@ export const useCreateSale = () => {
         return [newSale, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
     },
   });
 };
@@ -197,6 +199,7 @@ export const useUpdateSale = () => {
         return old.map((item) => (item.id === updatedSale.id ? { ...item, ...updatedSale } : item));
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}
@@ -217,6 +220,7 @@ export const useDeleteSale = () => {
         return old ? old.filter((item) => item.id !== deletedId) : [];
       });
       queryClient.invalidateQueries({ queryKey: SALE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: CUSTOMER_QUERY_KEY });
       try {
         useProductStore.getState().fetchProducts().catch(() => {});
       } catch (_) {}

@@ -7,8 +7,24 @@ const config: CrudConfig<Customer> = {
   columns: 'id, backendId, name, email, phone, address, taxId, outstandingBalance, status, createdAt, updatedAt, syncStatus', placeholders: '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?',
   updateSet: 'backendId = ?, name = ?, email = ?, phone = ?, address = ?, taxId = ?, outstandingBalance = ?, status = ?, createdAt = ?, updatedAt = ?, syncStatus = ?',
   toRow: e => [e.id, (e as any).backendId || null, e.name, e.email || null, e.phone || null, e.address || null, e.taxId || null, e.outstandingBalance || 0, e.status || 'ACTIVE', e.createdAt || now(), e.updatedAt || now(), e.syncStatus || 'synced'],
-  fromRow: r => ({ id: r.id, backendId: r.backendId || undefined, name: r.name || 'Unnamed Customer', email: r.email || undefined, phone: r.phone || undefined, address: r.address || undefined, taxId: r.taxId || undefined, outstandingBalance: r.outstandingBalance || 0, status: r.status || 'ACTIVE', createdAt: r.createdAt, updatedAt: r.updatedAt, syncStatus: r.syncStatus }),
-  normalize: r => ({ id: idOf(r), backendId: idOf(r), name: r.name || r.customerName || 'Unnamed Customer', email: r.email, phone: r.phone, address: r.address, taxId: r.taxId || r.tax_id, outstandingBalance: Number(r.outstandingBalance || 0), status: r.status || 'ACTIVE', createdAt: r.createdAt || now(), updatedAt: r.updatedAt || now(), syncStatus: 'synced' }),
+  fromRow: r => ({ id: r.id, backendId: r.backendId || undefined, name: r.name || 'Unnamed Customer', email: r.email || undefined, phone: r.phone || undefined, address: r.address || undefined, taxId: r.taxId || undefined, outstandingBalance: r.outstandingBalance !== undefined && r.outstandingBalance !== null ? Number(r.outstandingBalance) : 0, status: r.status || 'ACTIVE', createdAt: r.createdAt, updatedAt: r.updatedAt, syncStatus: r.syncStatus }),
+  normalize: r => {
+    const rawBal = r.outstandingBalance !== undefined ? r.outstandingBalance : (r.outstanding_balance !== undefined ? r.outstanding_balance : r.balance);
+    return {
+      id: idOf(r),
+      backendId: idOf(r),
+      name: r.name || r.customerName || 'Unnamed Customer',
+      email: r.email,
+      phone: r.phone,
+      address: r.address,
+      taxId: r.taxId || r.tax_id,
+      outstandingBalance: rawBal !== undefined && rawBal !== null ? Number(rawBal) : (undefined as any),
+      status: r.status || 'ACTIVE',
+      createdAt: r.createdAt || now(),
+      updatedAt: r.updatedAt || now(),
+      syncStatus: 'synced',
+    };
+  },
   payload: e => ({ name: e.name, email: e.email, phone: e.phone, address: e.address, taxId: e.taxId, status: e.status || 'ACTIVE' }),
 };
 
