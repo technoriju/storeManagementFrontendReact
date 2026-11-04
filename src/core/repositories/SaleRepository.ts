@@ -4,6 +4,7 @@ import { db } from '../database/db';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
+import { getLocalDateString } from '../../shared/utils/dateUtils';
 
 export class SaleRepository extends BaseRepository<Sale> {
   protected tableName = 'sales';
@@ -443,12 +444,13 @@ export class SaleRepository extends BaseRepository<Sale> {
           } catch (_) {}
         }
       }
+      const effDate = getLocalDateString(entity.date);
       const apiPayload = {
         branchId: 1,
         warehouseId: 1,
         customerId,
         invoiceNumber: entity.invoiceNumber || entity.reference || `INV-${entity.id}`,
-        saleDate: entity.date ? new Date(entity.date).toISOString() : new Date().toISOString(),
+        saleDate: `${effDate}T12:00:00.000Z`,
         status: entity.status || 'Completed',
         subTotal: Number(entity.subtotal || 0),
         taxTotal: Number((entity.orderTax || 0) + (entity.gst || 0)),
@@ -581,10 +583,10 @@ export class SaleRepository extends BaseRepository<Sale> {
     }
 
     const dateStr = s.saleDate
-      ? String(s.saleDate).slice(0, 10)
+      ? getLocalDateString(s.saleDate)
       : s.date
-      ? String(s.date).slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      ? getLocalDateString(s.date)
+      : (s.createdAt ? getLocalDateString(s.createdAt) : getLocalDateString());
 
     const prevDue = s.previousDue !== undefined && Number(s.previousDue) > 0
       ? Number(s.previousDue)

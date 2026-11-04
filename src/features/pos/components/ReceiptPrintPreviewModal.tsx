@@ -27,6 +27,7 @@ import {
 import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 import { QR_CODE_DATA_URI } from '../../../assets/qrCodeAsset';
 import { ShareSaleModal } from './ShareSaleModal';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 
 // Helper: Convert numbers to Indian Rupees in words
 export function amountToWords(amount: number): string {
@@ -460,7 +461,7 @@ export function generateReceiptHtml({
   const isThermal = paperFormat === '80mm';
   const isWholesale = customerType === 'wholesale';
   const invNumber = data.invoiceNumber || 'INV-0000';
-  const invDate = data.date || new Date().toISOString().split('T')[0];
+  const invDate = getLocalDateString(data.date || (data as any).createdAt);
   const custName = data.customerName || (data as any).customer?.name || 'Walk-in Customer';
   const custPhone = data.customerPhone || (data as any).customer?.phone || '';
   const custAddress = data.customerAddress || (data as any).customer?.address || '';
@@ -1796,7 +1797,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
   // Normalized values
   const invNumber = data.invoiceNumber || 'INV-0000';
-  const invDate = data.date || new Date().toISOString().split('T')[0];
+  const invDate = getLocalDateString(data.date || (data as any).createdAt);
   const custName = data.customerName || (data as any).customer?.name || 'Walk-in Customer';
   const custPhone = data.customerPhone || (data as any).customer?.phone || '';
   const custAddress = data.customerAddress || (data as any).customer?.address || '';

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -56,7 +57,7 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
   const createPOMutation = useCreatePurchaseOrder();
 
   const [supplierId, setSupplierId] = useState<string>('');
-  const [orderDate, setOrderDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [orderDate, setOrderDate] = useState<string>(() => getLocalDateString());
   const [expectedDate, setExpectedDate] = useState<string>('');
   const [orderNumber, setOrderNumber] = useState<string>(() => `PO-${Math.floor(100000 + Math.random() * 900000)}`);
   const [status, setStatus] = useState<'Ordered' | 'Pending' | 'Received'>('Ordered');
@@ -105,7 +106,7 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
 
   useEffect(() => {
     if (visible) {
-      setOrderDate(new Date().toISOString().split('T')[0]);
+      setOrderDate(getLocalDateString());
       setOrderNumber(`PO-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
@@ -254,7 +255,7 @@ export const AddPurchaseOrderModal: React.FC<Props> = ({ visible, onClose }) => 
           orderNumber: orderNumber || `PO-${Date.now().toString().slice(-6)}`,
           supplierId: Number(supplierId) || 1,
           supplierName: selectedSupplier?.name || 'Supplier',
-          orderDate: orderDate || new Date().toISOString().split('T')[0],
+          orderDate: orderDate || getLocalDateString(),
           expectedDate: expectedDate || undefined,
           subtotal: itemsSubtotal,
           discount: parseFloat(discountTotal) || 0,

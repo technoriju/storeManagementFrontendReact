@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -51,7 +52,7 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
   const createQuotationMutation = useCreateQuotation();
 
   const [customerId, setCustomerId] = useState<string>('');
-  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalDateString());
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [reference, setReference] = useState<string>(() => `QT-${Math.floor(100000 + Math.random() * 900000)}`);
   const [status, setStatus] = useState<'Sent' | 'Ordered' | 'Pending'>('Sent');
@@ -98,7 +99,7 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
 
   useEffect(() => {
     if (visible) {
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getLocalDateString());
       setReference(`QT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
@@ -231,7 +232,7 @@ export const AddQuotationModal: React.FC<Props> = ({ visible, onClose }) => {
           quotationNumber: reference || `QT-${Date.now().toString().slice(-6)}`,
           customerId: Number(customerId) || 1,
           customerName: selectedCustomer?.name || 'Walk-in Customer',
-          date: date || new Date().toISOString().split('T')[0],
+          date: date || getLocalDateString(),
           expiryDate: expiryDate || undefined,
           subtotal: itemsSubtotal,
           discount: parseFloat(discountTotal) || 0,

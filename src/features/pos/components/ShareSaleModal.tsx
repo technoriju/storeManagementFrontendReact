@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   Text,
@@ -50,7 +51,7 @@ import {
 
 function toReceiptPrintData(sale: any): ReceiptPrintData {
   const invNumber = sale.invoiceNumber || sale.reference || `INV-${sale.id || ''}`;
-  const invDate = sale.date || (sale.createdAt ? String(sale.createdAt).split('T')[0] : new Date().toISOString().split('T')[0]);
+  const invDate = getLocalDateString(sale.date || (sale as any).createdAt);
   const subtotal = Number(sale.subtotal || sale.grandTotal || sale.total || 0);
   const total = Number(sale.grandTotal || sale.total || 0);
   const discount = Number(sale.discount || 0);

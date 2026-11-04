@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -79,7 +80,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
 
   // Form State
   const [supplierId, setSupplierId] = useState<string>('');
-  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalDateString());
   const [reference, setReference] = useState<string>(() => `PO-${Math.floor(100000 + Math.random() * 900000)}`);
   const [status, setStatus] = useState<'Received' | 'Pending' | 'Ordered'>('Received');
   const [orderTax, setOrderTax] = useState<string>('0');
@@ -256,7 +257,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
           }
         })();
       } else {
-        setDate(new Date().toISOString().split('T')[0]);
+        setDate(getLocalDateString());
         setReference(`PO-${Math.floor(100000 + Math.random() * 900000)}`);
         setItems([]);
         setSupplierId('');
@@ -759,7 +760,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         reference: reference || `PO-${Date.now().toString().slice(-6)}`,
         supplierId: effectiveSupplierId,
         supplierName: suppName || 'Unknown Supplier',
-        date: date || new Date().toISOString().split('T')[0],
+        date: date || getLocalDateString(),
         subtotal: itemsSubtotal,
         discount: totalDiscount,
         orderTax: orderTaxNum,

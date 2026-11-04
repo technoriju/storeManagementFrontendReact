@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -52,7 +53,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
   const [customerId, setCustomerId] = useState<string>('');
   const [saleId, setSaleId] = useState<string>('');
-  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalDateString());
   const [returnNumber, setReturnNumber] = useState<string>(() => `SRT-${Math.floor(100000 + Math.random() * 900000)}`);
   const [reason, setReason] = useState<string>('');
   const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
@@ -96,7 +97,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
 
   useEffect(() => {
     if (visible) {
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getLocalDateString());
       setReturnNumber(`SRT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
@@ -192,7 +193,7 @@ export const AddSalesReturnModal: React.FC<Props> = ({ visible, onClose }) => {
           reference: returnNumber,
           customerId: customerId ? Number(customerId) : undefined,
           customerName: selectedCustomer?.name || 'Walk-in Customer',
-          date: date || new Date().toISOString().split('T')[0],
+          date: date || getLocalDateString(),
           subtotal: totalReturnAmount,
           taxTotal: 0,
           discountTotal: 0,

@@ -303,7 +303,8 @@ export class DashboardService {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthlyMap = new Map<string, { label: string; sales: number; purchase: number }>();
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
       const key = format(d, 'yyyy-MM');
       monthlyMap.set(key, { label: monthNames[d.getMonth()], sales: 0, purchase: 0 });
     }
