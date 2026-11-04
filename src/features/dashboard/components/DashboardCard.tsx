@@ -12,6 +12,7 @@ export interface DashboardCardProps {
   icon: React.ReactNode;
   subtitle?: string;
   trend?: string;
+  trendLabel?: string;
   trendUp?: boolean;
   color?: string;
   onViewAll?: () => void;
@@ -25,6 +26,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
   icon,
   subtitle,
   trend,
+  trendLabel,
   trendUp,
   color,
   onViewAll,
@@ -91,9 +93,16 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
           <View style={[styles.compactIconWrapper, { backgroundColor: iconBg }]}>
             {icon}
           </View>
-          <Text style={[styles.compactTitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            {title}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.compactTitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={{ fontSize: 9.5, color: color || theme.colors.textSecondary, fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -136,7 +145,7 @@ export const DashboardCard: React.FC<DashboardCardProps> = ({
       <View style={styles.secondaryFooter}>
         {trend && (
           <Text style={[styles.secondaryTrend, { color: trendUp ? theme.colors.success : theme.colors.error }]}>
-            {trendUp ? '+' : ''}{trend} <Text style={{ color: theme.colors.textSecondary }}>vs Last Month</Text>
+            {trendUp ? '+' : ''}{trend} <Text style={{ color: theme.colors.textSecondary }}>{trendLabel !== undefined ? trendLabel : 'vs Last Month'}</Text>
           </Text>
         )}
         {onViewAll && (
