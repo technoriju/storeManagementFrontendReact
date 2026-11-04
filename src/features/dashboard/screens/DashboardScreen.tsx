@@ -13,9 +13,11 @@ import { useTheme } from '../../../shared/theme/theme';
 import { useAuthStore } from '../../../core/auth/auth.store';
 import { DashboardService, DashboardMetrics } from '../services/dashboard.service';
 import { DashboardCard } from '../components/DashboardCard';
+import { DashboardDatePickerModal } from '../components/DashboardDatePickerModal';
 import { DashboardBarChart, DashboardDoughnutChart } from '../components/DashboardChart';
 import {
   Calendar,
+  ChevronDown,
   FileText,
   RefreshCcw,
   Gift,
@@ -41,7 +43,7 @@ import {
   CreditCard,
   TrendingUp,
 } from 'lucide-react-native';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 
 interface QuickActionConfig {
   id: string;
@@ -162,13 +164,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   const isMobile = width < 768;
 
-  const loadMetrics = useCallback(async (isRefresh = false) => {
+  const loadMetrics = useCallback(async (isRefresh = false, targetDate: Date = selectedDate) => {
     try {
       if (isRefresh) setRefreshing(true);
-      const data = await DashboardService.getMetrics(isRefresh);
+      const dateStr = format(targetDate, 'yyyy-MM-dd');
+      const data = await DashboardService.getMetrics(isRefresh, dateStr);
       setMetrics(data);
     } catch (error) {
       console.error('Dashboard: failed to load metrics', error);
@@ -176,7 +181,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedDate]);
+
+  const handleSelectDate = (newDate: Date) => {
+    setSelectedDate(newDate);
+    loadMetrics(false, newDate);
+  };
 
   useEffect(() => {
     loadMetrics();
@@ -198,7 +208,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
     );
   }
 
-  const todayStr = format(new Date(), 'dd/MM/yyyy');
+  const isToday = isSameDay(selectedDate, new Date());
+  const dateFormatted = format(selectedDate, 'dd/MM/yyyy');
+  const todayStr = dateFormatted;
   const greetingName = currentUser?.name || 'Admin';
   const m = metrics || {
     todaySales: 0,
@@ -206,6 +218,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
     currentStockValue: 0,
     outstanding: 0,
     profit: 0,
+    todayCogs: 0,
+    profitMargin: 0,
     expenses: 0,
     todayOrdersCount: 0,
     totalSales: 0,
@@ -257,14 +271,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               <Text style={{ color: '#F89B29', fontWeight: '700' }}>
                 {m.todayOrdersCount} {m.todayOrdersCount === 1 ? 'Order' : 'Orders'}
               </Text>{' '}
-              recorded today
+              {isToday ? 'recorded today' : `on ${dateFormatted}`}
             </Text>
           </View>
 
-          <View style={[styles.dateChip, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-            <Calendar size={13} color={theme.colors.textSecondary} style={{ marginRight: 5 }} />
-            <Text style={[styles.dateChipText, { color: theme.colors.textSecondary }]}>{todayStr}</Text>
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.dateChip,
+              {
+                backgroundColor: !isToday ? `${theme.colors.primary}18` : theme.colors.surface,
+                borderColor: !isToday ? theme.colors.primary : theme.colors.border,
+              },
+            ]}
+            onPress={() => setIsDatePickerOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Calendar size={13} color={!isToday ? theme.colors.primary : theme.colors.textSecondary} style={{ marginRight: 5 }} />
+            <Text style={[styles.dateChipText, { color: !isToday ? theme.colors.primary : theme.colors.textSecondary, fontWeight: !isToday ? '700' : '600' }]}>
+              {dateFormatted}
+            </Text>
+            <ChevronDown size={11} color={!isToday ? theme.colors.primary : theme.colors.textSecondary} style={{ marginLeft: 3 }} />
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions Launcher */}
@@ -375,6 +402,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
               variant="compact"
               title="Today Profit"
               value={formatCurrency(m.profit)}
+              subtitle={m.todaySales > 0 ? (m.profitMargin !== undefined ? `${m.profitMargin}% margin` : 'Gross') : undefined}
               icon={<TrendingUp size={14} color="#00C49F" />}
               color="#00C49F"
               style={styles.kpiGridCard}
@@ -520,6 +548,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             </View>
           )}
         </View>
+        <DashboardDatePickerModal
+          visible={isDatePickerOpen}
+          selectedDate={selectedDate}
+          onSelectDate={handleSelectDate}
+          onClose={() => setIsDatePickerOpen(false)}
+        />
       </ScrollView>
     );
   }
@@ -549,18 +583,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
             <Text style={{ color: '#F89B29', fontWeight: '700' }}>
               {m.todayOrdersCount} {m.todayOrdersCount === 1 ? 'Order' : 'Orders'}
             </Text>{' '}
-            recorded today
+            {isToday ? 'recorded today' : `on ${dateFormatted}`}
           </Text>
         </View>
-        <View
+        <TouchableOpacity
           style={[
             styles.datePicker,
-            { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+            {
+              borderColor: !isToday ? theme.colors.primary : theme.colors.border,
+              backgroundColor: !isToday ? `${theme.colors.primary}14` : theme.colors.surface,
+            },
           ]}
+          onPress={() => setIsDatePickerOpen(true)}
+          activeOpacity={0.7}
         >
-          <Calendar size={16} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
-          <Text style={[styles.dateText, { color: theme.colors.textSecondary }]}>{todayStr}</Text>
-        </View>
+          <Calendar size={15} color={!isToday ? theme.colors.primary : theme.colors.textSecondary} style={{ marginRight: 8 }} />
+          <Text style={[styles.dateText, { color: !isToday ? theme.colors.primary : theme.colors.text, fontWeight: !isToday ? '700' : '600' }]}>
+            {dateFormatted}
+          </Text>
+          <ChevronDown size={13} color={!isToday ? theme.colors.primary : theme.colors.textSecondary} style={{ marginLeft: 6 }} />
+        </TouchableOpacity>
       </View>
 
       {/* Row 1: Primary Metrics */}
@@ -614,7 +656,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           title="Profit (Today)"
           value={formatCurrency(m.profit)}
           icon={<Layers size={16} color="#00C49F" />}
-          trend="Gross"
+          trend={m.profitMargin !== undefined && m.todaySales > 0 ? `${m.profitMargin}%` : (m.profit >= 0 ? '+Gross' : 'Gross')}
+          trendLabel={m.profitMargin !== undefined && m.todaySales > 0 ? 'margin (vs purchase)' : 'on sales'}
           trendUp={m.profit >= 0}
           color="#00C49F"
           onViewAll={() => onNavigateTab?.('profit_loss')}
@@ -794,6 +837,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigateTab 
           />
         </View>
       </View>
+      <DashboardDatePickerModal
+        visible={isDatePickerOpen}
+        selectedDate={selectedDate}
+        onSelectDate={handleSelectDate}
+        onClose={() => setIsDatePickerOpen(false)}
+      />
     </ScrollView>
   );
 };
@@ -935,6 +984,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 5,
+    cursor: 'pointer' as any,
   },
   dateChipText: {
     fontSize: 11,

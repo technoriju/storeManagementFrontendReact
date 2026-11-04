@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -56,7 +57,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
   const [supplierId, setSupplierId] = useState<string>('');
   const [purchaseId, setPurchaseId] = useState<string>('');
-  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalDateString());
   const [returnNumber, setReturnNumber] = useState<string>(() => `PRT-${Math.floor(100000 + Math.random() * 900000)}`);
   const [reason, setReason] = useState<string>('');
   const [status, setStatus] = useState<'Received' | 'Pending'>('Received');
@@ -102,7 +103,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
 
   useEffect(() => {
     if (visible) {
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getLocalDateString());
       setReturnNumber(`PRT-${Math.floor(100000 + Math.random() * 900000)}`);
       setErrorMessage(null);
     }
@@ -214,7 +215,7 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
           reference: returnNumber,
           supplierId: supplierId ? Number(supplierId) : undefined,
           supplierName: selectedSupplier?.name || 'Supplier',
-          date: date || new Date().toISOString().split('T')[0],
+          date: date || getLocalDateString(),
           subtotal: totalReturnAmount,
           taxTotal: 0,
           discountTotal: 0,

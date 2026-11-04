@@ -1,5 +1,6 @@
 import { db } from '../../../core/database/db';
 import { apiClient } from '../../../core/api/api-client';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 
 export interface ReportFilters {
   startDate?: string;
@@ -173,7 +174,7 @@ export class ReportsService {
         return {
           ...item,
           customerName: custName,
-          date: item.saleDate ? String(item.saleDate).slice(0, 10) : item.date,
+          date: item.saleDate ? getLocalDateString(item.saleDate) : (item.date ? getLocalDateString(item.date) : ''),
           subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
           tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
           discount: item.discountTotal !== undefined ? item.discountTotal : item.discount || 0,
@@ -267,7 +268,7 @@ export class ReportsService {
         return {
           ...item,
           supplierName: suppName,
-          date: item.purchaseDate ? String(item.purchaseDate).slice(0, 10) : (item.date || ''),
+          date: item.purchaseDate ? getLocalDateString(item.purchaseDate) : (item.date ? getLocalDateString(item.date) : ''),
           itemsCount: item.itemCount !== undefined ? item.itemCount : item.itemsCount || 1,
           subtotal: item.subTotal !== undefined ? item.subTotal : item.subtotal || grandTotal,
           tax: item.taxTotal !== undefined ? item.taxTotal : item.tax || 0,
@@ -1361,7 +1362,7 @@ export class ReportsService {
           return {
             id: s.id,
             invoiceNumber: s.invoiceNumber,
-            date: s.saleDate ? String(s.saleDate).slice(0, 10) : (s.date || ''),
+            date: s.saleDate ? getLocalDateString(s.saleDate) : (s.date ? getLocalDateString(s.date) : ''),
             subtotal: Number(s.subTotal ?? s.subtotal ?? grandTotal),
             tax: Number(s.taxTotal ?? s.tax ?? 0),
             discount: Number(s.discountTotal ?? s.discount ?? 0),

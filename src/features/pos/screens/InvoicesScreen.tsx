@@ -26,6 +26,7 @@ import { AddSalesModal } from '../components/AddSalesModal';
 import { ShareSaleModal } from '../components/ShareSaleModal';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 import { enrichSaleItemsWithProductMeta } from '../utils/enrichSaleItems';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 
 interface Props {
   onNavigate: (screen: PosScreenType, id?: string) => void;
@@ -91,7 +92,7 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
             customerPhone: (s as any).customer?.phone || (s as any).customerPhone || '',
             customerAddress: (s as any).customer?.address || (s as any).customerAddress || '',
             customerGstin: (s as any).customer?.taxNumber || (s as any).customer?.taxId || (s as any).customer?.gstin || (s as any).customerGstin || '',
-            date: s.date || (s.createdAt ? s.createdAt.split('T')[0] : ''),
+            date: s.date ? getLocalDateString(s.date) : (s.createdAt ? getLocalDateString(s.createdAt) : ''),
             subtotal: Number(s.subtotal || 0),
             discount: Number(s.discount || 0),
             orderTax: Number(s.orderTax || 0),

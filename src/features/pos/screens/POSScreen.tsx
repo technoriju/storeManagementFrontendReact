@@ -24,6 +24,7 @@ import { useCreateSale } from '../api/useSales';
 import { saleRepository } from '../../../core/repositories/SaleRepository';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../components/ReceiptPrintPreviewModal';
 import { getProductPriceByType } from '../utils/priceUtils';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 
 export const POSScreen = () => {
   const {
@@ -182,7 +183,7 @@ export const POSScreen = () => {
           reference: invNum,
           customerId: (!isWalkIn && customer?.id) ? customer.id : undefined,
           customerName: customer?.name || 'Walk-in Customer',
-          date: new Date().toISOString().split('T')[0],
+          date: getLocalDateString(),
           subtotal: sub,
           discount: disc,
           gst: gTax,
@@ -206,7 +207,7 @@ export const POSScreen = () => {
       const receiptData: ReceiptPrintData = {
         invoiceNumber: invNum,
         reference: invNum,
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         customerName: customer?.name || 'Walk-in Customer',
         customerPhone: customer?.phone || '',
         customerType: priceType,

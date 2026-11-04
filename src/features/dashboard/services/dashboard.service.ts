@@ -24,11 +24,15 @@ export interface CustomerDistribution {
 }
 
 export interface DashboardMetrics {
+  selectedDate?: string;
   todaySales: number;
   todayPurchases: number;
+  todayCogs?: number;
   currentStockValue: number;
   outstanding: number;
   profit: number;
+  netProfit?: number;
+  profitMargin?: number;
   expenses: number;
   todayOrdersCount: number;
   totalSales: number;
@@ -46,8 +50,7 @@ export interface DashboardMetrics {
   customerDistribution?: CustomerDistribution;
 }
 
-let cachedMetrics: DashboardMetrics | null = null;
-let lastFetchTime = 0;
+const cachedMetricsMap = new Map<string, { timestamp: number; data: DashboardMetrics }>();
 const CACHE_TTL = 10000; // 10 seconds memory cache
 
 export class DashboardService {
@@ -56,23 +59,32 @@ export class DashboardService {
    * Fetches from backend API first; falls back to local SQLite if offline or network error.
    * Uses stale-while-revalidate caching for instant rendering.
    */
-  static async getMetrics(forceRefresh = false): Promise<DashboardMetrics> {
+  static async getMetrics(forceRefresh = false, selectedDate?: string): Promise<DashboardMetrics> {
+    const cacheKey = selectedDate || 'today';
     const now = Date.now();
-    if (!forceRefresh && cachedMetrics && now - lastFetchTime < CACHE_TTL) {
-      return cachedMetrics;
+    const cached = cachedMetricsMap.get(cacheKey);
+    if (!forceRefresh && cached && now - cached.timestamp < CACHE_TTL) {
+      return cached.data;
     }
 
     // 1. Try Backend API first for complete, aggregated real data
     try {
-      const response = await apiClient.get(API_ENDPOINTS.DASHBOARD.METRICS, { timeout: 4000 });
+      const response = await apiClient.get(API_ENDPOINTS.DASHBOARD.METRICS, {
+        params: selectedDate ? { date: selectedDate } : undefined,
+        timeout: 4000,
+      });
       const resData = response.data?.data || response.data;
       if (resData && typeof resData === 'object' && resData.totalProducts !== undefined) {
         const metrics: DashboardMetrics = {
+          selectedDate: resData.selectedDate || selectedDate,
           todaySales: Number(resData.todaySales || 0),
           todayPurchases: Number(resData.todayPurchases || 0),
+          todayCogs: resData.todayCogs !== undefined ? Number(resData.todayCogs) : undefined,
           currentStockValue: Number(resData.currentStockValue || 0),
           outstanding: Number(resData.outstanding || 0),
           profit: Number(resData.profit || 0),
+          netProfit: resData.netProfit !== undefined ? Number(resData.netProfit) : undefined,
+          profitMargin: resData.profitMargin !== undefined ? Number(resData.profitMargin) : undefined,
           expenses: Number(resData.expenses || 0),
           todayOrdersCount: Number(resData.todayOrdersCount || 0),
           totalSales: Number(resData.totalSales || 0),
@@ -89,8 +101,7 @@ export class DashboardService {
           monthlySalesData: Array.isArray(resData.monthlySalesData) ? resData.monthlySalesData : [],
           customerDistribution: resData.customerDistribution || { firstTime: 0, returnCount: 0 },
         };
-        cachedMetrics = metrics;
-        lastFetchTime = Date.now();
+        cachedMetricsMap.set(cacheKey, { timestamp: Date.now(), data: metrics });
         return metrics;
       }
     } catch (apiError) {
@@ -99,18 +110,17 @@ export class DashboardService {
     }
 
     // 2. Fallback to Local SQLite (Optimized with Promise.all)
-    const localData = await this.getMetricsFromLocalDb();
-    cachedMetrics = localData;
-    lastFetchTime = Date.now();
+    const localData = await this.getMetricsFromLocalDb(selectedDate);
+    cachedMetricsMap.set(cacheKey, { timestamp: Date.now(), data: localData });
     return localData;
   }
 
   /**
    * Fast parallel calculation from local SQLite database
    */
-  private static async getMetricsFromLocalDb(): Promise<DashboardMetrics> {
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
+  private static async getMetricsFromLocalDb(selectedDate?: string): Promise<DashboardMetrics> {
+    const targetDateStr = selectedDate || format(new Date(), 'yyyy-MM-dd');
+    const todayStr = targetDateStr;
 
     const [
       salesRes,
@@ -141,7 +151,7 @@ export class DashboardService {
 
       db.execute(`
         SELECT SUM(total) as total FROM purchases 
-        WHERE (createdAt LIKE '${todayStr}%' OR date LIKE '${todayStr}%') AND status != 'cancelled'
+        WHERE (createdAt LIKE '${todayStr}%' OR date LIKE '${todayStr}%' OR purchaseDate LIKE '${todayStr}%') AND status != 'cancelled'
       `).catch(() => ({ rows: [] })),
 
       db.execute(`
@@ -181,15 +191,25 @@ export class DashboardService {
         SELECT SUM(
           si.quantity * CASE 
             WHEN si.unitCost IS NOT NULL AND si.unitCost > 0 THEN si.unitCost
-            WHEN si.unitType = 'sub' AND si.conversionRate > 0 THEN (p.cost / si.conversionRate)
-            WHEN p.conversionRate > 1 AND si.unitType = 'sub' THEN (p.cost / p.conversionRate)
-            ELSE p.cost
+            WHEN p.purchasePrice IS NOT NULL AND p.purchasePrice > 0 THEN (
+              CASE
+                WHEN p.conversionRate > 1 AND (si.unitType = 'sub' OR si.unitPrice < p.purchasePrice * 0.6) THEN (p.purchasePrice / p.conversionRate)
+                ELSE p.purchasePrice
+              END
+            )
+            WHEN p.cost IS NOT NULL AND p.cost > 0 THEN (
+              CASE
+                WHEN p.conversionRate > 1 AND (si.unitType = 'sub' OR si.unitPrice < p.cost * 0.6) THEN (p.cost / p.conversionRate)
+                ELSE p.cost
+              END
+            )
+            ELSE 0
           END
         ) as total 
         FROM sale_items si
         JOIN products p ON si.productId = p.id
         JOIN sales s ON si.saleId = s.id
-        WHERE (s.createdAt LIKE '${todayStr}%' OR s.date LIKE '${todayStr}%') AND s.status != 'cancelled'
+        WHERE (s.createdAt LIKE '${todayStr}%' OR s.date LIKE '${todayStr}%' OR s.saleDate LIKE '${todayStr}%') AND s.status != 'cancelled'
       `).catch(() => ({ rows: [] })),
 
       db.execute(`
@@ -235,8 +255,10 @@ export class DashboardService {
     const totalSuppliers = Number(suppRes.rows?.[0]?.count || 0);
     const expenses = Number(expRes.rows?.[0]?.total || 0);
 
-    const cogs = Number(cogsRes.rows?.[0]?.total || 0);
-    const profit = Math.round((todaySales - cogs - expenses) * 100) / 100;
+    const cogs = Math.round(Number(cogsRes.rows?.[0]?.total || 0) * 100) / 100;
+    const profit = Math.round((todaySales - cogs) * 100) / 100;
+    const netProfit = Math.round((profit - expenses) * 100) / 100;
+    const profitMargin = todaySales > 0 ? Math.round(((profit / todaySales) * 100) * 10) / 10 : 0;
 
     const recentSales: RecentSaleItem[] = (recRes.rows || []).map((row: any) => ({
       id: row.id,
@@ -281,7 +303,8 @@ export class DashboardService {
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthlyMap = new Map<string, { label: string; sales: number; purchase: number }>();
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
       const key = format(d, 'yyyy-MM');
       monthlyMap.set(key, { label: monthNames[d.getMonth()], sales: 0, purchase: 0 });
     }
@@ -314,11 +337,15 @@ export class DashboardService {
     ];
 
     return {
+      selectedDate: todayStr,
       todaySales,
       todayPurchases,
+      todayCogs: cogs,
       currentStockValue,
       outstanding,
       profit,
+      netProfit,
+      profitMargin,
       expenses,
       todayOrdersCount,
       totalSales,
@@ -340,8 +367,11 @@ export class DashboardService {
     };
   }
 
-  static clearCache() {
-    cachedMetrics = null;
-    lastFetchTime = 0;
+  static clearCache(dateStr?: string) {
+    if (dateStr) {
+      cachedMetricsMap.delete(dateStr);
+    } else {
+      cachedMetricsMap.clear();
+    }
   }
 }

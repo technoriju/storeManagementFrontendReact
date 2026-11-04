@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { getLocalDateString } from '../../../shared/utils/dateUtils';
 import {
   View,
   StyleSheet,
@@ -97,7 +98,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
   // Form State
   const [customerId, setCustomerId] = useState<string>('');
   const [supplierId, setSupplierId] = useState<string>('');
-  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => getLocalDateString());
   const [reference, setReference] = useState<string>(() => `SL-${Math.floor(100000 + Math.random() * 900000)}`);
   const [status, setStatus] = useState<'Completed' | 'Pending' | 'Ordered'>('Pending');
   const [orderTax, setOrderTax] = useState<string>('0');
@@ -233,7 +234,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
               loadedEditCustomerRef.current = custIdStr || 'walkin';
               setCustomerId(custIdStr);
               setSupplierId(existingSale.supplierId ? String(existingSale.supplierId) : '');
-              setDate(existingSale.date ? existingSale.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+              setDate(existingSale.date ? getLocalDateString(existingSale.date) : getLocalDateString());
               setReference(existingSale.reference || existingSale.invoiceNumber || `SL-${numericId}`);
               setStatus((existingSale.status as any) || 'Completed');
               setOrderTax(String(existingSale.orderTax || 0));
@@ -394,7 +395,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           }
         })();
       } else {
-        setDate(new Date().toISOString().split('T')[0]);
+        setDate(getLocalDateString());
         setReference(`SL-${Math.floor(100000 + Math.random() * 900000)}`);
         setItems([]);
         setCustomerId('');
@@ -1000,7 +1001,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
         customerName: isWalkIn ? 'Walk-in Customer' : (custName || 'Walk-in Customer'),
         supplierId: supplierId ? Number(supplierId) : undefined,
         supplierName: selectedSupplier?.name || undefined,
-        date: date || new Date().toISOString().split('T')[0],
+        date: date || getLocalDateString(),
         subtotal: itemsSubtotal,
         discount: totalDiscount,
         orderTax: orderTaxNum,
