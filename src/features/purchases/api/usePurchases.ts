@@ -136,10 +136,19 @@ export const useCreatePurchase = () => {
     },
     onSuccess: (newPurchase) => {
       queryClient.setQueryData(PURCHASE_QUERY_KEY, (old: Purchase[] | undefined) => {
-        return old ? [newPurchase, ...old] : [newPurchase];
+        if (!old) return [newPurchase];
+        const filtered = old.filter(
+          (item) =>
+            item.id !== newPurchase.id &&
+            item.reference !== newPurchase.reference
+        );
+        return [newPurchase, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
+      try {
+        useProductStore.getState().fetchProducts().catch(() => {});
+      } catch (_) {}
     },
   });
 };
