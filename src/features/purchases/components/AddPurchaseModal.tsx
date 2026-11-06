@@ -69,7 +69,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const { isMobile, windowHeight } = useResponsive();
 
   // Suppliers & Products
-  const { data: suppliers = [] } = useSuppliers();
+  const { data: suppliers = [], refetch: refetchSuppliers } = useSuppliers();
   const { products, fetchProducts } = useProductStore();
   const { data: unitList = [] } = useUnits();
   const { data: subUnitList = [] } = useSubUnits();
@@ -161,6 +161,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
 
   useEffect(() => {
     if (visible) {
+      refetchSuppliers?.();
       setErrorMessage(null);
       setShowAddSupplierModal(false);
       setNewSupplierName('');
@@ -226,8 +227,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               }
 
               if (existingItems && existingItems.length > 0) {
+                const latestProds = useProductStore.getState().products;
                 const mappedItems: PurchaseItemRow[] = existingItems.map((item: any) => {
-                  const prod = products.find((p) => p.id === Number(item.productId));
+                  const prod = latestProds.find((p) => p.id === Number(item.productId)) || products.find((p) => p.id === Number(item.productId));
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
 
                   return {
@@ -273,7 +275,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         setUnpaidPurchasesCount(0);
       }
     }
-  }, [visible, editPurchaseId, products.length, fetchProducts]);
+  }, [visible, editPurchaseId, fetchProducts]);
 
   // Quick Add Supplier Handler
   const handleQuickAddSupplier = async () => {
@@ -572,24 +574,29 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   // Add Product to Table
   const handleAddProduct = (product: Product, initialQuantity: number = 1) => {
     const qtyToAdd = typeof initialQuantity === 'number' && initialQuantity > 0 ? initialQuantity : 1;
-    const existingIndex = items.findIndex((i) => i.productId === product.id);
-    if (existingIndex >= 0) {
-      const updated = [...items];
-      const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
-      updated[existingIndex].quantity = Number((curr + qtyToAdd).toFixed(4));
-      setItems(updated);
-    } else {
-      const basePrice = product.purchasePrice || product.cost || product.price || 0;
-      const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
-      const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
+    const basePrice = product.purchasePrice || product.cost || product.price || 0;
+    const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
+    const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
 
-      const baseUnit = unitList.find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId));
-      const subUnit = subUnitList.find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId));
+    const baseUnit = unitList.find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId));
+    const subUnit = subUnitList.find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId));
 
-      const baseUnitName = baseUnit?.name || baseUnit?.shortName || 'Box';
-      const subUnitName = subUnit?.name || 'Pcs';
+    const baseUnitName = baseUnit?.name || baseUnit?.shortName || (product as any).baseUnitName || 'Box';
+    const subUnitName = subUnit?.name || (product as any).subUnitName || 'Pcs';
 
-      setItems((prev) => [
+    setItems((prev) => {
+      const existingIndex = prev.findIndex((i) => Number(i.productId) === Number(product.id));
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        const curr = parseFloat(String(updated[existingIndex].quantity)) || 0;
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: Number((curr + qtyToAdd).toFixed(4)),
+        };
+        return updated;
+      }
+
+      return [
         ...prev,
         {
           productId: product.id,
@@ -607,8 +614,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
           subUnitName,
           conversionRate: cRate,
         },
-      ]);
-    }
+      ];
+    });
+
     setSearchQuery('');
     setIsSearching(false);
   };
