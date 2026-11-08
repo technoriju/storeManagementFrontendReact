@@ -28,11 +28,21 @@ import {
   Clock,
   Printer,
   Download,
+  FileSpreadsheet,
+  MessageCircle,
 } from 'lucide-react-native';
+import { DateFilterBar, DateRangeState, computePresetDates } from './DateFilterBar';
+import {
+  exportReportToExcel,
+  printOrSavePdfReport,
+  shareReportToWhatsApp,
+} from '../utils/reportExportUtils';
 
 interface CustomerWiseReportViewProps {
   filters: ReportFilters;
   dateRangeLabel: string;
+  dateRange?: DateRangeState;
+  onChangeDateRange?: (range: DateRangeState) => void;
   selectedCustomerId?: number | string | null;
   onSelectCustomer?: (customerId: number | string | null) => void;
   onOpenExport?: () => void;
@@ -40,7 +50,9 @@ interface CustomerWiseReportViewProps {
 
 export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   filters,
-  dateRangeLabel,
+  dateRangeLabel: propDateRangeLabel,
+  dateRange: propDateRange,
+  onChangeDateRange,
   selectedCustomerId: propCustomerId,
   onSelectCustomer,
   onOpenExport,
@@ -53,9 +65,33 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
     propCustomerId || null
   );
 
+  // Internal Date Range fallback
+  const [internalDateRange, setInternalDateRange] = useState<DateRangeState>(() => {
+    const init = computePresetDates('month');
+    return {
+      preset: 'month',
+      startDate: init.startDate,
+      endDate: init.endDate,
+      label: init.label,
+    };
+  });
+
+  const activeDateRange = propDateRange || internalDateRange;
+  const dateRangeLabel = propDateRange?.label || propDateRangeLabel || internalDateRange.label;
+
+  const handleDateRangeChange = (newRange: DateRangeState) => {
+    if (onChangeDateRange) {
+      onChangeDateRange(newRange);
+    } else {
+      setInternalDateRange(newRange);
+    }
+    setOverviewPage(1);
+  };
+
   // Data states
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [dropdownSearchQuery, setDropdownSearchQuery] = useState('');
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
 
   // Statement data for selected customer
@@ -92,12 +128,18 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   const loadData = async (targetPage = overviewPage, targetLimit = overviewRowsPerPage, targetSearch = customerSearchQuery) => {
     setIsLoading(true);
     try {
+      const activeFilters: ReportFilters = {
+        ...filters,
+        startDate: activeDateRange.startDate,
+        endDate: activeDateRange.endDate,
+      };
+
       if (selectedCustomerId) {
-        const stmt = await ReportsService.getCustomerWiseStatement(selectedCustomerId, filters);
+        const stmt = await ReportsService.getCustomerWiseStatement(selectedCustomerId, activeFilters);
         setStatementData(stmt);
       } else {
         const res = await ReportsService.getCustomerReport({
-          ...filters,
+          ...activeFilters,
           page: targetPage,
           limit: targetLimit,
           search: targetSearch.trim() || undefined,
@@ -116,7 +158,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
   useEffect(() => {
     loadData(overviewPage, overviewRowsPerPage, customerSearchQuery);
-  }, [selectedCustomerId, filters.startDate, filters.endDate, overviewPage, overviewRowsPerPage, customerSearchQuery]);
+  }, [selectedCustomerId, activeDateRange.startDate, activeDateRange.endDate, overviewPage, overviewRowsPerPage, customerSearchQuery]);
 
   const handleChooseCustomer = (id: number | string | null) => {
     setSelectedCustomerId(id);
@@ -130,15 +172,15 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
   // Filtered customer list for dropdown
   const filteredCustomerOptions = useMemo(() => {
-    if (!customerSearchQuery.trim()) return customersList;
-    const q = customerSearchQuery.toLowerCase().trim();
+    if (!dropdownSearchQuery.trim()) return customersList;
+    const q = dropdownSearchQuery.toLowerCase().trim();
     return customersList.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.phone.toLowerCase().includes(q) ||
         (c.customerCode && c.customerCode.toLowerCase().includes(q))
     );
-  }, [customersList, customerSearchQuery]);
+  }, [customersList, dropdownSearchQuery]);
 
   // Filtered invoices for selected customer
   const filteredInvoices = useMemo(() => {
@@ -229,15 +271,105 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           </View>
 
           <View style={styles.rightActionsRow}>
-            {onOpenExport && (
-              <Pressable
-                style={[styles.exportBtn, { borderColor: theme.colors.border }]}
-                onPress={onOpenExport}
-              >
-                <Download size={14} color={theme.colors.text} />
-                <Text style={[styles.exportBtnText, { color: theme.colors.text }]}>Export Statement</Text>
-              </Pressable>
-            )}
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => {
+                printOrSavePdfReport({
+                  title: `Customer Statement - ${cust.name}`,
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'invoiceNumber', title: 'Invoice #' },
+                    { key: 'date', title: 'Date' },
+                    { key: 'total', title: 'Total (₹)' },
+                    { key: 'paid', title: 'Paid (₹)' },
+                    { key: 'due', title: 'Due (₹)' },
+                    { key: 'paymentStatus', title: 'Status' },
+                  ],
+                  data: filteredInvoices,
+                  summary: summ,
+                  partyName: cust.name,
+                  phone: cust.phone,
+                });
+              }}
+            >
+              <FileText size={12} color="#EF4444" />
+              <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => {
+                exportReportToExcel({
+                  title: `Customer Statement - ${cust.name}`,
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'invoiceNumber', title: 'Invoice #' },
+                    { key: 'date', title: 'Date' },
+                    { key: 'total', title: 'Total (₹)' },
+                    { key: 'paid', title: 'Paid (₹)' },
+                    { key: 'due', title: 'Due (₹)' },
+                    { key: 'paymentStatus', title: 'Status' },
+                  ],
+                  data: filteredInvoices,
+                  summary: summ,
+                  partyName: cust.name,
+                  phone: cust.phone,
+                });
+              }}
+            >
+              <FileSpreadsheet size={12} color="#10B981" />
+              <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
+              onPress={() => {
+                shareReportToWhatsApp({
+                  title: `Customer Statement - ${cust.name}`,
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'invoiceNumber', title: 'Invoice #' },
+                    { key: 'date', title: 'Date' },
+                    { key: 'total', title: 'Total (₹)' },
+                    { key: 'paid', title: 'Paid (₹)' },
+                    { key: 'due', title: 'Due (₹)' },
+                    { key: 'paymentStatus', title: 'Status' },
+                  ],
+                  data: filteredInvoices,
+                  summary: summ,
+                  partyName: cust.name,
+                  phone: cust.phone,
+                });
+              }}
+            >
+              <MessageCircle size={12} color="#16A34A" />
+              <Text style={[styles.outlineActionText, { color: '#16A34A' }]}>WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+              onPress={() => {
+                printOrSavePdfReport({
+                  title: `Customer Statement - ${cust.name}`,
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'invoiceNumber', title: 'Invoice #' },
+                    { key: 'date', title: 'Date' },
+                    { key: 'total', title: 'Total (₹)' },
+                    { key: 'paid', title: 'Paid (₹)' },
+                    { key: 'due', title: 'Due (₹)' },
+                    { key: 'paymentStatus', title: 'Status' },
+                  ],
+                  data: filteredInvoices,
+                  summary: summ,
+                  partyName: cust.name,
+                  phone: cust.phone,
+                });
+              }}
+            >
+              <Printer size={12} color="#FFF" />
+              <Text style={styles.primaryActionText}>Print</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -245,75 +377,61 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         <View style={[styles.customerBanner, isMobile && styles.customerBannerMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.bannerLeft}>
             <View style={[styles.avatarBox, isMobile && styles.avatarBoxMobile, { backgroundColor: '#EFF6FF' }]}>
-              <Users size={isMobile ? 18 : 24} color="#2563EB" />
+              <Users size={isMobile ? 14 : 18} color="#2563EB" />
             </View>
             <View style={{ flexShrink: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <Text style={[styles.customerName, isMobile && styles.customerNameMobile, { color: theme.colors.text }]}>{cust.name}</Text>
                 {renderStatusBadge(summ.outstandingBalance > 0 ? 'Overdue' : 'Clear')}
               </View>
               <Text style={[styles.customerSub, { color: theme.colors.textSecondary }]}>
                 ID: {cust.customerCode || 'CU-' + cust.id} • {cust.phone || 'N/A'}
               </Text>
-              {!isMobile && cust.gstin ? (
-                <Text style={[styles.customerSub, { color: theme.colors.textSecondary }]}>
-                  GSTIN: {cust.gstin}
-                </Text>
-              ) : null}
-              {!isMobile && cust.address ? (
-                <Text style={[styles.customerSub, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-                  Address: {cust.address}
-                </Text>
-              ) : null}
             </View>
           </View>
         </View>
 
-        {/* 4 Metric Cards */}
+        {/* 4 Metric Cards (Height reduced up to 50%) */}
         <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
           <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
-              <FileText size={isMobile ? 15 : 18} color="#2563EB" />
+              <FileText size={isMobile ? 12 : 14} color="#2563EB" />
             </View>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Invoices</Text>
-              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{summ.totalOrders}</Text>
-              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>{dateRangeLabel}</Text>}
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Invoices</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]} numberOfLines={1}>{summ.totalOrders}</Text>
             </View>
           </View>
 
           <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
-              <TrendingUp size={isMobile ? 15 : 18} color="#10B981" />
+              <TrendingUp size={isMobile ? 12 : 14} color="#10B981" />
             </View>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Billed</Text>
-              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{Number(summ.totalBilled || 0).toLocaleString()}</Text>
-              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Invoiced sales</Text>}
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Billed</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]} numberOfLines={1}>₹{Number(summ.totalBilled || 0).toLocaleString()}</Text>
             </View>
           </View>
 
           <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F0FDF4' }]}>
-              <CheckCircle size={isMobile ? 15 : 18} color="#10B981" />
+              <CheckCircle size={isMobile ? 12 : 14} color="#10B981" />
             </View>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Paid</Text>
-              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{Number(summ.totalPaid || 0).toLocaleString()}</Text>
-              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Settled payments</Text>}
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Paid</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]} numberOfLines={1}>₹{Number(summ.totalPaid || 0).toLocaleString()}</Text>
             </View>
           </View>
 
           <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
-              <AlertTriangle size={isMobile ? 15 : 18} color="#EF4444" />
+              <AlertTriangle size={isMobile ? 12 : 14} color="#EF4444" />
             </View>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Due</Text>
-              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: Number(summ.outstandingBalance || 0) > 0 ? '#EF4444' : theme.colors.text }]}>
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Due</Text>
+              <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: Number(summ.outstandingBalance || 0) > 0 ? '#EF4444' : theme.colors.text }]} numberOfLines={1}>
                 ₹{Number(summ.outstandingBalance || 0).toLocaleString()}
               </Text>
-              {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Receivables pending</Text>}
             </View>
           </View>
         </View>
@@ -359,32 +477,12 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           </Pressable>
         </View>
 
-        {/* Transaction Search Input */}
-        <View style={[styles.searchBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <Search size={16} color={theme.colors.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.colors.text }]}
-            placeholder={
-              activeSubTab === 'invoices'
-                ? `Search ${cust.name}'s invoices (e.g. INV-..., status, date)...`
-                : `Search payments by voucher #, method, or ref...`
-            }
-            placeholderTextColor={theme.colors.textSecondary}
-            value={transactionSearchQuery}
-            onChangeText={setTransactionSearchQuery}
-          />
-          {transactionSearchQuery ? (
-            <Pressable onPress={() => setTransactionSearchQuery('')}>
-              <X size={16} color={theme.colors.textSecondary} />
-            </Pressable>
-          ) : null}
-        </View>
-
         {/* Invoices Table View */}
         {activeSubTab === 'invoices' ? (
           <AdvancedTable
             title={`Invoices for ${cust.name}`}
             subtitle={`${dateRangeLabel} • ${filteredInvoices.length} invoices found`}
+            searchPlaceholder={`Search ${cust.name}'s invoices (e.g. INV-..., status, date)...`}
             columns={[
               { key: 'invoiceNumber', title: 'Invoice #', width: 140, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
               { key: 'date', title: 'Date', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
@@ -430,6 +528,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
           <AdvancedTable
             title={`Payments Received from ${cust.name}`}
             subtitle={`${dateRangeLabel} • ${filteredPayments.length} payment receipts`}
+            searchPlaceholder="Search payments by voucher #, method, or ref..."
             columns={[
               { key: 'voucherNo', title: 'Voucher #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
               { key: 'date', title: 'Date', width: 120, render: (val: string) => <Text style={{ color: theme.colors.textSecondary }}>{val}</Text> },
@@ -466,59 +565,89 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   }
 
   // "All Customers Overview" View
-  const totalAllBilled = overviewSummary?.totalBilled ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalBilled || 0), 0);
-  const totalAllPaid = overviewSummary?.totalPaid ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalPaid || 0), 0);
-  const totalAllDue = overviewSummary?.totalOutstanding ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.outstandingBalance || 0), 0);
   const totalAllCount = overviewTotalItems || filteredAllCustomers.length;
+  const totalAllBilled = totalAllCount === 0 ? 0 : (overviewSummary?.totalBilled ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalBilled || 0), 0));
+  const totalAllPaid = totalAllCount === 0 ? 0 : (overviewSummary?.totalPaid ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalPaid || 0), 0));
+  const totalAllDue = totalAllCount === 0 ? 0 : (overviewSummary?.totalOutstanding ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.outstandingBalance || 0), 0));
 
   return (
     <View style={styles.container}>
-      {/* Search & Selector Toolbar */}
-      <View style={[styles.topSearchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <View style={styles.searchContainer}>
-          <Search size={18} color={theme.colors.textSecondary} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.colors.text }]}
-            placeholder="Search customer by name, mobile, or ID..."
-            placeholderTextColor={theme.colors.textSecondary}
-            value={customerSearchQuery}
-            onChangeText={setCustomerSearchQuery}
-          />
-          {customerSearchQuery ? (
-            <Pressable onPress={() => setCustomerSearchQuery('')}>
-              <X size={16} color={theme.colors.textSecondary} />
-            </Pressable>
-          ) : null}
+      {/* Overview Metric Cards (Height reduced up to 50%) */}
+      <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
+            <Users size={isMobile ? 12 : 14} color="#2563EB" />
+          </View>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Customers</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]} numberOfLines={1}>{totalAllCount}</Text>
+          </View>
         </View>
 
-        {/* Customer Select Dropdown Trigger */}
-        <Pressable
-          style={[styles.dropdownTrigger, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}
-          onPress={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
-        >
-          <Users size={15} color={theme.colors.primary} />
-          <Text style={[styles.dropdownTriggerText, { color: theme.colors.text }]}>
-            Pick Customer ({customersList.length})
-          </Text>
-          <ChevronRight size={14} color={theme.colors.textSecondary} />
-        </Pressable>
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
+            <TrendingUp size={isMobile ? 12 : 14} color="#10B981" />
+          </View>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Total Billed</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]} numberOfLines={1}>₹{totalAllBilled.toLocaleString()}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F0FDF4' }]}>
+            <CheckCircle size={isMobile ? 12 : 14} color="#10B981" />
+          </View>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Collections</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]} numberOfLines={1}>₹{totalAllPaid.toLocaleString()}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
+            <AlertTriangle size={isMobile ? 12 : 14} color="#EF4444" />
+          </View>
+          <View style={{ flexShrink: 1, minWidth: 0 }}>
+            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>Receivables Due</Text>
+            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#EF4444' }]} numberOfLines={1}>₹{totalAllDue.toLocaleString()}</Text>
+          </View>
+        </View>
       </View>
 
       {/* Customer Pick Modal/List if open */}
       {isCustomerDropdownOpen && (
-        <View style={[styles.customerDropdownPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.customerDropdownPanel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, marginBottom: 12 }]}>
           <View style={styles.dropdownHeader}>
             <Text style={[styles.dropdownTitle, { color: theme.colors.text }]}>Select Customer for Statement</Text>
             <Pressable onPress={() => setIsCustomerDropdownOpen(false)}>
               <X size={18} color={theme.colors.textSecondary} />
             </Pressable>
           </View>
+          <View style={[styles.dropdownSearchBox, { borderColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+            <Search size={14} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.dropdownSearchInput, { color: theme.colors.text }]}
+              placeholder="Search customer list..."
+              placeholderTextColor={theme.colors.textSecondary}
+              value={dropdownSearchQuery}
+              onChangeText={setDropdownSearchQuery}
+            />
+            {dropdownSearchQuery ? (
+              <Pressable onPress={() => setDropdownSearchQuery('')}>
+                <X size={14} color={theme.colors.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
           <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
             {filteredCustomerOptions.map((c) => (
               <Pressable
                 key={c.id}
                 style={[styles.customerPickItem, { borderBottomColor: theme.colors.divider }]}
-                onPress={() => handleChooseCustomer(c.id)}
+                onPress={() => {
+                  handleChooseCustomer(c.id);
+                  setDropdownSearchQuery('');
+                }}
               >
                 <View>
                   <Text style={[styles.customerPickName, { color: theme.colors.text }]}>{c.name}</Text>
@@ -533,57 +662,117 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         </View>
       )}
 
-      {/* Overview Metric Cards */}
-      <View style={[styles.kpiGrid, isMobile && styles.kpiGridMobile]}>
-        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#EFF6FF' }]}>
-            <Users size={isMobile ? 15 : 18} color="#2563EB" />
-          </View>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Customers</Text>
-            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{totalAllCount}</Text>
-            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Accounts in record</Text>}
-          </View>
-        </View>
-
-        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#ECFDF5' }]}>
-            <TrendingUp size={isMobile ? 15 : 18} color="#10B981" />
-          </View>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Total Billed</Text>
-            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>₹{totalAllBilled.toLocaleString()}</Text>
-            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Sales turnover</Text>}
-          </View>
-        </View>
-
-        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#F0FDF4' }]}>
-            <CheckCircle size={isMobile ? 15 : 18} color="#10B981" />
-          </View>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Collections</Text>
-            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#10B981' }]}>₹{totalAllPaid.toLocaleString()}</Text>
-            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Total received</Text>}
-          </View>
-        </View>
-
-        <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-          <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: '#FEF2F2' }]}>
-            <AlertTriangle size={isMobile ? 15 : 18} color="#EF4444" />
-          </View>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>Receivables Due</Text>
-            <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: '#EF4444' }]}>₹{totalAllDue.toLocaleString()}</Text>
-            {!isMobile && <Text style={[styles.kpiSub, { color: theme.colors.textSecondary }]}>Outstanding balance</Text>}
-          </View>
-        </View>
-      </View>
-
       {/* Customer Summary Table */}
       <AdvancedTable
-        title="Customer-Wise Sales & Ledger Summary"
-        subtitle={`${dateRangeLabel} • Tap any customer row or 'View Statement' to drill down`}
+        title="Customer-Wise Summary"
+        subtitle={`${dateRangeLabel} • ${totalAllCount} registered accounts`}
+        searchPlaceholder="Search customer by name, mobile, or ID..."
+        headerActions={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, backgroundColor: '#EFF6FF' }]}
+              onPress={() => setIsCustomerDropdownOpen(!isCustomerDropdownOpen)}
+            >
+              <Users size={12} color={theme.colors.primary} />
+              <Text style={[styles.outlineActionText, { color: theme.colors.primary, fontWeight: '600' }]}>
+                Pick Customer ({customersList.length})
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => {
+                printOrSavePdfReport({
+                  title: 'Customer-Wise Report',
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'customerCode', title: 'Customer ID' },
+                    { key: 'customerName', title: 'Customer Name' },
+                    { key: 'phone', title: 'Phone' },
+                    { key: 'totalSalesCount', title: 'Orders' },
+                    { key: 'totalBilled', title: 'Billed (₹)' },
+                    { key: 'totalPaid', title: 'Paid (₹)' },
+                    { key: 'outstandingBalance', title: 'Due (₹)' },
+                  ],
+                  data: filteredAllCustomers,
+                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
+                });
+              }}
+            >
+              <FileText size={12} color="#EF4444" />
+              <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
+              onPress={() => {
+                exportReportToExcel({
+                  title: 'Customer-Wise Report',
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'customerCode', title: 'Customer ID' },
+                    { key: 'customerName', title: 'Customer Name' },
+                    { key: 'phone', title: 'Phone' },
+                    { key: 'totalSalesCount', title: 'Orders' },
+                    { key: 'totalBilled', title: 'Billed (₹)' },
+                    { key: 'totalPaid', title: 'Paid (₹)' },
+                    { key: 'outstandingBalance', title: 'Due (₹)' },
+                  ],
+                  data: filteredAllCustomers,
+                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
+                });
+              }}
+            >
+              <FileSpreadsheet size={12} color="#10B981" />
+              <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
+              onPress={() => {
+                shareReportToWhatsApp({
+                  title: 'Customer-Wise Report',
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'customerCode', title: 'Customer ID' },
+                    { key: 'customerName', title: 'Customer Name' },
+                    { key: 'totalBilled', title: 'Billed (₹)' },
+                    { key: 'totalPaid', title: 'Paid (₹)' },
+                    { key: 'outstandingBalance', title: 'Due (₹)' },
+                  ],
+                  data: filteredAllCustomers,
+                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
+                });
+              }}
+            >
+              <MessageCircle size={12} color="#16A34A" />
+              <Text style={[styles.outlineActionText, { color: '#16A34A' }]}>WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+              onPress={() => {
+                printOrSavePdfReport({
+                  title: 'Customer-Wise Report',
+                  dateRangeLabel,
+                  columns: [
+                    { key: 'customerCode', title: 'Customer ID' },
+                    { key: 'customerName', title: 'Customer Name' },
+                    { key: 'phone', title: 'Phone' },
+                    { key: 'totalSalesCount', title: 'Orders' },
+                    { key: 'totalBilled', title: 'Billed (₹)' },
+                    { key: 'totalPaid', title: 'Paid (₹)' },
+                    { key: 'outstandingBalance', title: 'Due (₹)' },
+                  ],
+                  data: filteredAllCustomers,
+                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
+                });
+              }}
+            >
+              <Printer size={12} color="#FFF" />
+              <Text style={styles.primaryActionText}>Print</Text>
+            </Pressable>
+          </View>
+        }
         columns={[
           { key: 'customerCode', title: 'Customer ID', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
           { key: 'customerName', title: 'Customer Name', flex: 2, minWidth: 200, render: (val: string, item: any) => <Text style={{ fontWeight: '700', color: theme.colors.text }}>{(val && String(val).trim()) || (item.name && String(item.name).trim()) || 'Customer'}</Text> },
@@ -713,9 +902,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  dateFilterContainer: {
+    padding: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
   customerBanner: {
-    padding: 16,
-    borderRadius: 12,
+    padding: 8,
+    borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -724,56 +918,83 @@ const styles = StyleSheet.create({
   bannerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 10,
   },
   avatarBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   customerName: {
-    fontSize: 17,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   customerSub: {
-    fontSize: 12,
+    fontSize: 11,
   },
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 180,
-    borderRadius: 12,
+    minWidth: 135,
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   kpiLabel: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
   },
   kpiValue: {
-    fontSize: 17,
+    fontSize: 13.5,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 0,
   },
   kpiSub: {
+    fontSize: 9.5,
+    marginTop: 0,
+  },
+  outlineActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 4,
+  },
+  outlineActionText: {
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: '600',
+  },
+  primaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  primaryActionText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
   subTabsRow: {
     flexDirection: 'row',
@@ -864,6 +1085,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  dropdownSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  dropdownSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    padding: 0,
+    ...Platform.select({ web: { outlineStyle: 'none' } as any }),
+  },
   customerPickItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -910,25 +1147,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   kpiGridMobile: {
-    gap: 8,
+    gap: 6,
   },
   kpiCardMobile: {
     minWidth: '47%',
-    padding: 8,
-    gap: 8,
-    borderRadius: 8,
-  },
-  kpiIconBoxMobile: {
-    width: 30,
-    height: 30,
+    padding: 5,
+    gap: 6,
     borderRadius: 6,
   },
+  kpiIconBoxMobile: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+  },
   kpiLabelMobile: {
-    fontSize: 10,
+    fontSize: 9,
   },
   kpiValueMobile: {
-    fontSize: 14,
-    marginTop: 1,
+    fontSize: 12,
+    marginTop: 0,
   },
   customerBannerMobile: {
     padding: 10,

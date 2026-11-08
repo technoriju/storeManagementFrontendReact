@@ -185,9 +185,7 @@ export class ReportsService {
           paymentMethod: item.paymentMethod || 'UPI',
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -279,9 +277,7 @@ export class ReportsService {
           status: item.status || 'Received',
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -365,9 +361,7 @@ export class ReportsService {
           status: Number(item.quantity || item.stockQuantity || 0) <= 0 ? 'OUT_OF_STOCK' : Number(item.quantity || item.stockQuantity || 0) <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -462,17 +456,18 @@ export class ReportsService {
           status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Overdue' : 'Clear'),
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
       let salesDateCondition = 's.status != "cancelled"';
+      let hasDateFilter = false;
       if (filters.startDate) {
+        hasDateFilter = true;
         salesDateCondition += ` AND (s.date >= '${filters.startDate}' OR SUBSTR(s.createdAt, 1, 10) >= '${filters.startDate}')`;
       }
       if (filters.endDate) {
+        hasDateFilter = true;
         const dateOnly = filters.endDate.split('T')[0];
         salesDateCondition += ` AND (s.date <= '${dateOnly}' OR SUBSTR(s.createdAt, 1, 10) <= '${dateOnly}')`;
       }
@@ -507,6 +502,7 @@ export class ReportsService {
         LEFT JOIN sales s ON ((s.customerId = c.id OR (c.backendId IS NOT NULL AND s.customerId = c.backendId)) AND ${salesDateCondition})
         WHERE ${whereClause}
         GROUP BY c.id
+        ${hasDateFilter ? 'HAVING COUNT(s.id) > 0' : ''}
         ORDER BY outstandingBalance DESC, totalBilled DESC
       `;
       const res = await db.execute(query);
@@ -561,17 +557,18 @@ export class ReportsService {
           status: item.status || (Number(item.outstandingBalance || 0) > 0 ? 'Pending' : 'Clear'),
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
       let purDateCondition = 'p.status != "cancelled"';
+      let hasDateFilter = false;
       if (filters.startDate) {
+        hasDateFilter = true;
         purDateCondition += ` AND (p.date >= '${filters.startDate}' OR SUBSTR(p.createdAt, 1, 10) >= '${filters.startDate}')`;
       }
       if (filters.endDate) {
+        hasDateFilter = true;
         const dateOnly = filters.endDate.split('T')[0];
         purDateCondition += ` AND (p.date <= '${dateOnly}' OR SUBSTR(p.createdAt, 1, 10) <= '${dateOnly}')`;
       }
@@ -606,6 +603,7 @@ export class ReportsService {
         LEFT JOIN purchases p ON ((p.supplierId = s.id OR (s.backendId IS NOT NULL AND p.supplierId = s.backendId)) AND ${purDateCondition})
         WHERE ${whereClause}
         GROUP BY s.id
+        ${hasDateFilter ? 'HAVING COUNT(p.id) > 0' : ''}
         ORDER BY outstandingBalance DESC, totalPurchased DESC
       `;
       const res = await db.execute(query);
@@ -659,12 +657,22 @@ export class ReportsService {
           currentStock: item.currentStock || 0,
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
+      let salesDateCondition = '1=1';
+      let hasDateFilter = false;
+      if (filters.startDate) {
+        hasDateFilter = true;
+        salesDateCondition += ` AND (s.date >= '${filters.startDate}' OR SUBSTR(s.createdAt, 1, 10) >= '${filters.startDate}')`;
+      }
+      if (filters.endDate) {
+        hasDateFilter = true;
+        const dateOnly = filters.endDate.split('T')[0];
+        salesDateCondition += ` AND (s.date <= '${dateOnly}' OR SUBSTR(s.createdAt, 1, 10) <= '${dateOnly}')`;
+      }
+
       let whereClause = '1=1';
       if (filters.search) {
         const safeSearch = filters.search.replace(/'/g, "''");
@@ -693,8 +701,10 @@ export class ReportsService {
         FROM products p
         LEFT JOIN categories c ON (p.categoryId = c.id OR (c.backendId IS NOT NULL AND p.categoryId = c.backendId))
         LEFT JOIN sale_items si ON si.productId = p.id
+        LEFT JOIN sales s ON (si.saleId = s.id AND ${salesDateCondition})
         WHERE ${whereClause}
         GROUP BY p.id
+        ${hasDateFilter ? 'HAVING COUNT(si.id) > 0' : ''}
         ORDER BY revenue DESC
       `;
       const res = await db.execute(query);
@@ -743,9 +753,7 @@ export class ReportsService {
           paymentStatus: item.paymentStatus || 'Paid',
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -826,9 +834,7 @@ export class ReportsService {
           outflow: !isReceived ? (Number(item.amount) || 0) : 0,
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -897,9 +903,7 @@ export class ReportsService {
         paymentMethod: item.paymentMethod || item.method || 'Bank / Cash',
         amount: Number(item.amount) || 0,
       }));
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -966,9 +970,7 @@ export class ReportsService {
         paymentMethod: item.reference || item.paymentMethod || 'Bank / Cash',
         amount: Number(item.amount) || 0,
       }));
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -1044,9 +1046,7 @@ export class ReportsService {
           totalGst: Number(item.totalGst ?? item.totalTax ?? (Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0))),
         };
       });
-      if (parsed.data.length > 0 || parsed.total > 0) {
-        return parsed;
-      }
+      return parsed;
     } catch {}
 
     try {
@@ -1354,69 +1354,67 @@ export class ReportsService {
         params: { ...filters, customerId: custIdStr, limit: 100 },
       });
       const rawSales = this.unpackApiArray(apiRes);
-      if (rawSales.length > 0) {
-        const sales = rawSales.map((s: any) => {
-          const grandTotal = Number(s.grandTotal ?? s.total ?? 0);
-          const paidAmount = Number(s.paidAmount ?? s.paid ?? 0);
-          const dueAmount = Number(s.dueAmount ?? (grandTotal - paidAmount));
-          return {
-            id: s.id,
-            invoiceNumber: s.invoiceNumber,
-            date: s.saleDate ? getLocalDateString(s.saleDate) : (s.date ? getLocalDateString(s.date) : ''),
-            subtotal: Number(s.subTotal ?? s.subtotal ?? grandTotal),
-            tax: Number(s.taxTotal ?? s.tax ?? 0),
-            discount: Number(s.discountTotal ?? s.discount ?? 0),
-            total: grandTotal,
-            paid: paidAmount,
-            due: dueAmount,
-            paymentStatus: dueAmount <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid'),
-            status: s.status || 'Completed',
-          };
-        });
+      const sales = rawSales.map((s: any) => {
+        const grandTotal = Number(s.grandTotal ?? s.total ?? 0);
+        const paidAmount = Number(s.paidAmount ?? s.paid ?? 0);
+        const dueAmount = Number(s.dueAmount ?? (grandTotal - paidAmount));
+        return {
+          id: s.id,
+          invoiceNumber: s.invoiceNumber,
+          date: s.saleDate ? getLocalDateString(s.saleDate) : (s.date ? getLocalDateString(s.date) : ''),
+          subtotal: Number(s.subTotal ?? s.subtotal ?? grandTotal),
+          tax: Number(s.taxTotal ?? s.tax ?? 0),
+          discount: Number(s.discountTotal ?? s.discount ?? 0),
+          total: grandTotal,
+          paid: paidAmount,
+          due: dueAmount,
+          paymentStatus: dueAmount <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid'),
+          status: s.status || 'Completed',
+        };
+      });
 
-        let custInfo: any = null;
-        try {
-          const custApi = await apiClient.get('/reports/customer-outstanding', { params: { customerId: custIdStr } });
-          const clist = this.unpackApiArray(custApi);
-          if (clist.length > 0) {
-            const found = clist.find((c: any) => String(c.id || c.customerId) === custIdStr) || clist[0];
-            custInfo = {
-              id: found.id || found.customerId,
-              name: (found.customerName && String(found.customerName).trim()) || (found.name && String(found.name).trim()) || `Customer #${found.id || found.customerId}`,
-              phone: found.phone || '',
-              gstin: found.gstin || '',
-              customerCode: found.customerCode || `CU-${String(custIdStr).padStart(3, '0')}`,
-              outstandingBalance: Number(found.outstandingBalance || 0),
-            };
-          }
-        } catch {}
-
-        if (!custInfo) {
+      let custInfo: any = null;
+      try {
+        const custApi = await apiClient.get('/reports/customer-outstanding', { params: { customerId: custIdStr } });
+        const clist = this.unpackApiArray(custApi);
+        if (clist.length > 0) {
+          const found = clist.find((c: any) => String(c.id || c.customerId) === custIdStr) || clist[0];
           custInfo = {
-            id: custIdStr,
-            name: rawSales[0]?.customerName || 'Customer',
-            customerCode: `CU-${String(custIdStr).padStart(3, '0')}`,
-            outstandingBalance: sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0),
+            id: found.id || found.customerId,
+            name: (found.customerName && String(found.customerName).trim()) || (found.name && String(found.name).trim()) || `Customer #${found.id || found.customerId}`,
+            phone: found.phone || '',
+            gstin: found.gstin || '',
+            customerCode: found.customerCode || `CU-${String(custIdStr).padStart(3, '0')}`,
+            outstandingBalance: Number(found.outstandingBalance || 0),
           };
         }
+      } catch {}
 
-        const totalBilled = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
-        const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
-        const totalDue = sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0);
-
-        return {
-          customer: custInfo,
-          sales,
-          payments: [],
-          summary: {
-            totalOrders: sales.length,
-            totalBilled,
-            totalPaid,
-            totalDue,
-            outstandingBalance: Number(custInfo.outstandingBalance !== undefined ? custInfo.outstandingBalance : totalDue),
-          },
+      if (!custInfo) {
+        custInfo = {
+          id: custIdStr,
+          name: rawSales[0]?.customerName || `Customer #${custIdStr}`,
+          customerCode: `CU-${String(custIdStr).padStart(3, '0')}`,
+          outstandingBalance: sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0),
         };
       }
+
+      const totalBilled = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+      const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
+      const totalDue = sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0);
+
+      return {
+        customer: custInfo,
+        sales,
+        payments: [],
+        summary: {
+          totalOrders: sales.length,
+          totalBilled,
+          totalPaid,
+          totalDue,
+          outstandingBalance: Number(custInfo.outstandingBalance !== undefined ? custInfo.outstandingBalance : totalDue),
+        },
+      };
     } catch {}
 
     try {
@@ -1520,69 +1518,67 @@ export class ReportsService {
         params: { ...filters, supplierId: suppIdStr, limit: 100 },
       });
       const rawPurchases = this.unpackApiArray(apiRes);
-      if (rawPurchases.length > 0) {
-        const purchases = rawPurchases.map((p: any) => {
-          const grandTotal = Number(p.grandTotal ?? p.total ?? 0);
-          const paidAmount = Number(p.paidAmount ?? p.paid ?? 0);
-          const dueAmount = Number(p.dueAmount ?? (grandTotal - paidAmount));
-          return {
-            id: p.id,
-            invoiceNumber: p.invoiceNumber,
-            date: p.purchaseDate ? String(p.purchaseDate).slice(0, 10) : (p.date || ''),
-            subtotal: Number(p.subTotal ?? p.subtotal ?? grandTotal),
-            tax: Number(p.taxTotal ?? p.tax ?? 0),
-            total: grandTotal,
-            paid: paidAmount,
-            due: dueAmount,
-            paymentStatus: dueAmount <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid'),
-            status: p.status || 'Received',
-            itemsCount: p.itemCount || 1,
-          };
-        });
+      const purchases = rawPurchases.map((p: any) => {
+        const grandTotal = Number(p.grandTotal ?? p.total ?? 0);
+        const paidAmount = Number(p.paidAmount ?? p.paid ?? 0);
+        const dueAmount = Number(p.dueAmount ?? (grandTotal - paidAmount));
+        return {
+          id: p.id,
+          invoiceNumber: p.invoiceNumber,
+          date: p.purchaseDate ? String(p.purchaseDate).slice(0, 10) : (p.date || ''),
+          subtotal: Number(p.subTotal ?? p.subtotal ?? grandTotal),
+          tax: Number(p.taxTotal ?? p.tax ?? 0),
+          total: grandTotal,
+          paid: paidAmount,
+          due: dueAmount,
+          paymentStatus: dueAmount <= 0 ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid'),
+          status: p.status || 'Received',
+          itemsCount: p.itemCount || 1,
+        };
+      });
 
-        let suppInfo: any = null;
-        try {
-          const suppApi = await apiClient.get('/reports/supplier-outstanding', { params: { supplierId: suppIdStr } });
-          const slist = this.unpackApiArray(suppApi);
-          if (slist.length > 0) {
-            const found = slist.find((s: any) => String(s.id || s.supplierId) === suppIdStr) || slist[0];
-            suppInfo = {
-              id: found.id || found.supplierId,
-              name: (found.supplierName && String(found.supplierName).trim()) || (found.name && String(found.name).trim()) || `Supplier #${found.id || found.supplierId}`,
-              phone: found.phone || '',
-              contactName: found.contactName || '',
-              supplierCode: found.supplierCode || `SU-${String(suppIdStr).padStart(3, '0')}`,
-              outstandingBalance: Number(found.outstandingBalance || 0),
-            };
-          }
-        } catch {}
-
-        if (!suppInfo) {
+      let suppInfo: any = null;
+      try {
+        const suppApi = await apiClient.get('/reports/supplier-outstanding', { params: { supplierId: suppIdStr } });
+        const slist = this.unpackApiArray(suppApi);
+        if (slist.length > 0) {
+          const found = slist.find((s: any) => String(s.id || s.supplierId) === suppIdStr) || slist[0];
           suppInfo = {
-            id: suppIdStr,
-            name: rawPurchases[0]?.supplierName || 'Supplier',
-            supplierCode: `SU-${String(suppIdStr).padStart(3, '0')}`,
-            outstandingBalance: purchases.reduce((sum: number, p: any) => sum + Number(p.due || 0), 0),
+            id: found.id || found.supplierId,
+            name: (found.supplierName && String(found.supplierName).trim()) || (found.name && String(found.name).trim()) || `Supplier #${found.id || found.supplierId}`,
+            phone: found.phone || '',
+            contactName: found.contactName || '',
+            supplierCode: found.supplierCode || `SU-${String(suppIdStr).padStart(3, '0')}`,
+            outstandingBalance: Number(found.outstandingBalance || 0),
           };
         }
+      } catch {}
 
-        const totalPurchased = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
-        const totalPaid = purchases.reduce((sum: number, p: any) => sum + Number(p.paid || 0), 0);
-        const totalDue = Math.max(0, totalPurchased - totalPaid);
-
-        return {
-          supplier: suppInfo,
-          purchases,
-          payments: [],
-          summary: {
-            totalOrders: purchases.length,
-            totalPurchased,
-            totalPaid,
-            totalDue,
-            outstandingBalance: Number(suppInfo.outstandingBalance || totalDue),
-          },
+      if (!suppInfo) {
+        suppInfo = {
+          id: suppIdStr,
+          name: rawPurchases[0]?.supplierName || 'Supplier',
+          supplierCode: `SU-${String(suppIdStr).padStart(3, '0')}`,
+          outstandingBalance: purchases.reduce((sum: number, p: any) => sum + Number(p.due || 0), 0),
         };
       }
+
+      const totalPurchased = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+      const totalPaid = purchases.reduce((sum: number, p: any) => sum + Number(p.paid || 0), 0);
+      const totalDue = Math.max(0, totalPurchased - totalPaid);
+
+      return {
+        supplier: suppInfo,
+        purchases,
+        payments: [],
+        summary: {
+          totalOrders: purchases.length,
+          totalPurchased,
+          totalPaid,
+          totalDue,
+          outstandingBalance: Number(suppInfo.outstandingBalance || totalDue),
+        },
+      };
     } catch {}
 
     try {
