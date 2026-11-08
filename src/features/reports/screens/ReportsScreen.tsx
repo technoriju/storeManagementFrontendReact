@@ -15,6 +15,7 @@ import { AdvancedTable } from '../../../shared/components/data-display/AdvancedT
 import { ProfitLossView } from '../components/ProfitLossView';
 import { AnnualReportView } from '../components/AnnualReportView';
 import { ReportExportModal } from '../components/ReportExportModal';
+import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 import { DateFilterBar, DateRangeState, computePresetDates } from '../components/DateFilterBar';
 import { CustomerWiseReportView } from '../components/CustomerWiseReportView';
 import { SupplierWiseReportView } from '../components/SupplierWiseReportView';
@@ -93,6 +94,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const { isMobile, windowWidth } = useResponsive();
+  const { settings } = useInvoiceSettingsStore();
+  const business = settings?.businessProfile;
 
   // Normalize initial report ID
   const normalizedInitial = useMemo(() => {
@@ -112,6 +115,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [selectedFilterStatus, setSelectedFilterStatus] = useState<string | undefined>(undefined);
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportModalData, setExportModalData] = useState<any[] | null>(null);
 
   // Dynamic Date Range Filter State
   const [dateRange, setDateRange] = useState<DateRangeState>(() => {
@@ -1076,6 +1081,118 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
   };
 
+  // Fetch complete dataset for active date range and filters for exporting
+  const fetchFullReportData = async (): Promise<any[]> => {
+    // If total items already fits within visible page data and single page, use filteredData
+    if (totalItems <= data.length && totalPages <= 1 && !selectedFilterStatus) {
+      return filteredData;
+    }
+
+    try {
+      const fullFilters: ReportFilters = {
+        page: 1,
+        limit: 10000,
+        search: searchQuery.trim() || undefined,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      };
+
+      let res: any = null;
+      switch (activeReportId) {
+        case 'sales_report':
+          res = await ReportsService.getSalesReport(fullFilters);
+          break;
+        case 'purchase_report':
+          res = await ReportsService.getPurchasesReport(fullFilters);
+          break;
+        case 'inventory_report':
+          res = await ReportsService.getInventoryReport(fullFilters);
+          break;
+        case 'customer_report':
+          res = await ReportsService.getCustomerReport(fullFilters);
+          break;
+        case 'supplier_report':
+          res = await ReportsService.getSupplierReport(fullFilters);
+          break;
+        case 'product_report':
+          res = await ReportsService.getProductReport(fullFilters);
+          break;
+        case 'invoice_report':
+          res = await ReportsService.getInvoiceReport(fullFilters);
+          break;
+        case 'payment_report':
+          res = await ReportsService.getPaymentReport(fullFilters);
+          break;
+        case 'expense_report':
+          res = await ReportsService.getExpenseReport(fullFilters);
+          break;
+        case 'income_report':
+          res = await ReportsService.getIncomeReport(fullFilters);
+          break;
+        case 'tax_report':
+          res = await ReportsService.getTaxReport(fullFilters);
+          break;
+        default:
+          return filteredData;
+      }
+
+      let allItems = Array.isArray(res?.data) ? res.data : [];
+      if (selectedFilterStatus) {
+        allItems = allItems.filter((item: any) => {
+          const statusVal = item.paymentStatus || item.status || item.type;
+          return String(statusVal).toLowerCase() === selectedFilterStatus.toLowerCase();
+        });
+      }
+      return allItems.length > 0 ? allItems : filteredData;
+    } catch (err) {
+      console.warn('Failed to load full dataset for export, falling back to visible page data:', err);
+      return filteredData;
+    }
+  };
+
+  const handleExportAction = async (action: 'pdf' | 'excel' | 'whatsapp' | 'print') => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const fullData = await fetchFullReportData();
+      const exportOptions = {
+        title: activeTabConfig.label,
+        dateRangeLabel,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
+        data: fullData,
+        summary: summaryData,
+        businessName: business?.businessName,
+      };
+
+      if (action === 'pdf') {
+        await exportReportToPdf(exportOptions);
+      } else if (action === 'excel') {
+        exportReportToExcel(exportOptions);
+      } else if (action === 'whatsapp') {
+        await shareReportToWhatsApp(exportOptions);
+      } else if (action === 'print') {
+        printOrSavePdfReport(exportOptions);
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Sync full data into export modal when opened
+  useEffect(() => {
+    if (isExportModalVisible) {
+      fetchFullReportData().then((full) => {
+        setExportModalData(full);
+      });
+    } else {
+      setExportModalData(null);
+    }
+  }, [isExportModalVisible]);
+
   // Header action buttons
   const headerActions = (
     <View style={[styles.actionButtonsRow, isMobile && styles.actionButtonsRowMobile]}>
@@ -1087,74 +1204,38 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
-        onPress={() => {
-          exportReportToPdf({
-            title: activeTabConfig.label,
-            dateRangeLabel,
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
-            data: filteredData,
-            summary: summaryData,
-          });
-        }}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border, opacity: isExporting ? 0.6 : 1 }]}
+        onPress={() => handleExportAction('pdf')}
+        disabled={isExporting}
       >
-        <FileText size={isMobile ? 12 : 14} color="#EF4444" />
+        {isExporting ? <ActivityIndicator size={12} color="#EF4444" /> : <FileText size={isMobile ? 12 : 14} color="#EF4444" />}
         <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>PDF</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
-        onPress={() => {
-          exportReportToExcel({
-            title: activeTabConfig.label,
-            dateRangeLabel,
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
-            data: filteredData,
-            summary: summaryData,
-          });
-        }}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border, opacity: isExporting ? 0.6 : 1 }]}
+        onPress={() => handleExportAction('excel')}
+        disabled={isExporting}
       >
-        <FileSpreadsheet size={isMobile ? 12 : 14} color="#10B981" />
+        {isExporting ? <ActivityIndicator size={12} color="#10B981" /> : <FileSpreadsheet size={isMobile ? 12 : 14} color="#10B981" />}
         <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>Excel</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
-        onPress={() => {
-          shareReportToWhatsApp({
-            title: activeTabConfig.label,
-            dateRangeLabel,
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
-            data: filteredData,
-            summary: summaryData,
-          });
-        }}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: '#16A34A', backgroundColor: '#DCFCE720', opacity: isExporting ? 0.6 : 1 }]}
+        onPress={() => handleExportAction('whatsapp')}
+        disabled={isExporting}
       >
-        <MessageCircle size={isMobile ? 12 : 14} color="#16A34A" />
+        {isExporting ? <ActivityIndicator size={12} color="#16A34A" /> : <MessageCircle size={isMobile ? 12 : 14} color="#16A34A" />}
         <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: '#16A34A' }]}>WhatsApp</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.primaryActionBtn, isMobile && styles.primaryActionBtnMobile, { backgroundColor: '#2563EB' }]}
-        onPress={() => {
-          printOrSavePdfReport({
-            title: activeTabConfig.label,
-            dateRangeLabel,
-            startDate: dateRange.startDate,
-            endDate: dateRange.endDate,
-            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
-            data: filteredData,
-            summary: summaryData,
-          });
-        }}
+        style={[styles.primaryActionBtn, isMobile && styles.primaryActionBtnMobile, { backgroundColor: '#2563EB', opacity: isExporting ? 0.6 : 1 }]}
+        onPress={() => handleExportAction('print')}
+        disabled={isExporting}
       >
-        <Printer size={isMobile ? 12 : 14} color="#FFF" />
+        {isExporting ? <ActivityIndicator size={12} color="#FFF" /> : <Printer size={isMobile ? 12 : 14} color="#FFF" />}
         <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>Print</Text>
       </Pressable>
     </View>
@@ -1330,9 +1411,12 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         visible={isExportModalVisible}
         onClose={() => setIsExportModalVisible(false)}
         reportTitle={activeTabConfig.label}
-        totalRecords={filteredData.length}
+        totalRecords={exportModalData ? exportModalData.length : totalItems || filteredData.length}
         dateRangeLabel={dateRangeLabel}
-        data={filteredData}
+        startDate={dateRange.startDate}
+        endDate={dateRange.endDate}
+        businessName={business?.businessName}
+        data={exportModalData || filteredData}
         columns={tableColumns.map((c) => ({ key: c.key, title: c.title }))}
         summary={summaryData}
       />

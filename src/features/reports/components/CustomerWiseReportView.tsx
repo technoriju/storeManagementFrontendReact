@@ -579,6 +579,53 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
   const totalAllPaid = totalAllCount === 0 ? 0 : (overviewSummary?.totalPaid ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.totalPaid || 0), 0));
   const totalAllDue = totalAllCount === 0 ? 0 : (overviewSummary?.totalOutstanding ?? filteredAllCustomers.reduce((sum, c) => sum + Number(c.outstandingBalance || 0), 0));
 
+  const fetchFullCustomerOverviewForExport = async (): Promise<any[]> => {
+    if (overviewTotalPages <= 1 && allCustomersData.length >= overviewTotalItems && !customerSearchQuery.trim()) {
+      return filteredAllCustomers;
+    }
+    try {
+      const res = await ReportsService.getCustomerReport({
+        ...filters,
+        startDate: activeDateRange.startDate,
+        endDate: activeDateRange.endDate,
+        page: 1,
+        limit: 10000,
+        search: customerSearchQuery.trim() || undefined,
+      });
+      return Array.isArray(res?.data) && res.data.length > 0 ? res.data : filteredAllCustomers;
+    } catch {
+      return filteredAllCustomers;
+    }
+  };
+
+  const handleOverviewExport = async (action: 'pdf' | 'excel' | 'whatsapp' | 'print') => {
+    const fullData = await fetchFullCustomerOverviewForExport();
+    const summ = overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue };
+    const cols = [
+      { key: 'customerCode', title: 'Customer ID' },
+      { key: 'customerName', title: 'Customer Name' },
+      { key: 'phone', title: 'Phone' },
+      { key: 'totalSalesCount', title: 'Orders' },
+      { key: 'totalBilled', title: 'Billed (₹)' },
+      { key: 'totalPaid', title: 'Paid (₹)' },
+      { key: 'outstandingBalance', title: 'Due (₹)' },
+    ];
+    const opts = {
+      title: 'Customer-Wise Report',
+      dateRangeLabel,
+      startDate: activeDateRange.startDate,
+      endDate: activeDateRange.endDate,
+      columns: cols,
+      data: fullData,
+      summary: summ,
+    };
+
+    if (action === 'pdf') await exportReportToPdf(opts);
+    else if (action === 'excel') exportReportToExcel(opts);
+    else if (action === 'whatsapp') await shareReportToWhatsApp(opts);
+    else if (action === 'print') printOrSavePdfReport(opts);
+  };
+
   return (
     <View style={styles.container}>
       {/* Overview Metric Cards (Height reduced up to 50%) */}
@@ -689,25 +736,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             </Pressable>
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
-              onPress={() => {
-                exportReportToPdf({
-                  title: 'Customer-Wise Report',
-                  dateRangeLabel,
-                  startDate: activeDateRange.startDate,
-                  endDate: activeDateRange.endDate,
-                  columns: [
-                    { key: 'customerCode', title: 'Customer ID' },
-                    { key: 'customerName', title: 'Customer Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalSalesCount', title: 'Orders' },
-                    { key: 'totalBilled', title: 'Billed (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllCustomers,
-                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('pdf')}
             >
               <FileText size={12} color="#EF4444" />
               <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
@@ -715,25 +744,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
-              onPress={() => {
-                exportReportToExcel({
-                  title: 'Customer-Wise Report',
-                  dateRangeLabel,
-                  startDate: activeDateRange.startDate,
-                  endDate: activeDateRange.endDate,
-                  columns: [
-                    { key: 'customerCode', title: 'Customer ID' },
-                    { key: 'customerName', title: 'Customer Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalSalesCount', title: 'Orders' },
-                    { key: 'totalBilled', title: 'Billed (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllCustomers,
-                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('excel')}
             >
               <FileSpreadsheet size={12} color="#10B981" />
               <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
@@ -741,23 +752,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
-              onPress={() => {
-                shareReportToWhatsApp({
-                  title: 'Customer-Wise Report',
-                  dateRangeLabel,
-                  startDate: activeDateRange.startDate,
-                  endDate: activeDateRange.endDate,
-                  columns: [
-                    { key: 'customerCode', title: 'Customer ID' },
-                    { key: 'customerName', title: 'Customer Name' },
-                    { key: 'totalBilled', title: 'Billed (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllCustomers,
-                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('whatsapp')}
             >
               <MessageCircle size={12} color="#16A34A" />
               <Text style={[styles.outlineActionText, { color: '#16A34A' }]}>WhatsApp</Text>
@@ -765,25 +760,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
-              onPress={() => {
-                printOrSavePdfReport({
-                  title: 'Customer-Wise Report',
-                  dateRangeLabel,
-                  startDate: activeDateRange.startDate,
-                  endDate: activeDateRange.endDate,
-                  columns: [
-                    { key: 'customerCode', title: 'Customer ID' },
-                    { key: 'customerName', title: 'Customer Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalSalesCount', title: 'Orders' },
-                    { key: 'totalBilled', title: 'Billed (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllCustomers,
-                  summary: overviewSummary || { totalBilled: totalAllBilled, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('print')}
             >
               <Printer size={12} color="#FFF" />
               <Text style={styles.primaryActionText}>Print</Text>

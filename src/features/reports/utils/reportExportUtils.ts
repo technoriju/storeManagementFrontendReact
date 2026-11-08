@@ -1,5 +1,6 @@
 import { Platform, Linking } from 'react-native';
 import * as XLSX from 'xlsx';
+import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 
 export interface ReportColumnDef {
   key: string;
@@ -21,6 +22,30 @@ export interface ReportExportOptions {
 }
 
 /**
+ * Retrieve current active business / company profile
+ */
+export function getCompanyProfile() {
+  try {
+    const profile = useInvoiceSettingsStore.getState().settings?.businessProfile;
+    return {
+      businessName: (profile?.businessName && profile.businessName.trim()) || 'Tarama Enterprise',
+      address: profile?.address || '',
+      phone: profile?.phone || '',
+      gstin: profile?.gstin || '',
+      email: profile?.email || '',
+    };
+  } catch {
+    return {
+      businessName: 'Tarama Enterprise',
+      address: '',
+      phone: '',
+      gstin: '',
+      email: '',
+    };
+  }
+}
+
+/**
  * Clean numeric string or number for export
  */
 function cleanVal(val: any): string | number {
@@ -31,6 +56,39 @@ function cleanVal(val: any): string | number {
     return val.name || val.title || JSON.stringify(val);
   }
   return String(val);
+}
+
+/**
+ * Helper to normalize any date input to YYYY-MM-DD
+ */
+function normalizeDateToYMD(val: any): string | null {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+
+  // Match YYYY-MM-DD or ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.slice(0, 10);
+  }
+
+  // Match DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
 }
 
 /**
@@ -46,10 +104,11 @@ export function filterDataByDateRange(data: any[], startDate?: string, endDate?:
   return data.filter((item) => {
     if (!item) return false;
     const raw = item.date || item.saleDate || item.purchaseDate || item.paymentDate || item.expenseDate || item.incomeDate || item.createdAt;
-    if (!raw) return true;
-    const d = String(raw).slice(0, 10);
-    if (sDate && d < sDate) return false;
-    if (eDate && d > eDate) return false;
+    if (!raw) return true; // Keep items without explicit date field (e.g. inventory master items)
+    const norm = normalizeDateToYMD(raw);
+    if (!norm) return true;
+    if (sDate && norm < sDate) return false;
+    if (eDate && norm > eDate) return false;
     return true;
   });
 }
@@ -58,7 +117,13 @@ export function filterDataByDateRange(data: any[], startDate?: string, endDate?:
  * Generate formatted HTML printable document for report
  */
 export function generateReportHtml(options: ReportExportOptions): string {
-  const { title, dateRangeLabel, startDate, endDate, columns, data, summary, businessName = 'Billing Store', partyName, phone } = options;
+  const company = getCompanyProfile();
+  const businessName = (options.businessName && options.businessName.trim()) || company.businessName;
+  const businessAddress = company.address;
+  const businessPhone = company.phone;
+  const businessGstin = company.gstin;
+
+  const { title, dateRangeLabel, startDate, endDate, columns, data, summary, partyName, phone } = options;
 
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
@@ -127,6 +192,8 @@ export function generateReportHtml(options: ReportExportOptions): string {
     @media print {
       body { margin: 0; padding: 8mm; }
       @page { size: auto; margin: 8mm; }
+      tr { page-break-inside: avoid; }
+      thead { display: table-header-group; }
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -174,6 +241,8 @@ export function generateReportHtml(options: ReportExportOptions): string {
   <div class="header">
     <div style="flex: 1;">
       <div class="brand">${businessName}</div>
+      ${businessAddress ? `<div style="font-size: 11px; color: #475569; margin-top: 2px;">${businessAddress}</div>` : ''}
+      ${businessGstin || businessPhone ? `<div style="font-size: 11px; color: #475569; margin-top: 1px;">${businessGstin ? `GSTIN: <strong>${businessGstin}</strong>` : ''} ${businessPhone ? `&nbsp;•&nbsp; Contact: <strong>${businessPhone}</strong>` : ''}</div>` : ''}
       <div class="report-title">${title}</div>
       ${partyName ? `<div style="font-size: 12.5px; font-weight: 600; color: #334155; margin-top: 3px;">Party: ${partyName} ${phone ? `(${phone})` : ''}</div>` : ''}
       <div class="period-badge">
@@ -196,7 +265,7 @@ export function generateReportHtml(options: ReportExportOptions): string {
 
   <div class="footer">
     <div>${businessName} • ${title} • Period: ${displayRange}</div>
-    <div>Page 1 of 1</div>
+    <div>Total Records: ${filteredRows.length}</div>
   </div>
 </body>
 </html>`;
@@ -217,6 +286,9 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
     container.style.left = '-9999px';
     container.style.top = '0';
     container.style.width = '800px';
+    container.style.height = 'auto';
+    container.style.overflow = 'visible';
+    container.style.boxSizing = 'border-box';
     container.style.background = '#ffffff';
     container.style.padding = '20px';
     container.innerHTML = htmlString;
@@ -372,6 +444,8 @@ export function printOrSavePdfReport(options: ReportExportOptions) {
  * Download Report as Excel (.xlsx) file datewise
  */
 export function exportReportToExcel(options: ReportExportOptions) {
+  const company = getCompanyProfile();
+  const businessName = (options.businessName && options.businessName.trim()) || company.businessName;
   const { title, dateRangeLabel, startDate, endDate, columns, data } = options;
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate}_to_${endDate}` : dateRangeLabel;
@@ -391,10 +465,26 @@ export function exportReportToExcel(options: ReportExportOptions) {
     return rowObj;
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(excelRows);
+  // Prepend company name and metadata header to Excel spreadsheet
+  const headerDetails = [company.address, company.gstin ? `GSTIN: ${company.gstin}` : '', company.phone ? `Phone: ${company.phone}` : '']
+    .filter(Boolean)
+    .join('  |  ');
+
+  const headerAoa: any[][] = [
+    [businessName],
+    [`${title} - Period: ${displayRange.replace(/_/g, ' ')}`],
+  ];
+  if (headerDetails) {
+    headerAoa.push([headerDetails]);
+  }
+  headerAoa.push([]); // Blank row separator
+
+  const worksheet = XLSX.utils.aoa_to_sheet(headerAoa);
+  const dataStartRow = headerAoa.length + 1;
+  XLSX.utils.sheet_add_json(worksheet, excelRows, { origin: `A${dataStartRow}` });
 
   // Set column widths
-  const colWidths = [{ wch: 6 }, ...columns.map((c) => ({ wch: Math.max(12, (c.title || '').length + 4) }))];
+  const colWidths = [{ wch: 8 }, ...columns.map((c) => ({ wch: Math.max(14, (c.title || '').length + 4) }))];
   worksheet['!cols'] = colWidths;
 
   const workbook = XLSX.utils.book_new();
@@ -416,7 +506,9 @@ export function exportReportToExcel(options: ReportExportOptions) {
  * Convert data to PDF first, then share via WhatsApp / System Share
  */
 export async function shareReportToWhatsApp(options: ReportExportOptions) {
-  const { title, dateRangeLabel, startDate, endDate, data, summary, businessName = 'Store', phone = '', partyName } = options;
+  const company = getCompanyProfile();
+  const businessName = (options.businessName && options.businessName.trim()) || company.businessName;
+  const { title, dateRangeLabel, startDate, endDate, data, summary, phone = '', partyName } = options;
 
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
@@ -424,7 +516,7 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
   // 1. MUST convert data to PDF first
   let pdfResult: { blob?: Blob; fileName: string; dataUri?: string } | null = null;
   try {
-    pdfResult = await generateReportPdfBlob({ ...options, data: filteredRows });
+    pdfResult = await generateReportPdfBlob({ ...options, businessName, data: filteredRows });
   } catch (err) {
     console.warn('PDF generation before WhatsApp share:', err);
   }
@@ -433,8 +525,8 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
 
   // 2. Prepare formatted summary message
   let lines: string[] = [];
+  lines.push(`🏢 *${businessName}*`);
   lines.push(`📄 *${title}*`);
-  if (businessName) lines.push(`🏢 *${businessName}*`);
   if (partyName) lines.push(`👤 *Party:* ${partyName}`);
   lines.push(`🗓️ *Period:* ${dateRangeLabel}`);
   if (startDate && endDate) lines.push(`📅 *Date Range:* ${startDate} to ${endDate}`);

@@ -22,6 +22,7 @@ interface ReportExportModalProps {
   data?: any[];
   columns?: ReportColumnDef[];
   summary?: any;
+  businessName?: string;
   customerPhone?: string;
   partyName?: string;
 }
@@ -37,6 +38,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   data = [],
   columns = [],
   summary,
+  businessName,
   customerPhone,
   partyName,
 }) => {
@@ -63,6 +65,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
         ],
         data,
         summary,
+        businessName,
         phone: customerPhone,
         partyName,
       };
