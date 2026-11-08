@@ -5,6 +5,7 @@ import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
 import { getLocalDateString } from '../../shared/utils/dateUtils';
+import { useProductStore } from '../../features/products/store/productStore';
 
 export class SaleRepository extends BaseRepository<Sale> {
   protected tableName = 'sales';
@@ -147,7 +148,13 @@ export class SaleRepository extends BaseRepository<Sale> {
           gst: Number(row.gst || 0),
           taxAmount: Number(row.taxAmount || 0),
           unitCost: Number(row.unitCost || 0),
-          unit: row.unit ? String(row.unit) : undefined,
+          unit: (() => {
+            const rUnit = row.unit ? String(row.unit) : undefined;
+            const rType = row.unitType;
+            if (rType === 'sub' && subUnit) return subUnit;
+            if (rType === 'base' && (row.baseUnitName || row.fallbackBaseUnitName)) return String(row.baseUnitName || row.fallbackBaseUnitName).trim();
+            return rUnit || (rType === 'sub' ? subUnit : undefined);
+          })(),
           unitType: row.unitType || undefined,
           baseUnitName: (row.baseUnitName || row.fallbackBaseUnitName || '').trim() || undefined,
           conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
@@ -474,6 +481,7 @@ export class SaleRepository extends BaseRepository<Sale> {
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
+          unit: it.unitType === 'sub' ? (it.subUnit || it.subUnitName || it.unit) : (it.unit || it.baseUnitName),
           unitType: it.unitType,
           conversionRate: Number(it.conversionRate || 1),
         })),
@@ -647,16 +655,12 @@ export class SaleRepository extends BaseRepository<Sale> {
         const existingItem = existingSale?.items?.find(
           (x) => x.productId === Number(it.productId) || (x.id && it.id && Number(x.id) === Number(it.id))
         );
-        const unitType = it.unitType || existingItem?.unitType || undefined;
-        const unit = (typeof it.unit === 'string' && it.unit) ? it.unit : (it.unit?.name || existingItem?.unit || undefined);
-        const baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName) ? it.baseUnitName : (existingItem?.baseUnitName || undefined);
         const unitPrice = Number(it.unitPrice || 0);
         const quantity = Number(it.quantity || 1);
         const discount = Number(it.discount || 0);
         const taxAmount = Number(it.taxAmount || 0);
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
-
 
         const rawBrand =
           it.brandName ||
@@ -679,6 +683,33 @@ export class SaleRepository extends BaseRepository<Sale> {
           existingItem?.subUnitName ||
           existingItem?.subUnit;
         const subUnit = rawSubUnit && String(rawSubUnit).trim() !== 'N/A' ? String(rawSubUnit).trim() : undefined;
+
+        const baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName) ? it.baseUnitName : (existingItem?.baseUnitName || it.product?.baseUnitName || it.product?.baseUnit?.name || undefined);
+        let effectiveUnitType: 'base' | 'sub' | undefined = (it.unitType === 'base' || it.unitType === 'sub') ? it.unitType : (existingItem?.unitType === 'base' || existingItem?.unitType === 'sub' ? existingItem.unitType : undefined);
+        if (!effectiveUnitType && conversionRate > 1 && subUnit) {
+          try {
+            const prodList = useProductStore.getState().products || [];
+            const matchedProd = prodList.find((p: any) => p.id === Number(it.productId));
+            const baseRef = Number(matchedProd?.wholesalePrice || matchedProd?.retailPrice || matchedProd?.price || it.product?.wholesalePrice || it.product?.retailPrice || it.product?.price || 0);
+            const subRef = conversionRate > 0 ? baseRef / conversionRate : baseRef;
+            if (baseRef > 0 && Math.abs(unitPrice - subRef) < Math.abs(unitPrice - baseRef)) {
+              effectiveUnitType = 'sub';
+            }
+          } catch (_) {}
+        }
+        let unit: string | undefined;
+        if (effectiveUnitType === 'sub' && subUnit) {
+          unit = subUnit;
+        } else if (effectiveUnitType === 'base' && baseUnitName) {
+          unit = baseUnitName;
+        } else if (existingItem?.unit) {
+          unit = existingItem.unit;
+        } else if (typeof it.unit === 'string' && it.unit) {
+          unit = it.unit;
+        } else {
+          unit = it.unit?.name || baseUnitName || subUnit || undefined;
+        }
+        const unitType = effectiveUnitType;
 
         items.push({
           id: itemId,
@@ -824,6 +855,9 @@ export class SaleRepository extends BaseRepository<Sale> {
       if (!raw || !raw.id) return await this.getById(id);
 
       const existing = await super.getById(id);
+      if (existing) {
+        existing.items = await this.getItemsForSale(id);
+      }
       const { sale, items } = this.normalizeApiSale(raw, existing);
       if (!existing || existing.syncStatus === 'synced') {
         if (existing) {

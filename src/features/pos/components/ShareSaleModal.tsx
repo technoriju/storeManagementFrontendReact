@@ -72,7 +72,7 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
         unitType: it.unitType,
         quantity: Number(it.quantity) || 1,
         unitPrice: Number(it.unitPrice || it.price || 0),
-        unit: it.unit || it.product?.unitName || it.product?.baseUnitName || 'Pcs',
+        unit: (it.unitType === 'sub' && (it.subUnit || it.subUnitName)) ? (it.subUnit || it.subUnitName) : (it.unit || it.product?.unitName || it.product?.baseUnitName || 'Pcs'),
         discount: Number(it.discount || 0),
         gst: Number(it.gst || 0),
         taxAmount: Number(it.taxAmount || 0),

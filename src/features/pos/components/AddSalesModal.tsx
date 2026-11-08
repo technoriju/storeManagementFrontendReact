@@ -324,21 +324,21 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
                     (baseUnit?.shortName && rawItemUnit === baseUnit.shortName.toLowerCase())
                   ));
 
+                  const baseRef = detectedPriceType === 'retail' ? retailP : wholesaleP;
+                  const subRef = cRate > 0 ? baseRef / cRate : baseRef;
+                  const isPriceCloserToSub = cRate > 1 && baseRef > 0 && Math.abs(Number(item.unitPrice) - subRef) < Math.abs(Number(item.unitPrice) - baseRef);
+
                   let effectiveUnitType: 'base' | 'sub';
-                  if (isSubByName) {
+                  if (item.unitType === 'sub' || item.unitType === 'base') {
+                    effectiveUnitType = item.unitType;
+                  } else if (isPriceCloserToSub) {
+                    effectiveUnitType = 'sub';
+                  } else if (isSubByName) {
                     effectiveUnitType = 'sub';
                   } else if (isBaseByName) {
                     effectiveUnitType = 'base';
-                  } else if (item.unitType === 'base' || item.unitType === 'sub') {
-                    effectiveUnitType = item.unitType;
                   } else {
-                    const baseRef = detectedPriceType === 'retail' ? retailP : wholesaleP;
-                    const subRef = cRate > 0 ? baseRef / cRate : baseRef;
-                    if (cRate > 1 && Math.abs(Number(item.unitPrice) - subRef) < Math.abs(Number(item.unitPrice) - baseRef)) {
-                      effectiveUnitType = 'sub';
-                    } else {
-                      effectiveUnitType = 'base';
-                    }
+                    effectiveUnitType = 'base';
                   }
 
                   const effectiveUnit = effectiveUnitType === 'sub' ? fallbackSubName : resolvedBaseUnitName;
@@ -1040,7 +1040,7 @@ export const AddSalesModal: React.FC<Props> = ({ visible, onClose, editSaleId })
           taxAmount: item.taxAmount,
           unitCost: item.unitCost,
           total: item.total,
-          unit: item.unit,
+          unit: item.unitType === 'sub' ? (validSubUnit || item.unit || 'Pcs') : (item.unit || item.baseUnitName || 'Unit'),
           unitType: item.unitType,
           conversionRate: item.conversionRate,
         };

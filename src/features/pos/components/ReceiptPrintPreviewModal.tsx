@@ -144,6 +144,25 @@ export function getItemBaseUnit(item: ReceiptItem): string {
   return String(raw).trim() || 'Unit';
 }
 
+export function getItemDisplayUnit(item: ReceiptItem): string {
+  const subUnit = getItemSubUnit(item);
+  const baseUnit = getItemBaseUnit(item);
+
+  if (item.unitType === 'sub' && subUnit) {
+    return subUnit;
+  }
+  if (item.unitType === 'base' && baseUnit) {
+    return baseUnit;
+  }
+  if (item.unit && subUnit && String(item.unit).trim().toLowerCase() === String(subUnit).trim().toLowerCase()) {
+    return subUnit;
+  }
+  if (item.unit && baseUnit && String(item.unit).trim().toLowerCase() === String(baseUnit).trim().toLowerCase() && item.unitType !== 'sub') {
+    return baseUnit;
+  }
+  return item.unit || (item.unitType === 'sub' ? subUnit : baseUnit) || 'Pcs';
+}
+
 export function formatItemMeta(item: ReceiptItem): string {
   const brand = getItemBrand(item);
   const subUnit = getItemSubUnit(item);
@@ -287,7 +306,8 @@ export function getItemHeightMm(item: ReceiptItem, paperFormat: ReceiptPaperForm
   const subUnit = getItemSubUnit(item);
   const conversionRate = getItemConversionRate(item);
   if (brand || subUnit || conversionRate) lines += 1;
-  if (item.unit && subUnit && subUnit !== item.unit) lines = Math.max(lines, 2);
+  const displayUnit = getItemDisplayUnit(item);
+  if (displayUnit && subUnit && subUnit.toLowerCase() !== displayUnit.toLowerCase() && item.unitType !== 'sub') lines = Math.max(lines, 2);
 
   if (paperFormat === 'halfA4Landscape') {
     return 5.5 + (lines - 1) * 3.6;
@@ -628,7 +648,7 @@ export function generateReceiptHtml({
             ${metaLine}
             <div class="meta-row item-sub">
               <span>${item.discount ? `Disc: -₹${Number(item.discount).toFixed(2)}` : ''} ${showTaxBreakdown && item.gst ? `GST ${item.gst}%` : ''}</span>
-              <span style="width: 15%; text-align: center;">${item.quantity}${item.unit ? ` ${item.unit}` : ''}</span>
+              <span style="width: 15%; text-align: center;">${item.quantity} ${getItemDisplayUnit(item)}</span>
               <span style="width: 15%; text-align: right;">${Number(item.unitPrice).toFixed(2)}</span>
               <span style="width: 20%; text-align: right; font-weight: bold;">₹${Number(item.total).toFixed(2)}</span>
             </div>
@@ -1066,7 +1086,7 @@ ${pages.map((page, pageIdx) => {
               </td>
               ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
               <td style="text-align: center;">
-                ${item.quantity} ${item.unit || ''}
+                ${item.quantity} ${getItemDisplayUnit(item)}
               </td>
               <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
               <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
@@ -1496,8 +1516,8 @@ ${pagesLs.map((page, pageIdx) => {
               ${isWholesale ? `<td style="text-align: center;">${item.hsn || '9983'}</td>` : ''}
               <td style="text-align: center;">${item.quantity}</td>
               <td style="text-align: center;">
-                ${item.unit || 'Pcs'}
-                ${subUnit && subUnit !== item.unit ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
+                ${getItemDisplayUnit(item)}
+                ${subUnit && subUnit.toLowerCase() !== getItemDisplayUnit(item).toLowerCase() && item.unitType !== 'sub' ? `<div style="font-size: 7.5px; color: #64748b; font-weight: normal;">(Sub: ${subUnit})</div>` : ''}
               </td>
               <td style="text-align: right;">${Number(item.unitPrice).toFixed(2)}</td>
               <td style="text-align: right;">${discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}</td>
@@ -2223,7 +2243,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               {showTaxBreakdown && item.gst ? ` GST ${item.gst}%` : ''}
                             </Text>
                             <Text style={[styles.thermalMono, { width: 36, textAlign: 'center' }]}>
-                              {item.quantity}{item.unit ? ` ${item.unit}` : ''}
+                              {item.quantity} {getItemDisplayUnit(item)}
                             </Text>
                             <Text style={[styles.thermalMono, { width: 55, textAlign: 'right' }]}>
                               {Number(item.unitPrice).toFixed(2)}
@@ -2488,7 +2508,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               <Text style={[styles.p140Td, { width: 42, textAlign: 'center' }]}>{item.hsn || '-'}</Text>
                             )}
                             <Text style={[styles.p140Td, { width: 38, textAlign: 'center' }]}>
-                              {item.quantity}{item.unit ? ` ${item.unit}` : ''}
+                              {item.quantity} {getItemDisplayUnit(item)}
                             </Text>
                             <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
                               {Number(item.unitPrice).toFixed(2)}
@@ -2824,10 +2844,11 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                               {item.quantity}
                             </Text>
                             <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
-                              {item.unit || 'Pcs'}
+                              {getItemDisplayUnit(item)}
                               {(() => {
                                 const sub = getItemSubUnit(item);
-                                return sub && sub !== item.unit ? `\n(Sub: ${sub})` : '';
+                                const du = getItemDisplayUnit(item);
+                                return sub && sub.toLowerCase() !== du.toLowerCase() && item.unitType !== 'sub' ? `\n(Sub: ${sub})` : '';
                               })()}
                             </Text>
                             <Text style={[styles.lsTd, { width: 65, textAlign: 'right' }]}>
