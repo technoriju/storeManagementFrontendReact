@@ -1351,7 +1351,7 @@ export class ReportsService {
 
     try {
       const apiRes = await apiClient.get('/reports/sales', {
-        params: { ...filters, customerId: custIdStr, limit: 100 },
+        params: { ...filters, customerId: custIdStr, limit: filters.limit || 5000 },
       });
       const rawSales = this.unpackApiArray(apiRes);
       const sales = rawSales.map((s: any) => {
@@ -1515,7 +1515,7 @@ export class ReportsService {
 
     try {
       const apiRes = await apiClient.get('/reports/purchases', {
-        params: { ...filters, supplierId: suppIdStr, limit: 100 },
+        params: { ...filters, supplierId: suppIdStr, limit: filters.limit || 5000 },
       });
       const rawPurchases = this.unpackApiArray(apiRes);
       const purchases = rawPurchases.map((p: any) => {

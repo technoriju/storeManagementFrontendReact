@@ -26,6 +26,7 @@ import { DateFilterBar, DateRangeState, computePresetDates } from '../../reports
 import { ReportsService } from '../../reports/services/reports.service';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../../reports/utils/reportExportUtils';
@@ -74,6 +75,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
       const res = await ReportsService.getCustomerWiseStatement(id, {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
+        limit: 10000,
       });
       setStatementData(res);
     } catch (e) {
@@ -83,11 +85,35 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     }
   };
 
-  const handlePdf = () => {
+  const handlePrint = () => {
     if (!customer) return;
     printOrSavePdfReport({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      columns: [
+        { key: 'invoiceNumber', title: 'Invoice #' },
+        { key: 'date', title: 'Date' },
+        { key: 'total', title: 'Total (₹)' },
+        { key: 'paid', title: 'Paid (₹)' },
+        { key: 'due', title: 'Due (₹)' },
+        { key: 'paymentStatus', title: 'Status' },
+      ],
+      data: statementData?.sales || [],
+      summary: statementData?.summary || {},
+      partyName: customer.name,
+      phone: customer.phone,
+    });
+  };
+
+  const handlePdf = () => {
+    if (!customer) return;
+    exportReportToPdf({
+      title: `Customer Statement - ${customer.name}`,
+      dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },
@@ -108,6 +134,8 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     exportReportToExcel({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },
@@ -128,6 +156,8 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     shareReportToWhatsApp({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },
@@ -327,7 +357,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
                 <MessageCircle size={11} color="#16A34A" />
                 <Text style={[styles.smallActionText, { color: '#16A34A' }]}>WhatsApp</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: '#2563EB', borderColor: '#2563EB' }]} onPress={handlePdf}>
+              <TouchableOpacity style={[styles.smallActionBtn, { backgroundColor: '#2563EB', borderColor: '#2563EB' }]} onPress={handlePrint}>
                 <Printer size={11} color="#FFF" />
                 <Text style={[styles.smallActionText, { color: '#FFF' }]}>Print</Text>
               </TouchableOpacity>

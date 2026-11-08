@@ -33,6 +33,7 @@ import {
 import { DateFilterBar, DateRangeState, computePresetDates } from './DateFilterBar';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../utils/reportExportUtils';
@@ -275,9 +276,11 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
-                printOrSavePdfReport({
+                exportReportToPdf({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -303,6 +306,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 exportReportToExcel({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -328,6 +333,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 shareReportToWhatsApp({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -353,6 +360,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 printOrSavePdfReport({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -571,6 +580,53 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
   const totalAllPaid = totalAllCount === 0 ? 0 : (overviewSummary?.totalPaid ?? filteredAllSuppliers.reduce((sum, s) => sum + Number(s.totalPaid || 0), 0));
   const totalAllDue = totalAllCount === 0 ? 0 : (overviewSummary?.totalOutstanding ?? filteredAllSuppliers.reduce((sum, s) => sum + Number(s.outstandingBalance || 0), 0));
 
+  const fetchFullSupplierOverviewForExport = async (): Promise<any[]> => {
+    if (overviewTotalPages <= 1 && allSuppliersData.length >= overviewTotalItems && !supplierSearchQuery.trim()) {
+      return filteredAllSuppliers;
+    }
+    try {
+      const res = await ReportsService.getSupplierReport({
+        ...filters,
+        startDate: activeDateRange.startDate,
+        endDate: activeDateRange.endDate,
+        page: 1,
+        limit: 10000,
+        search: supplierSearchQuery.trim() || undefined,
+      });
+      return Array.isArray(res?.data) && res.data.length > 0 ? res.data : filteredAllSuppliers;
+    } catch {
+      return filteredAllSuppliers;
+    }
+  };
+
+  const handleOverviewExport = async (action: 'pdf' | 'excel' | 'whatsapp' | 'print') => {
+    const fullData = await fetchFullSupplierOverviewForExport();
+    const summ = overviewSummary || { totalPurchased: totalAllPurchased, totalPaid: totalAllPaid, totalOutstanding: totalAllDue };
+    const cols = [
+      { key: 'supplierCode', title: 'Supplier ID' },
+      { key: 'supplierName', title: 'Supplier Name' },
+      { key: 'phone', title: 'Phone' },
+      { key: 'totalPurchasesCount', title: 'Orders' },
+      { key: 'totalPurchased', title: 'Purchased (₹)' },
+      { key: 'totalPaid', title: 'Paid (₹)' },
+      { key: 'outstandingBalance', title: 'Due (₹)' },
+    ];
+    const opts = {
+      title: 'Supplier-Wise Report',
+      dateRangeLabel,
+      startDate: activeDateRange.startDate,
+      endDate: activeDateRange.endDate,
+      columns: cols,
+      data: fullData,
+      summary: summ,
+    };
+
+    if (action === 'pdf') await exportReportToPdf(opts);
+    else if (action === 'excel') exportReportToExcel(opts);
+    else if (action === 'whatsapp') await shareReportToWhatsApp(opts);
+    else if (action === 'print') printOrSavePdfReport(opts);
+  };
+
   return (
     <View style={styles.container}>
       {/* Overview Metric Cards (Height reduced up to 50%) */}
@@ -681,23 +737,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             </Pressable>
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
-              onPress={() => {
-                printOrSavePdfReport({
-                  title: 'Supplier-Wise Report',
-                  dateRangeLabel,
-                  columns: [
-                    { key: 'supplierCode', title: 'Supplier ID' },
-                    { key: 'supplierName', title: 'Supplier Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalPurchasesCount', title: 'Orders' },
-                    { key: 'totalPurchased', title: 'Purchased (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllSuppliers,
-                  summary: overviewSummary || { totalPurchased: totalAllPurchased, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('pdf')}
             >
               <FileText size={12} color="#EF4444" />
               <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>PDF</Text>
@@ -705,23 +745,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
-              onPress={() => {
-                exportReportToExcel({
-                  title: 'Supplier-Wise Report',
-                  dateRangeLabel,
-                  columns: [
-                    { key: 'supplierCode', title: 'Supplier ID' },
-                    { key: 'supplierName', title: 'Supplier Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalPurchasesCount', title: 'Orders' },
-                    { key: 'totalPurchased', title: 'Purchased (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllSuppliers,
-                  summary: overviewSummary || { totalPurchased: totalAllPurchased, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('excel')}
             >
               <FileSpreadsheet size={12} color="#10B981" />
               <Text style={[styles.outlineActionText, { color: theme.colors.text }]}>Excel</Text>
@@ -729,21 +753,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
-              onPress={() => {
-                shareReportToWhatsApp({
-                  title: 'Supplier-Wise Report',
-                  dateRangeLabel,
-                  columns: [
-                    { key: 'supplierCode', title: 'Supplier ID' },
-                    { key: 'supplierName', title: 'Supplier Name' },
-                    { key: 'totalPurchased', title: 'Purchased (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllSuppliers,
-                  summary: overviewSummary || { totalPurchased: totalAllPurchased, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('whatsapp')}
             >
               <MessageCircle size={12} color="#16A34A" />
               <Text style={[styles.outlineActionText, { color: '#16A34A' }]}>WhatsApp</Text>
@@ -751,23 +761,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
 
             <Pressable
               style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
-              onPress={() => {
-                printOrSavePdfReport({
-                  title: 'Supplier-Wise Report',
-                  dateRangeLabel,
-                  columns: [
-                    { key: 'supplierCode', title: 'Supplier ID' },
-                    { key: 'supplierName', title: 'Supplier Name' },
-                    { key: 'phone', title: 'Phone' },
-                    { key: 'totalPurchasesCount', title: 'Orders' },
-                    { key: 'totalPurchased', title: 'Purchased (₹)' },
-                    { key: 'totalPaid', title: 'Paid (₹)' },
-                    { key: 'outstandingBalance', title: 'Due (₹)' },
-                  ],
-                  data: filteredAllSuppliers,
-                  summary: overviewSummary || { totalPurchased: totalAllPurchased, totalPaid: totalAllPaid, totalOutstanding: totalAllDue },
-                });
-              }}
+              onPress={() => handleOverviewExport('print')}
             >
               <Printer size={12} color="#FFF" />
               <Text style={styles.primaryActionText}>Print</Text>
