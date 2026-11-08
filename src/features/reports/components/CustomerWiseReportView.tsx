@@ -34,6 +34,7 @@ import {
 import { DateFilterBar, DateRangeState, computePresetDates } from './DateFilterBar';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../utils/reportExportUtils';
@@ -274,9 +275,11 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
-                printOrSavePdfReport({
+                exportReportToPdf({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Invoice #' },
                     { key: 'date', title: 'Date' },
@@ -302,6 +305,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 exportReportToExcel({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Invoice #' },
                     { key: 'date', title: 'Date' },
@@ -327,6 +332,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 shareReportToWhatsApp({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Invoice #' },
                     { key: 'date', title: 'Date' },
@@ -352,6 +359,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 printOrSavePdfReport({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Invoice #' },
                     { key: 'date', title: 'Date' },
@@ -681,9 +690,11 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
-                printOrSavePdfReport({
+                exportReportToPdf({
                   title: 'Customer-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'customerCode', title: 'Customer ID' },
                     { key: 'customerName', title: 'Customer Name' },
@@ -708,6 +719,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 exportReportToExcel({
                   title: 'Customer-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'customerCode', title: 'Customer ID' },
                     { key: 'customerName', title: 'Customer Name' },
@@ -732,6 +745,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 shareReportToWhatsApp({
                   title: 'Customer-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'customerCode', title: 'Customer ID' },
                     { key: 'customerName', title: 'Customer Name' },
@@ -754,6 +769,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                 printOrSavePdfReport({
                   title: 'Customer-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'customerCode', title: 'Customer ID' },
                     { key: 'customerName', title: 'Customer Name' },

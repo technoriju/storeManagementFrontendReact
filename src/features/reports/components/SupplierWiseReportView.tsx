@@ -33,6 +33,7 @@ import {
 import { DateFilterBar, DateRangeState, computePresetDates } from './DateFilterBar';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../utils/reportExportUtils';
@@ -275,9 +276,11 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
-                printOrSavePdfReport({
+                exportReportToPdf({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -303,6 +306,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 exportReportToExcel({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -328,6 +333,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 shareReportToWhatsApp({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -353,6 +360,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 printOrSavePdfReport({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'invoiceNumber', title: 'Bill / PO #' },
                     { key: 'date', title: 'Date' },
@@ -682,9 +691,11 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
-                printOrSavePdfReport({
+                exportReportToPdf({
                   title: 'Supplier-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'supplierCode', title: 'Supplier ID' },
                     { key: 'supplierName', title: 'Supplier Name' },
@@ -709,6 +720,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 exportReportToExcel({
                   title: 'Supplier-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'supplierCode', title: 'Supplier ID' },
                     { key: 'supplierName', title: 'Supplier Name' },
@@ -733,6 +746,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 shareReportToWhatsApp({
                   title: 'Supplier-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'supplierCode', title: 'Supplier ID' },
                     { key: 'supplierName', title: 'Supplier Name' },
@@ -755,6 +770,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                 printOrSavePdfReport({
                   title: 'Supplier-Wise Report',
                   dateRangeLabel,
+                  startDate: activeDateRange.startDate,
+                  endDate: activeDateRange.endDate,
                   columns: [
                     { key: 'supplierCode', title: 'Supplier ID' },
                     { key: 'supplierName', title: 'Supplier Name' },

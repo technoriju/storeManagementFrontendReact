@@ -26,6 +26,7 @@ import { DateFilterBar, DateRangeState, computePresetDates } from '../../reports
 import { ReportsService } from '../../reports/services/reports.service';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../../reports/utils/reportExportUtils';
@@ -85,9 +86,11 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
 
   const handlePdf = () => {
     if (!customer) return;
-    printOrSavePdfReport({
+    exportReportToPdf({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },
@@ -108,6 +111,8 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     exportReportToExcel({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },
@@ -128,6 +133,8 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     shareReportToWhatsApp({
       title: `Customer Statement - ${customer.name}`,
       dateRangeLabel: dateRange.label,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
       columns: [
         { key: 'invoiceNumber', title: 'Invoice #' },
         { key: 'date', title: 'Date' },

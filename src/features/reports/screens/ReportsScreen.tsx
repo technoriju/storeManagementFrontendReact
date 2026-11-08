@@ -50,6 +50,7 @@ import {
 } from 'lucide-react-native';
 import {
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../utils/reportExportUtils';
@@ -1088,9 +1089,11 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
       <Pressable
         style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
         onPress={() => {
-          printOrSavePdfReport({
+          exportReportToPdf({
             title: activeTabConfig.label,
             dateRangeLabel,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
             columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
             data: filteredData,
             summary: summaryData,
@@ -1107,6 +1110,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           exportReportToExcel({
             title: activeTabConfig.label,
             dateRangeLabel,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
             columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
             data: filteredData,
             summary: summaryData,
@@ -1123,6 +1128,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           shareReportToWhatsApp({
             title: activeTabConfig.label,
             dateRangeLabel,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
             columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
             data: filteredData,
             summary: summaryData,
@@ -1139,6 +1146,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           printOrSavePdfReport({
             title: activeTabConfig.label,
             dateRangeLabel,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
             columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
             data: filteredData,
             summary: summaryData,

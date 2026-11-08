@@ -6,6 +6,7 @@ import { FileText, FileSpreadsheet, Printer, Download, Check, X, Share2, Message
 import {
   ReportColumnDef,
   exportReportToExcel,
+  exportReportToPdf,
   printOrSavePdfReport,
   shareReportToWhatsApp,
 } from '../utils/reportExportUtils';
@@ -16,6 +17,8 @@ interface ReportExportModalProps {
   reportTitle: string;
   totalRecords: number;
   dateRangeLabel?: string;
+  startDate?: string;
+  endDate?: string;
   data?: any[];
   columns?: ReportColumnDef[];
   summary?: any;
@@ -29,6 +32,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   reportTitle,
   totalRecords,
   dateRangeLabel = 'Current Period',
+  startDate,
+  endDate,
   data = [],
   columns = [],
   summary,
@@ -41,12 +46,14 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setIsExporting(true);
     try {
       const exportOptions = {
         title: reportTitle,
         dateRangeLabel,
+        startDate,
+        endDate,
         columns: columns.length > 0 ? columns : [
           { key: 'invoiceNumber', title: 'Invoice / Doc #' },
           { key: 'date', title: 'Date' },
@@ -62,10 +69,12 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
 
       if (selectedFormat === 'excel') {
         exportReportToExcel(exportOptions);
-      } else if (selectedFormat === 'pdf' || selectedFormat === 'print') {
+      } else if (selectedFormat === 'pdf') {
+        await exportReportToPdf(exportOptions);
+      } else if (selectedFormat === 'print') {
         printOrSavePdfReport(exportOptions);
       } else if (selectedFormat === 'whatsapp') {
-        shareReportToWhatsApp(exportOptions);
+        await shareReportToWhatsApp(exportOptions);
       }
 
       setIsSuccess(true);
