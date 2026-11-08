@@ -225,7 +225,7 @@ export const PosOrdersScreen: React.FC<Props> = ({ onNavigate }) => {
           gst: Number(i.gst) || 0,
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
-          unit: i.unit || i.product?.unitName || i.product?.baseUnitName || 'Pcs',
+          unit: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unit || i.product?.unitName || i.product?.baseUnitName || 'Pcs'),
           product: i.product,
           productUnit: i.productUnit,
           hsn: i.hsn || '',

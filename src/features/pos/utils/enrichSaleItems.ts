@@ -142,10 +142,53 @@ export async function enrichSaleItemsWithProductMeta<T extends Record<string, an
       it.product?.unitName ||
       storeProduct?.baseUnitName ||
       storeProduct?.baseUnit?.name ||
-      it.unit;
+      'Unit';
+
+    // Accurately determine unit and unitType (sub vs base)
+    let resolvedUnit = it.unit || it.unitName;
+    let resolvedUnitType = it.unitType;
+
+    if (convRate && convRate > 1 && subUnit) {
+      const baseRef = Number(
+        storeProduct?.wholesalePrice ||
+        storeProduct?.retailPrice ||
+        storeProduct?.price ||
+        it.product?.wholesalePrice ||
+        it.product?.retailPrice ||
+        it.product?.price ||
+        0
+      );
+      const subRef = convRate > 0 ? baseRef / convRate : baseRef;
+      const uPrice = Number(it.unitPrice || 0);
+
+      const isSubByName = Boolean(
+        resolvedUnit &&
+        (String(resolvedUnit).trim().toLowerCase() === String(subUnit).trim().toLowerCase() ||
+         String(resolvedUnit).trim().toLowerCase() === 'pcs')
+      );
+      const isPriceCloserToSub = baseRef > 0 && Math.abs(uPrice - subRef) < Math.abs(uPrice - baseRef);
+
+      if (resolvedUnitType === 'sub') {
+        resolvedUnit = subUnit;
+      } else if (resolvedUnitType === 'base') {
+        resolvedUnit = baseUnitName;
+      } else if (isPriceCloserToSub || isSubByName) {
+        resolvedUnitType = 'sub';
+        resolvedUnit = subUnit;
+      } else {
+        resolvedUnitType = 'base';
+        resolvedUnit = resolvedUnit || baseUnitName;
+      }
+    } else {
+      if (!resolvedUnit) resolvedUnit = baseUnitName || subUnit || 'Pcs';
+      if (!resolvedUnitType) resolvedUnitType = 'base';
+    }
 
     return {
       ...it,
+      unit: resolvedUnit,
+      unitName: resolvedUnit,
+      unitType: resolvedUnitType,
       brand: brand || undefined,
       brandName: brand || undefined,
       subUnit: subUnit || undefined,
