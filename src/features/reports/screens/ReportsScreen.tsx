@@ -46,7 +46,13 @@ import {
   CheckCircle,
   Clock,
   ChevronRight,
+  MessageCircle,
 } from 'lucide-react-native';
+import {
+  exportReportToExcel,
+  printOrSavePdfReport,
+  shareReportToWhatsApp,
+} from '../utils/reportExportUtils';
 
 interface ReportsScreenProps {
   initialReport?: string;
@@ -148,6 +154,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
       if (activeReportId === 'customer_wise' || activeReportId === 'supplier_wise') {
         // Handled by dedicated CustomerWiseReportView and SupplierWiseReportView
+        setData([]);
+        setSummaryData(null);
+        setTotalItems(0);
         setIsLoading(false);
         return;
       }
@@ -304,10 +313,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
   // Contextual KPI cards calculation
   const reportKPIs = useMemo(() => {
     if (activeReportId === 'sales_report') {
-      const totalSales = summaryData?.totalSales ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
-      const totalPaid = summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
-      const totalDue = summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
       const invoiceCount = totalItems || filteredData.length;
+      const totalSales = invoiceCount === 0 ? 0 : (summaryData?.totalSales ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0));
+      const totalPaid = invoiceCount === 0 ? 0 : (summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0));
+      const totalDue = invoiceCount === 0 ? 0 : (summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0));
       const avgValue = invoiceCount > 0 ? Math.round(totalSales / invoiceCount) : 0;
 
       return [
@@ -319,10 +328,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'purchase_report') {
-      const totalPurchase = summaryData?.totalPurchases ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0);
-      const totalPaid = summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0);
-      const totalDue = summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0);
       const orderCount = totalItems || filteredData.length;
+      const totalPurchase = orderCount === 0 ? 0 : (summaryData?.totalPurchases ?? filteredData.reduce((sum, i) => sum + Number(i.total || 0), 0));
+      const totalPaid = orderCount === 0 ? 0 : (summaryData?.totalPaid ?? filteredData.reduce((sum, i) => sum + Number(i.paid || 0), 0));
+      const totalDue = orderCount === 0 ? 0 : (summaryData?.totalDue ?? filteredData.reduce((sum, i) => sum + Number(i.due || 0), 0));
 
       return [
         { title: 'Total Procurement', value: `₹${totalPurchase.toLocaleString()}`, sub: `${orderCount} purchase orders`, icon: ShoppingBag, color: '#2563EB', bg: '#EFF6FF' },
@@ -334,9 +343,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
     if (activeReportId === 'inventory_report') {
       const totalSKUs = totalItems || filteredData.length;
-      const totalUnits = summaryData?.totalQuantity ?? filteredData.reduce((sum, i) => sum + Number(i.stockQuantity || 0), 0);
-      const totalValuation = summaryData?.estimatedStockValue ?? filteredData.reduce((sum, i) => sum + Number(i.stockValuation || 0), 0);
-      const lowStockCount = filteredData.filter((i) => i.status === 'LOW_STOCK' || i.status === 'OUT_OF_STOCK').length;
+      const totalUnits = totalSKUs === 0 ? 0 : (summaryData?.totalQuantity ?? filteredData.reduce((sum, i) => sum + Number(i.stockQuantity || 0), 0));
+      const totalValuation = totalSKUs === 0 ? 0 : (summaryData?.estimatedStockValue ?? filteredData.reduce((sum, i) => sum + Number(i.stockValuation || 0), 0));
+      const lowStockCount = totalSKUs === 0 ? 0 : filteredData.filter((i) => i.status === 'LOW_STOCK' || i.status === 'OUT_OF_STOCK').length;
 
       return [
         { title: 'Total Active SKUs', value: String(totalSKUs), sub: 'Catalogued products', icon: Box, color: '#2563EB', bg: '#EFF6FF' },
@@ -348,9 +357,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
     if (activeReportId === 'customer_report') {
       const totalCust = totalItems || filteredData.length;
-      const totalBilled = filteredData.reduce((sum, i) => sum + Number(i.totalBilled || 0), 0);
-      const totalDue = summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
-      const overdueCust = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
+      const totalBilled = totalCust === 0 ? 0 : filteredData.reduce((sum, i) => sum + Number(i.totalBilled || 0), 0);
+      const totalDue = totalCust === 0 ? 0 : (summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0));
+      const overdueCust = totalCust === 0 ? 0 : filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
 
       return [
         { title: 'Total Customers', value: String(totalCust), sub: 'Registered accounts', icon: Users, color: '#2563EB', bg: '#EFF6FF' },
@@ -362,9 +371,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
     if (activeReportId === 'supplier_report') {
       const totalSupp = totalItems || filteredData.length;
-      const totalPurchased = filteredData.reduce((sum, i) => sum + Number(i.totalPurchased || 0), 0);
-      const totalDue = summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0);
-      const pendingSupp = filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
+      const totalPurchased = totalSupp === 0 ? 0 : filteredData.reduce((sum, i) => sum + Number(i.totalPurchased || 0), 0);
+      const totalDue = totalSupp === 0 ? 0 : (summaryData?.totalOutstanding ?? filteredData.reduce((sum, i) => sum + Number(i.outstandingBalance || 0), 0));
+      const pendingSupp = totalSupp === 0 ? 0 : filteredData.filter((i) => Number(i.outstandingBalance || 0) > 0).length;
 
       return [
         { title: 'Total Suppliers', value: String(totalSupp), sub: 'Active vendors', icon: UserCheck, color: '#2563EB', bg: '#EFF6FF' },
@@ -375,9 +384,10 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'product_report') {
-      const totalRevenue = summaryData?.totalRevenue ?? filteredData.reduce((sum, i) => sum + Number(i.revenue || 0), 0);
-      const totalProfit = summaryData?.totalProfit ?? filteredData.reduce((sum, i) => sum + Number(i.profit || 0), 0);
-      const totalUnits = summaryData?.totalQuantitySold ?? filteredData.reduce((sum, i) => sum + Number(i.unitsSold || 0), 0);
+      const prodCount = totalItems || filteredData.length;
+      const totalRevenue = prodCount === 0 ? 0 : (summaryData?.totalRevenue ?? filteredData.reduce((sum, i) => sum + Number(i.revenue || 0), 0));
+      const totalProfit = prodCount === 0 ? 0 : (summaryData?.totalProfit ?? filteredData.reduce((sum, i) => sum + Number(i.profit || 0), 0));
+      const totalUnits = prodCount === 0 ? 0 : (summaryData?.totalQuantitySold ?? filteredData.reduce((sum, i) => sum + Number(i.unitsSold || 0), 0));
       const avgMargin = totalRevenue > 0 ? Number(((totalProfit / totalRevenue) * 100).toFixed(1)) : 0;
 
       return [
@@ -389,13 +399,14 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'invoice_report') {
-      const grandTotal = summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.grandTotal || 0), 0);
-      const taxAmount = summaryData?.totalTax ?? filteredData.reduce((sum, i) => sum + Number(i.taxAmount || 0), 0);
-      const paidCount = filteredData.filter((i) => i.paymentStatus === 'Paid').length;
-      const unpaidCount = filteredData.filter((i) => i.paymentStatus !== 'Paid').length;
+      const invCount = totalItems || filteredData.length;
+      const grandTotal = invCount === 0 ? 0 : (summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.grandTotal || 0), 0));
+      const taxAmount = invCount === 0 ? 0 : (summaryData?.totalTax ?? filteredData.reduce((sum, i) => sum + Number(i.taxAmount || 0), 0));
+      const paidCount = invCount === 0 ? 0 : filteredData.filter((i) => i.paymentStatus === 'Paid').length;
+      const unpaidCount = invCount === 0 ? 0 : filteredData.filter((i) => i.paymentStatus !== 'Paid').length;
 
       return [
-        { title: 'Invoiced Amount', value: `₹${grandTotal.toLocaleString()}`, sub: `${totalItems || filteredData.length} tax bills`, icon: FileText, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Invoiced Amount', value: `₹${grandTotal.toLocaleString()}`, sub: `${invCount} tax bills`, icon: FileText, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'GST Collected', value: `₹${taxAmount.toLocaleString()}`, sub: 'Total tax component', icon: Activity, color: '#7C3AED', bg: '#F5F3FF' },
         { title: 'Paid Invoices', value: String(paidCount), sub: 'Settled receipts', icon: CheckCircle, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Unpaid / Partial', value: String(unpaidCount), sub: 'Pending collection', icon: AlertTriangle, color: '#EF4444', bg: '#FEF2F2' },
@@ -403,49 +414,56 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
     }
 
     if (activeReportId === 'payment_report') {
-      const totalInflow = summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.inflow || 0), 0);
-      const totalOutflow = filteredData.reduce((sum, i) => sum + Number(i.outflow || 0), 0);
+      const txCount = totalItems || filteredData.length;
+      const totalInflow = txCount === 0 ? 0 : (summaryData?.totalAmount ?? filteredData.reduce((sum, i) => sum + Number(i.inflow || 0), 0));
+      const totalOutflow = txCount === 0 ? 0 : filteredData.reduce((sum, i) => sum + Number(i.outflow || 0), 0);
       const netCash = totalInflow - totalOutflow;
 
       return [
         { title: 'Total Collections (In)', value: `₹${totalInflow.toLocaleString()}`, sub: 'Receipts from customers', icon: ArrowUpRight, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Total Payouts (Out)', value: `₹${totalOutflow.toLocaleString()}`, sub: 'Vendor & expense payouts', icon: ArrowDownLeft, color: '#EF4444', bg: '#FEF2F2' },
         { title: 'Net Cash Flow', value: `₹${netCash.toLocaleString()}`, sub: 'Inflow minus outflow', icon: DollarSign, color: netCash >= 0 ? '#10B981' : '#EF4444', bg: netCash >= 0 ? '#ECFDF5' : '#FEF2F2' },
-        { title: 'Total Transactions', value: String(totalItems || filteredData.length), sub: 'Vouchers recorded', icon: Layers, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Total Transactions', value: String(txCount), sub: 'Vouchers recorded', icon: Layers, color: '#2563EB', bg: '#EFF6FF' },
       ];
     }
 
     if (activeReportId === 'expense_report') {
-      const totalExp = summaryData?.totalExpenses ?? filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      const expCount = totalItems || filteredData.length;
+      const totalExp = expCount === 0 ? 0 : (summaryData?.totalExpenses ?? filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0));
+      const topCat = expCount === 0 ? 'None' : (filteredData[0]?.category || 'General');
 
       return [
-        { title: 'Total Expenses', value: `₹${totalExp.toLocaleString()}`, sub: `${totalItems || filteredData.length} cost vouchers`, icon: FileMinus, color: '#EF4444', bg: '#FEF2F2' },
-        { title: 'Top Category', value: 'Rent & Facility', sub: '₹25,000 monthly', icon: PieChart, color: '#D97706', bg: '#FFFBEB' },
+        { title: 'Total Expenses', value: `₹${totalExp.toLocaleString()}`, sub: `${expCount} cost vouchers`, icon: FileMinus, color: '#EF4444', bg: '#FEF2F2' },
+        { title: 'Top Category', value: topCat, sub: expCount === 0 ? 'No expense in range' : 'Primary cost centre', icon: PieChart, color: '#D97706', bg: '#FFFBEB' },
         { title: 'Operational Overhead', value: `₹${totalExp.toLocaleString()}`, sub: 'Direct business costs', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
     if (activeReportId === 'income_report') {
-      const totalInc = filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      const incCount = totalItems || filteredData.length;
+      const totalInc = incCount === 0 ? 0 : filteredData.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      const primarySource = incCount === 0 ? 'None' : (filteredData[0]?.source || filteredData[0]?.category || 'Sales Operations');
+      const otherInc = incCount === 0 ? 0 : Math.max(0, totalInc - Number(filteredData[0]?.amount || 0));
 
       return [
-        { title: 'Total Inflow Recorded', value: `₹${totalInc.toLocaleString()}`, sub: `${totalItems || filteredData.length} credit entries`, icon: FilePlus, color: '#10B981', bg: '#ECFDF5' },
-        { title: 'Primary Source', value: 'Sales Operations', sub: 'Core store revenues', icon: TrendingUp, color: '#2563EB', bg: '#EFF6FF' },
-        { title: 'Other Inflows', value: '₹10,800', sub: 'Interest & scrap sales', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Total Inflow Recorded', value: `₹${totalInc.toLocaleString()}`, sub: `${incCount} credit entries`, icon: FilePlus, color: '#10B981', bg: '#ECFDF5' },
+        { title: 'Primary Source', value: primarySource, sub: incCount === 0 ? 'No inflow in range' : 'Core store revenues', icon: TrendingUp, color: '#2563EB', bg: '#EFF6FF' },
+        { title: 'Other Inflows', value: `₹${otherInc.toLocaleString()}`, sub: 'Secondary receipts', icon: DollarSign, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
     if (activeReportId === 'tax_report') {
-      const totalTax = summaryData?.totalTax;
-      const salesTax = filteredData.filter((i) => i.type === 'SALE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
-      const purchaseTax = filteredData.filter((i) => i.type === 'PURCHASE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
+      const taxCount = totalItems || filteredData.length;
+      const totalTax = taxCount === 0 ? 0 : summaryData?.totalTax;
+      const salesTax = taxCount === 0 ? 0 : filteredData.filter((i) => i.type === 'SALE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
+      const purchaseTax = taxCount === 0 ? 0 : filteredData.filter((i) => i.type === 'PURCHASE').reduce((sum, i) => sum + Number(i.totalGst || 0), 0);
       const netTaxPayable = totalTax !== undefined ? totalTax : Math.max(0, salesTax - purchaseTax);
 
       return [
         { title: 'Output GST (Sales)', value: `₹${salesTax.toLocaleString()}`, sub: 'Collected from buyers', icon: ArrowUpRight, color: '#2563EB', bg: '#EFF6FF' },
         { title: 'Input Tax Credit (ITC)', value: `₹${purchaseTax.toLocaleString()}`, sub: 'Paid to suppliers', icon: ArrowDownLeft, color: '#10B981', bg: '#ECFDF5' },
         { title: 'Net GST Payable', value: `₹${netTaxPayable.toLocaleString()}`, sub: 'Government tax liability', icon: Activity, color: '#EF4444', bg: '#FEF2F2' },
-        { title: 'Tax Invoices Logged', value: String(totalItems || filteredData.length), sub: 'GSTR compliance ready', icon: FileText, color: '#7C3AED', bg: '#F5F3FF' },
+        { title: 'Tax Invoices Logged', value: String(taxCount), sub: 'GSTR compliance ready', icon: FileText, color: '#7C3AED', bg: '#F5F3FF' },
       ];
     }
 
@@ -1064,30 +1082,70 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         style={[styles.iconButton, isMobile && styles.iconButtonMobile, { borderColor: theme.colors.border }]}
         onPress={() => loadReportData()}
       >
-        <RefreshCw size={isMobile ? 14 : 16} color={theme.colors.textSecondary} />
+        <RefreshCw size={isMobile ? 12 : 14} color={theme.colors.textSecondary} />
       </Pressable>
 
       <Pressable
         style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
-        onPress={() => setIsExportModalVisible(true)}
+        onPress={() => {
+          printOrSavePdfReport({
+            title: activeTabConfig.label,
+            dateRangeLabel,
+            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
+            data: filteredData,
+            summary: summaryData,
+          });
+        }}
       >
-        <FileText size={isMobile ? 13 : 15} color="#EF4444" />
+        <FileText size={isMobile ? 12 : 14} color="#EF4444" />
         <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>PDF</Text>
       </Pressable>
 
       <Pressable
         style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: theme.colors.border }]}
-        onPress={() => setIsExportModalVisible(true)}
+        onPress={() => {
+          exportReportToExcel({
+            title: activeTabConfig.label,
+            dateRangeLabel,
+            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
+            data: filteredData,
+            summary: summaryData,
+          });
+        }}
       >
-        <FileSpreadsheet size={isMobile ? 13 : 15} color="#10B981" />
+        <FileSpreadsheet size={isMobile ? 12 : 14} color="#10B981" />
         <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: theme.colors.text }]}>Excel</Text>
       </Pressable>
 
       <Pressable
-        style={[styles.primaryActionBtn, isMobile && styles.primaryActionBtnMobile, { backgroundColor: '#2563EB' }]}
-        onPress={() => setIsExportModalVisible(true)}
+        style={[styles.outlineActionBtn, isMobile && styles.outlineActionBtnMobile, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
+        onPress={() => {
+          shareReportToWhatsApp({
+            title: activeTabConfig.label,
+            dateRangeLabel,
+            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
+            data: filteredData,
+            summary: summaryData,
+          });
+        }}
       >
-        <Printer size={isMobile ? 13 : 15} color="#FFF" />
+        <MessageCircle size={isMobile ? 12 : 14} color="#16A34A" />
+        <Text style={[styles.outlineActionText, isMobile && styles.outlineActionTextMobile, { color: '#16A34A' }]}>WhatsApp</Text>
+      </Pressable>
+
+      <Pressable
+        style={[styles.primaryActionBtn, isMobile && styles.primaryActionBtnMobile, { backgroundColor: '#2563EB' }]}
+        onPress={() => {
+          printOrSavePdfReport({
+            title: activeTabConfig.label,
+            dateRangeLabel,
+            columns: tableColumns.map((c) => ({ key: c.key, title: c.title })),
+            data: filteredData,
+            summary: summaryData,
+          });
+        }}
+      >
+        <Printer size={isMobile ? 12 : 14} color="#FFF" />
         <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>Print</Text>
       </Pressable>
     </View>
@@ -1128,7 +1186,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                 onPress={() => handleSelectTab(tab.id)}
               >
                 <TabIcon
-                  size={isMobile ? 14 : 16}
+                  size={isMobile ? 13 : 15}
                   color={isSelected ? '#F89344' : theme.colors.textSecondary}
                 />
                 <Text
@@ -1147,10 +1205,15 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         </ScrollView>
       </View>
 
+      {/* Date Range Filter Bar (Visible for ALL Report Modules) */}
+      <View style={[styles.globalDateBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.divider }]}>
+        {dateFilters}
+      </View>
+
       {/* Main Content Area */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]} showsVerticalScrollIndicator={false}>
         
-        {/* 2. Contextual KPI Cards Bar */}
+        {/* 2. Contextual KPI Cards Bar (Reduced height up to 50%) */}
         {reportKPIs.length > 0 &&
           activeReportId !== 'profit_loss' &&
           activeReportId !== 'annual_report' &&
@@ -1169,12 +1232,12 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
                   ]}
                 >
                   <View style={[styles.kpiIconBox, isMobile && styles.kpiIconBoxMobile, { backgroundColor: kpi.bg }]}>
-                    <IconComp size={isMobile ? 16 : 20} color={kpi.color} />
+                    <IconComp size={isMobile ? 12 : 14} color={kpi.color} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]}>{kpi.title}</Text>
-                    <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]}>{kpi.value}</Text>
-                    <Text style={[styles.kpiSub, isMobile && styles.kpiSubMobile, { color: theme.colors.textSecondary }]}>{kpi.sub}</Text>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.kpiLabel, isMobile && styles.kpiLabelMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>{kpi.title}</Text>
+                    <Text style={[styles.kpiValue, isMobile && styles.kpiValueMobile, { color: theme.colors.text }]} numberOfLines={1}>{kpi.value}</Text>
+                    <Text style={[styles.kpiSub, isMobile && styles.kpiSubMobile, { color: theme.colors.textSecondary }]} numberOfLines={1}>{kpi.sub}</Text>
                   </View>
                 </View>
               );
@@ -1192,6 +1255,11 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               search: searchQuery,
             }}
             dateRangeLabel={dateRangeLabel}
+            dateRange={dateRange}
+            onChangeDateRange={(newRange) => {
+              setDateRange(newRange);
+              setPage(1);
+            }}
             selectedCustomerId={selectedCustomerId}
             onSelectCustomer={setSelectedCustomerId}
             onOpenExport={() => setIsExportModalVisible(true)}
@@ -1205,6 +1273,11 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               search: searchQuery,
             }}
             dateRangeLabel={dateRangeLabel}
+            dateRange={dateRange}
+            onChangeDateRange={(newRange) => {
+              setDateRange(newRange);
+              setPage(1);
+            }}
             selectedSupplierId={selectedSupplierId}
             onSelectSupplier={setSelectedSupplierId}
             onOpenExport={() => setIsExportModalVisible(true)}
@@ -1217,7 +1290,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           <View style={styles.tableWrapper}>
             <AdvancedTable
               title={activeTabConfig.label}
-              subtitle={`${activeTabConfig.subtitle} • ${dateRangeLabel}`}
+              subtitle={`${dateRangeLabel} • ${totalItems || filteredData.length} records`}
               headerActions={headerActions}
               columns={tableColumns}
               data={filteredData}
@@ -1225,7 +1298,6 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
               searchValue={searchQuery}
               onSearch={handleSearch}
               debounceSearchMs={400}
-              filters={dateFilters}
               isLoading={isLoading}
               hasCheckbox={false}
               renderMobileCard={renderReportCard}
@@ -1251,6 +1323,9 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         reportTitle={activeTabConfig.label}
         totalRecords={filteredData.length}
         dateRangeLabel={dateRangeLabel}
+        data={filteredData}
+        columns={tableColumns.map((c) => ({ key: c.key, title: c.title }))}
+        summary={summaryData}
       />
 
     </View>
@@ -1301,73 +1376,80 @@ const styles = StyleSheet.create({
   tabChipTextActive: {
     fontWeight: '700',
   },
+  globalDateBar: {
+    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
   scrollContent: {
-    padding: 16,
-    gap: 16,
+    padding: 12,
+    gap: 10,
   },
   scrollContentMobile: {
-    padding: 8,
-    gap: 10,
+    padding: 6,
+    gap: 8,
   },
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
   kpiGridMobile: {
-    gap: 8,
+    gap: 6,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 190,
-    borderRadius: 14,
+    minWidth: 150,
+    borderRadius: 8,
     borderWidth: 1,
-    padding: 16,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   kpiCardMobile: {
     minWidth: '47%',
-    padding: 9,
-    borderRadius: 8,
-    gap: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    gap: 6,
   },
   kpiIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
   },
   kpiIconBoxMobile: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 5,
   },
   kpiLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   kpiLabelMobile: {
-    fontSize: 10.5,
+    fontSize: 9.5,
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 13.5,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 0,
   },
   kpiValueMobile: {
-    fontSize: 14.5,
-    marginTop: 1,
+    fontSize: 12,
+    marginTop: 0,
   },
   kpiSub: {
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 9.5,
+    marginTop: 0,
   },
   kpiSubMobile: {
-    fontSize: 9.5,
-    marginTop: 1,
+    fontSize: 8.5,
+    marginTop: 0,
   },
   tableWrapper: {
     flex: 1,
@@ -1476,9 +1558,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   mobileCard: {
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
-    padding: 9,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -1486,15 +1569,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardTitle: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
   },
   cardSubtitle: {
-    fontSize: 11.5,
-    marginTop: 2,
+    fontSize: 10.5,
+    marginTop: 1,
   },
   cardAmount: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   cardBottomRow: {
@@ -1502,7 +1585,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    paddingTop: 6,
-    marginTop: 6,
+    paddingTop: 4,
+    marginTop: 4,
   },
 });

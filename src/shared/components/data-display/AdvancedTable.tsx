@@ -765,13 +765,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageHeader: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   pageHeaderDesktop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   pageHeaderMobile: {
     flexDirection: 'row',
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'nowrap',
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 6,
   },
   titleWrapper: {
     flexDirection: 'column',
@@ -790,31 +790,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pageTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   pageTitleMobile: {
-    fontSize: 15,
+    fontSize: 13,
   },
   pageTitleDesktop: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   countBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   countBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   pageSubtitle: {
-    fontSize: 13,
-    marginTop: 3,
+    fontSize: 11,
+    marginTop: 1,
   },
   pageActions: {
     flexDirection: 'row',
@@ -908,35 +908,35 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   row: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    paddingVertical: 16,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   cell: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     justifyContent: 'center',
   },
   checkboxCell: {
-    width: 48,
-    paddingLeft: 16,
+    width: 40,
+    paddingLeft: 12,
     justifyContent: 'center',
   },
   checkbox: {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
     borderWidth: 1,
     borderRadius: 4,
   },
   headerText: {
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 12,
   },
   cellText: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '500',
   },
   emptyState: {
