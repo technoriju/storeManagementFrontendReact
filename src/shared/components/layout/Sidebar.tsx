@@ -225,7 +225,21 @@ const CUSTOM_COLORS = {
   iconInactive: '#7B809A',
 };
 
-const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: MenuItem, activeItem: string, onItemPress: (id: string) => void, theme: any }) => {
+const MenuItemComponent = ({
+  item,
+  activeItem,
+  onItemPress,
+  theme,
+  collapsed = false,
+  onExpandSidebar,
+}: {
+  item: MenuItem;
+  activeItem: string;
+  onItemPress: (id: string) => void;
+  theme: any;
+  collapsed?: boolean;
+  onExpandSidebar?: () => void;
+}) => {
   const { getShortcutBadgeForAction, showShortcutBadges } = useShortcutSettingsStore();
   const shortcutBadge = showShortcutBadges ? getShortcutBadgeForAction(item.id) : null;
   const hasSubItems = item.subItems && item.subItems.length > 0;
@@ -288,6 +302,16 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   };
 
   const handlePress = () => {
+    if (collapsed) {
+      if (hasSubItems) {
+        onExpandSidebar?.();
+        setExpanded(true);
+      } else {
+        onItemPress(item.id);
+      }
+      return;
+    }
+
     if (hasSubItems) {
       if (expanded) {
         toggleExpand();
@@ -304,6 +328,31 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
     inputRange: [0, 1],
     outputRange: ['0deg', '90deg']
   });
+
+  if (collapsed) {
+    return (
+      <View style={styles.menuItemContainer}>
+        <TouchableOpacity
+          style={[
+            styles.item,
+            styles.itemCollapsed,
+            isActiveGroup && styles.itemActive
+          ]}
+          onPress={handlePress}
+          activeOpacity={0.7}
+          accessibilityLabel={item.label}
+          accessibilityRole="button"
+          {...(Platform.OS === 'web' ? { title: item.label } : {})}
+        >
+          <Icon 
+            name={item.icon} 
+            size={18} 
+            color={isActiveGroup ? CUSTOM_COLORS.activeText : CUSTOM_COLORS.iconInactive}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.menuItemContainer}>
@@ -409,13 +458,14 @@ const MenuItemComponent = ({ item, activeItem, onItemPress, theme }: { item: Men
   );
 };
 
-export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
+export const Sidebar = ({ activeItem, onItemPress, isDrawer, collapsed = false, onExpandSidebar }: any) => {
   const theme = useTheme();
   const { logout } = useAuthStore();
   const { permissions, userRole, isAdmin } = usePermissions();
   const { width } = useWindowDimensions();
   
   const isMobile = width < 768;
+  const isCollapsed = !isDrawer && collapsed;
 
   const visibleSections = useMemo(() => {
     return menuSections
@@ -452,17 +502,22 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
   return (
     <View style={[
       styles.container, 
+      isCollapsed && styles.containerCollapsed,
       { backgroundColor: theme.colors.surface, borderRightColor: theme.colors.border },
       isDrawer && styles.drawerContainer,
       isMobile && !isDrawer && { display: 'none' }
     ]}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.paddingContainer}>
+        <View style={[styles.paddingContainer, isCollapsed && styles.paddingContainerCollapsed]}>
           {visibleSections.map((section, index) => (
             <View key={index} style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {section.title}
-              </Text>
+              {isCollapsed ? (
+                index > 0 ? <View style={styles.collapsedSectionDivider} /> : null
+              ) : (
+                <Text style={styles.sectionTitle}>
+                  {section.title}
+                </Text>
+              )}
               
               {section.items.map((item) => (
                 <MenuItemComponent
@@ -471,10 +526,12 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
                   activeItem={activeItem}
                   onItemPress={onItemPress}
                   theme={theme}
+                  collapsed={isCollapsed}
+                  onExpandSidebar={onExpandSidebar}
                 />
               ))}
               
-              {index < visibleSections.length - 1 && (
+              {!isCollapsed && index < visibleSections.length - 1 && (
                 <View style={styles.divider} />
               )}
             </View>
@@ -482,19 +539,23 @@ export const Sidebar = ({ activeItem, onItemPress, isDrawer }: any) => {
         </View>
       </ScrollView>
       
-      <View style={styles.footer}>
+      <View style={[styles.footer, isCollapsed && styles.footerCollapsed]}>
         <TouchableOpacity
-          style={styles.item}
+          style={[styles.item, isCollapsed && styles.itemCollapsed]}
           onPress={logout}
+          accessibilityLabel="Logout"
+          {...(Platform.OS === 'web' ? { title: 'Logout' } : {})}
         >
-          <Icon name="log-out" size={16} color={theme.colors.error} style={{ marginRight: 12 }} />
-          <Text style={{ 
-            color: theme.colors.error,
-            fontWeight: theme.typography.weights.medium as any,
-            fontSize: 14
-          }}>
-            Logout
-          </Text>
+          <Icon name="log-out" size={16} color={theme.colors.error} style={!isCollapsed ? { marginRight: 12 } : undefined} />
+          {!isCollapsed && (
+            <Text style={{ 
+              color: theme.colors.error,
+              fontWeight: theme.typography.weights.medium as any,
+              fontSize: 14
+            }}>
+              Logout
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -508,12 +569,20 @@ const styles = StyleSheet.create({
     height: '100%', 
     flexDirection: 'column' 
   },
+  containerCollapsed: {
+    width: 68,
+  },
   drawerContainer: { 
     width: '100%', 
     borderRightWidth: 0 
   },
   paddingContainer: {
     paddingVertical: 16,
+  },
+  paddingContainerCollapsed: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    paddingHorizontal: 0,
   },
   section: {
     marginBottom: 8,
@@ -537,6 +606,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginHorizontal: 16,
     borderRadius: 8,
+  },
+  itemCollapsed: {
+    marginHorizontal: 0,
+    paddingHorizontal: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   itemActive: {
     backgroundColor: CUSTOM_COLORS.activeBg,
@@ -596,6 +675,13 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
+  collapsedSectionDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    width: 32,
+    alignSelf: 'center',
+    marginVertical: 8,
+  },
   divider: {
     height: 1,
     backgroundColor: '#F1F5F9',
@@ -607,6 +693,11 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
     paddingVertical: 16,
     paddingHorizontal: 20,
+  },
+  footerCollapsed: {
+    paddingHorizontal: 0,
+    alignItems: 'center',
+    paddingVertical: 12,
   }
 });
 

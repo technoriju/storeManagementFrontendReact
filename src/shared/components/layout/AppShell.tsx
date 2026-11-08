@@ -166,10 +166,12 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   const theme = useTheme();
   const { isDesktop, isTablet } = useResponsive();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isLargeScreen = isDesktop || isTablet;
 
   const handleMenuPress = () => setDrawerOpen(true);
+  const handleToggleSidebar = () => setSidebarCollapsed(prev => !prev);
 
   const formatTabTitle = (tab: string) => {
     const found = TABS.find(t => t.id === tab);
@@ -187,14 +189,24 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {isLargeScreen ? (
-        <DesktopHeader title={currentTabLabel} rightContent={<SyncStatusIndicator />} />
+        <DesktopHeader
+          title={currentTabLabel}
+          rightContent={<SyncStatusIndicator />}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarCollapsed={sidebarCollapsed}
+        />
       ) : (
         <MobileHeader title={currentTabLabel} onMenuPress={handleMenuPress} rightContent={<SyncStatusIndicator />} />
       )}
       
       <View style={styles.body}>
         {isLargeScreen && (
-          <Sidebar activeItem={activeTab} onItemPress={onTabChange} />
+          <Sidebar
+            activeItem={activeTab}
+            onItemPress={onTabChange}
+            collapsed={sidebarCollapsed}
+            onExpandSidebar={() => setSidebarCollapsed(false)}
+          />
         )}
         
         <View style={styles.content}>
@@ -215,6 +227,7 @@ export const AppShell = ({ children, activeTab = 'dashboard', onTabChange = () =
       {!isLargeScreen && (
         <AppDrawer
           visible={drawerOpen}
+          title="Tarama Enterprise"
           onClose={() => setDrawerOpen(false)}
         >
           <Sidebar activeItem={activeTab} onItemPress={(item: string) => {
