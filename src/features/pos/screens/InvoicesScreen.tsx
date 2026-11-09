@@ -649,13 +649,20 @@ export const InvoicesScreen: React.FC<Props> = ({ onNavigate }) => {
                         <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 18 }}>₹{Math.max(0, Number(viewInvoice.total) - Math.min(Number(viewInvoice.advancePayment), Number(viewInvoice.total))).toFixed(2)}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Amount Paid:</Text>
-                        <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Number(viewInvoice.paid).toFixed(2)}</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>Cash Paid:</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Math.max(0, Number(viewInvoice.paid || 0) - Math.min(Number(viewInvoice.advancePayment || 0), Number(viewInvoice.total || 0))).toFixed(2)}</Text>
                       </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>Balance Due:</Text>
-                        <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>₹{Math.max(0, Math.max(0, Number(viewInvoice.total) - Math.min(Number(viewInvoice.advancePayment), Number(viewInvoice.total))) - Number(viewInvoice.paid)).toFixed(2)}</Text>
-                      </View>
+                      {Number(viewInvoice.due || 0) > 0 ? (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: '#EF4444', fontWeight: '600' }}>Balance Due:</Text>
+                          <Text style={{ color: '#EF4444', fontWeight: '600' }}>₹{Number(viewInvoice.due || 0).toFixed(2)}</Text>
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: '#10B981', fontWeight: '600' }}>Balance Advance:</Text>
+                          <Text style={{ color: '#10B981', fontWeight: '600' }}>₹{Math.max(0, Number(viewInvoice.advancePayment || 0) - Math.min(Number(viewInvoice.advancePayment || 0), Number(viewInvoice.total || 0))).toFixed(2)}</Text>
+                        </View>
+                      )}
                       {Number(viewInvoice.advancePayment) > Number(viewInvoice.total) && (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                           <Text style={{ color: '#3B82F6', fontWeight: '600' }}>Remaining Advance:</Text>
