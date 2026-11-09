@@ -535,6 +535,42 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
       }
     }
 
+    const returnTotal = Number(purchaseReturn.totalAmount || 0);
+
+    // Update parent purchase due & payment status locally in SQLite
+    if (purchaseReturn.purchaseId) {
+      try {
+        const purRes = await db.execute(`SELECT grandTotal, paid, due, paymentStatus FROM purchases WHERE id = ? LIMIT 1`, [purchaseReturn.purchaseId]);
+        const pRows = (purRes as any)?.rows ? (Array.isArray((purRes as any).rows) ? (purRes as any).rows : (purRes as any).rows._array || []) : [];
+        if (pRows.length > 0) {
+          const pDue = Number(pRows[0].due || 0);
+          const pPaid = Number(pRows[0].paid || 0);
+          const newDue = Math.max(0, Number((pDue - returnTotal).toFixed(2)));
+          let newStatus = pRows[0].paymentStatus;
+          if (newDue === 0) newStatus = 'Paid';
+          else if (pPaid > 0) newStatus = 'Partial';
+          await db.execute(
+            `UPDATE purchases SET due = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+            [newDue, newStatus, now, purchaseReturn.purchaseId]
+          );
+        }
+      } catch (pErr) {
+        console.warn('Failed to update local purchase due on return:', pErr);
+      }
+    }
+
+    // Update supplier outstanding balance locally in SQLite
+    if (purchaseReturn.supplierId) {
+      try {
+        await db.execute(
+          `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) - ?, updatedAt = ? WHERE id = ?`,
+          [returnTotal, now, purchaseReturn.supplierId]
+        );
+      } catch (sErr) {
+        console.warn('Failed to update local supplier balance on return:', sErr);
+      }
+    }
+
     // Always queue in outbox for reliable auto-sync
     await outboxRepo.add(this.tableName, returnId, 'CREATE', { purchaseReturn, items: fullItems });
     this.requestSync();

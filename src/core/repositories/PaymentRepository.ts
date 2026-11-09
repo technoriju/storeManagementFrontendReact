@@ -71,6 +71,94 @@ export class PaymentRepository extends OfflineCrudRepository<Payment> {
     super(config);
   }
 
+  public override async insert(entity: Payment, shouldSync = true) {
+    await super.insert(entity, shouldSync);
+    await this.applyLocalLedgerAdjustment(entity);
+  }
+
+  public override async createDirect(data: Partial<Payment>): Promise<Payment> {
+    const created = await super.createDirect(data);
+    await this.applyLocalLedgerAdjustment(created);
+    return created;
+  }
+
+  private async applyLocalLedgerAdjustment(entity: Payment): Promise<void> {
+    const amt = Number(entity.amount || 0);
+    if (amt <= 0) return;
+    const nowIso = new Date().toISOString();
+
+    // Customer Payment: update customer balance and auto-allocate towards unpaid sales locally
+    const pType = String(entity.type || '').toLowerCase();
+    if (entity.customerId && (pType === 'receive' || pType === 'received')) {
+      const cId = Number(entity.customerId);
+      try {
+        await db.execute(
+          `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) - ?, updatedAt = ? WHERE id = ?`,
+          [amt, nowIso, cId]
+        );
+
+        const salesRes = await db.execute(
+          `SELECT id, due, paid, paymentStatus FROM sales WHERE customerId = ? AND due > 0 ORDER BY date ASC, id ASC`,
+          [cId]
+        );
+        const rows = this.extractRows(salesRes);
+        let remaining = amt;
+        for (const s of rows) {
+          if (remaining <= 0) break;
+          const sDue = Number(s.due || 0);
+          const sPaid = Number(s.paid || 0);
+          if (sDue <= 0) continue;
+          const alloc = Math.min(sDue, remaining);
+          const newDue = Math.max(0, Number((sDue - alloc).toFixed(2)));
+          const newPaid = Number((sPaid + alloc).toFixed(2));
+          const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+          await db.execute(
+            `UPDATE sales SET due = ?, paid = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+            [newDue, newPaid, newStatus, nowIso, s.id]
+          );
+          remaining = Number((remaining - alloc).toFixed(2));
+        }
+      } catch (err) {
+        console.warn('Failed to apply local customer ledger adjustment:', err);
+      }
+    }
+
+    // Supplier Payment: update supplier balance and auto-allocate towards unpaid purchases locally
+    if (entity.supplierId && (pType === 'pay' || pType === 'paid')) {
+      const sId = Number(entity.supplierId);
+      try {
+        await db.execute(
+          `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) - ?, updatedAt = ? WHERE id = ?`,
+          [amt, nowIso, sId]
+        );
+
+        const purRes = await db.execute(
+          `SELECT id, due, paid, paymentStatus FROM purchases WHERE supplierId = ? AND due > 0 ORDER BY date ASC, id ASC`,
+          [sId]
+        );
+        const rows = this.extractRows(purRes);
+        let remaining = amt;
+        for (const p of rows) {
+          if (remaining <= 0) break;
+          const pDue = Number(p.due || 0);
+          const pPaid = Number(p.paid || 0);
+          if (pDue <= 0) continue;
+          const alloc = Math.min(pDue, remaining);
+          const newDue = Math.max(0, Number((pDue - alloc).toFixed(2)));
+          const newPaid = Number((pPaid + alloc).toFixed(2));
+          const newStatus = newDue === 0 ? 'Paid' : 'Partial';
+          await db.execute(
+            `UPDATE purchases SET due = ?, paid = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+            [newDue, newPaid, newStatus, nowIso, p.id]
+          );
+          remaining = Number((remaining - alloc).toFixed(2));
+        }
+      } catch (err) {
+        console.warn('Failed to apply local supplier ledger adjustment:', err);
+      }
+    }
+  }
+
   private extractRows(results: any): any[] {
     let rawRows: any[] = [];
     if (results.rows && Array.isArray(results.rows)) {
