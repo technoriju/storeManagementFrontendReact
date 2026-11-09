@@ -115,7 +115,12 @@ export class SaleReturnRepository extends BaseRepository<SaleReturn> {
 
   public override async getAll(): Promise<SaleReturn[]> {
     try {
-      const res = await db.execute(`SELECT * FROM ${this.tableName} ORDER BY id DESC`);
+      const res = await db.execute(`
+        SELECT sr.*, s.invoiceNumber as saleInvoiceNumber 
+        FROM ${this.tableName} sr 
+        LEFT JOIN sales s ON sr.saleId = s.id 
+        ORDER BY sr.id DESC
+      `);
       const items: SaleReturn[] = [];
       let rawRows: any[] = [];
       if (res.rows && Array.isArray(res.rows)) {
@@ -130,12 +135,77 @@ export class SaleReturnRepository extends BaseRepository<SaleReturn> {
         }
       }
       for (const row of rawRows) {
-        if (row) items.push(this.fromRow(row));
+        if (row) {
+          const ret = this.fromRow(row);
+          if (row.saleInvoiceNumber) {
+            ret.saleInvoiceNumber = String(row.saleInvoiceNumber);
+          }
+          items.push(ret);
+        }
       }
+
+      // Batch load return items so view and cards have items
+      try {
+        const itemRes = await db.execute('SELECT * FROM sale_return_items ORDER BY id ASC');
+        const itemRows = itemRes.rows && Array.isArray(itemRes.rows) ? itemRes.rows : (itemRes.rows?._array || []);
+        const itemsByReturnId: Record<number, SaleReturnItem[]> = {};
+        for (const iRow of itemRows) {
+          if (!iRow) continue;
+          const rId = Number(iRow.saleReturnId);
+          if (!itemsByReturnId[rId]) itemsByReturnId[rId] = [];
+          itemsByReturnId[rId].push({
+            id: Number(iRow.id),
+            saleReturnId: rId,
+            productId: Number(iRow.productId),
+            productName: iRow.productName ? String(iRow.productName) : undefined,
+            quantity: Number(iRow.quantity || 1),
+            unitPrice: Number(iRow.unitPrice || 0),
+            discount: Number(iRow.discount || 0),
+            taxAmount: Number(iRow.taxAmount || 0),
+            unit: iRow.unit ? String(iRow.unit) : undefined,
+            unitType: iRow.unitType || 'base',
+            conversionRate: iRow.conversionRate ? Number(iRow.conversionRate) : 1,
+            total: Number(iRow.total || 0),
+            createdAt: iRow.createdAt,
+            updatedAt: iRow.updatedAt,
+            syncStatus: iRow.syncStatus,
+          });
+        }
+        for (const ret of items) {
+          ret.items = itemsByReturnId[ret.id] || [];
+        }
+      } catch (itemErr) {
+        console.warn('Failed to load sale return items in getAll():', itemErr);
+      }
+
       return items;
     } catch (error) {
       console.error('Failed to get all sale returns:', error);
       return [];
+    }
+  }
+
+  public async getReturnedQuantitiesForSale(saleId: number): Promise<Record<number, number>> {
+    try {
+      const res = await db.execute(
+        `SELECT sri.productId, SUM(sri.quantity) as totalReturned
+         FROM sale_return_items sri
+         JOIN sale_returns sr ON sri.saleReturnId = sr.id
+         WHERE sr.saleId = ?
+         GROUP BY sri.productId`,
+        [saleId]
+      );
+      const rows = res.rows && Array.isArray(res.rows) ? res.rows : (res.rows?._array || []);
+      const map: Record<number, number> = {};
+      for (const row of rows) {
+        if (row && row.productId) {
+          map[Number(row.productId)] = Number(row.totalReturned || 0);
+        }
+      }
+      return map;
+    } catch (e) {
+      console.warn('Failed to get returned quantities for sale:', e);
+      return {};
     }
   }
 
@@ -165,10 +235,14 @@ export class SaleReturnRepository extends BaseRepository<SaleReturn> {
           totalAmount: Number(entity.totalAmount || 0),
           items: items.map((i) => ({
             productId: Number(i.productId),
+            productUnitId: (i as any).productUnitId ? Number((i as any).productUnitId) : undefined,
             quantity: Number(i.quantity),
             unitPrice: Number(i.unitPrice),
             discount: Number(i.discount || 0),
             taxAmount: Number(i.taxAmount || 0),
+            unit: i.unit,
+            unitType: i.unitType || 'base',
+            conversionRate: i.conversionRate ? Number(i.conversionRate) : 1,
             total: Number(i.total),
           })),
         });
@@ -218,6 +292,7 @@ export class SaleReturnRepository extends BaseRepository<SaleReturn> {
     const saleReturn: SaleReturn = {
       id: returnId,
       saleId: item.saleId ? Number(item.saleId) : undefined,
+      saleInvoiceNumber: item.sale?.invoiceNumber || item.saleInvoiceNumber || undefined,
       returnNumber: String(item.returnNumber || `SRT-${returnId}`),
       reference: item.reference ? String(item.reference) : String(item.returnNumber || `SRT-${returnId}`),
       customerId: item.sale?.customerId

@@ -137,11 +137,19 @@ export class SaleRepository extends BaseRepository<Sale> {
         const brand = (row.brandName || row.fallbackBrandName || '').trim() || undefined;
         const subUnit = (row.subUnitName || row.fallbackSubUnitName || '').trim() || undefined;
 
+        let resolvedProdName = row.productName || row.fallbackProductName;
+        try {
+          const storeProd = useProductStore.getState().products?.find((p: any) => Number(p.id) === pId);
+          if (storeProd?.name) {
+            resolvedProdName = storeProd.name;
+          }
+        } catch (_) {}
+
         const newItem: SaleItem = {
           id: Number(row.id),
           saleId: Number(row.saleId || saleId),
           productId: pId,
-          productName: row.productName || row.fallbackProductName || `Product #${row.productId}`,
+          productName: resolvedProdName || `Product #${row.productId}`,
           quantity: qty,
           unitPrice: Number(row.unitPrice || 0),
           discount: Number(row.discount || 0),
@@ -255,6 +263,33 @@ export class SaleRepository extends BaseRepository<Sale> {
     if (!sale) return null;
     const items = await this.getItemsForSale(id);
     return { ...sale, items };
+  }
+
+  public async getByInvoiceNumber(invoiceNumber: string): Promise<Sale | null> {
+    const term = (invoiceNumber || '').trim();
+    if (!term) return null;
+    try {
+      // 1. Fetch verified sale from server first
+      try {
+        const serverSale = await this.fetchByIdFromApi(term);
+        if (serverSale) return serverSale;
+      } catch (_) {}
+
+      // 2. Fallback to local SQLite
+      const res = await db.execute(
+        `SELECT * FROM sales WHERE UPPER(invoiceNumber) = UPPER(?) OR UPPER(reference) = UPPER(?) LIMIT 1`,
+        [term, term]
+      );
+      const rows = res.rows && Array.isArray(res.rows) ? res.rows : (res.rows?._array || []);
+      if (rows.length > 0) {
+        const sale = this.fromRow(rows[0]);
+        sale.items = await this.getItemsForSale(sale.id);
+        return sale;
+      }
+    } catch (e) {
+      console.warn('Failed to get sale by invoiceNumber:', e);
+    }
+    return null;
   }
 
   public override async getAll(): Promise<Sale[]> {
@@ -848,15 +883,19 @@ export class SaleRepository extends BaseRepository<Sale> {
     }
   }
 
-  public async fetchByIdFromApi(id: number): Promise<Sale | null> {
+  public async fetchByIdFromApi(id: number | string): Promise<Sale | null> {
     try {
-      const response = await apiClient.get<any>(API_ENDPOINTS.SALES.BY_ID(id));
+      const response = await apiClient.get<any>(API_ENDPOINTS.SALES.BY_ID(encodeURIComponent(String(id))));
       const raw = response.data?.data || response.data;
-      if (!raw || !raw.id) return await this.getById(id);
+      if (!raw || !raw.id) {
+        if (/^\d+$/.test(String(id))) return await this.getById(Number(id));
+        return null;
+      }
 
-      const existing = await super.getById(id);
+      const numericId = Number(raw.id);
+      const existing = await super.getById(numericId);
       if (existing) {
-        existing.items = await this.getItemsForSale(id);
+        existing.items = await this.getItemsForSale(numericId);
       }
       const { sale, items } = this.normalizeApiSale(raw, existing);
       if (!existing || existing.syncStatus === 'synced') {
@@ -902,11 +941,11 @@ export class SaleRepository extends BaseRepository<Sale> {
           }
         }
       }
-      const fullItems = await this.getItemsForSale(sale.id);
-      return { ...(existing || sale), items: fullItems.length > 0 ? fullItems : (items.length > 0 ? items : existing?.items || []) };
+      return { ...sale, items: items.length > 0 ? items : (existing?.items || []) };
     } catch (e) {
       console.warn(`[SaleRepository] fetchByIdFromApi(${id}) error:`, e);
-      return await this.getById(id);
+      if (/^\d+$/.test(String(id))) return await this.getById(Number(id));
+      return null;
     }
   }
 
