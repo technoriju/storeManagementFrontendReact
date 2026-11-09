@@ -535,6 +535,42 @@ export class SaleReturnRepository extends BaseRepository<SaleReturn> {
       }
     }
 
+    const returnTotal = Number(saleReturn.totalAmount || 0);
+
+    // Update parent sale due & payment status locally in SQLite
+    if (saleReturn.saleId) {
+      try {
+        const saleRes = await db.execute(`SELECT total, paid, due, paymentStatus FROM sales WHERE id = ? LIMIT 1`, [saleReturn.saleId]);
+        const sRows = (saleRes as any)?.rows ? (Array.isArray((saleRes as any).rows) ? (saleRes as any).rows : (saleRes as any).rows._array || []) : [];
+        if (sRows.length > 0) {
+          const sDue = Number(sRows[0].due || 0);
+          const sPaid = Number(sRows[0].paid || 0);
+          const newDue = Math.max(0, Number((sDue - returnTotal).toFixed(2)));
+          let newStatus = sRows[0].paymentStatus;
+          if (newDue === 0) newStatus = 'Paid';
+          else if (sPaid > 0) newStatus = 'Partial';
+          await db.execute(
+            `UPDATE sales SET due = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+            [newDue, newStatus, now, saleReturn.saleId]
+          );
+        }
+      } catch (sErr) {
+        console.warn('Failed to update local sale due on return:', sErr);
+      }
+    }
+
+    // Update customer outstanding balance locally in SQLite
+    if (saleReturn.customerId) {
+      try {
+        await db.execute(
+          `UPDATE customers SET outstandingBalance = COALESCE(outstandingBalance, 0) - ?, updatedAt = ? WHERE id = ?`,
+          [returnTotal, now, saleReturn.customerId]
+        );
+      } catch (cErr) {
+        console.warn('Failed to update local customer balance on return:', cErr);
+      }
+    }
+
     // Always queue in outbox for reliable auto-sync
     await outboxRepo.add(this.tableName, returnId, 'CREATE', { saleReturn, items: fullItems });
     this.requestSync();

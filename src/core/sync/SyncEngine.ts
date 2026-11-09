@@ -24,6 +24,7 @@ import { incomeRepository } from '../repositories/IncomeRepository';
 import { incomeCategoryRepository } from '../repositories/IncomeCategoryRepository';
 import { bankAccountRepository } from '../repositories/BankAccountRepository';
 import { moneyTransferRepository } from '../repositories/MoneyTransferRepository';
+import { stockRepository } from '../repositories/StockRepository';
 
 class SyncEngine {
   private isSyncing = false;
@@ -213,6 +214,9 @@ class SyncEngine {
           await outboxRepo.remove(item.id);
         } else if (item.entityType === 'money_transfers') {
           await moneyTransferRepository.syncOutboxItem(item);
+          await outboxRepo.remove(item.id);
+        } else if (item.entityType === 'stock_adjustments') {
+          await stockRepository.syncOutboxAdjustment(item);
           await outboxRepo.remove(item.id);
         } else {
           await outboxRepo.remove(item.id);

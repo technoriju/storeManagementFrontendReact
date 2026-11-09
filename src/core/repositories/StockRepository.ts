@@ -1,6 +1,7 @@
 import { db } from '../database/db';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
+import { outboxRepo } from '../sync/outbox';
 
 export interface StockItem {
   id: string | number;
@@ -366,7 +367,13 @@ class StockRepository {
         });
         return apiRes.data?.data || apiRes.data;
       } catch (apiErr) {
-        console.warn('Backend sync deferred for adjustStock:', apiErr);
+        console.warn('Backend sync deferred for adjustStock, queuing in outbox:', apiErr);
+        try {
+          await outboxRepo.add('stock_adjustments', Date.now(), 'CREATE', payload);
+          void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.refreshPendingCount());
+        } catch (queueErr) {
+          console.warn('Failed to queue adjustStock in outbox:', queueErr);
+        }
       }
     }
     return {
@@ -375,6 +382,19 @@ class StockRepository {
       adjustmentType: payload.adjustmentType,
       offline: true,
     };
+  }
+
+  async syncOutboxAdjustment(item: any): Promise<void> {
+    const payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload;
+    if (!payload || !payload.productId) return;
+    await apiClient.post(API_ENDPOINTS.INVENTORY.ADJUST_STOCK, {
+      productId: Number(payload.productId),
+      adjustmentType: payload.adjustmentType,
+      quantity: Number(payload.quantity),
+      reason: payload.reason,
+      notes: payload.notes,
+      warehouseId: payload.warehouseId,
+    });
   }
 
   async getTransactions(productId?: number | string): Promise<StockTransactionRecord[]> {
