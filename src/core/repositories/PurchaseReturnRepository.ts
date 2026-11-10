@@ -467,9 +467,21 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
     const items = payloadData?.items || (await this.getItemsForPurchaseReturn(purchaseReturn.id));
     purchaseReturn.items = items;
 
-    if (purchaseReturn.purchaseId) {
+    let targetPurchaseId = purchaseReturn.purchaseId ? Number(purchaseReturn.purchaseId) : null;
+    if (targetPurchaseId && targetPurchaseId > 1000000000000) {
+      const prRowRes = await db.execute(`SELECT purchaseId FROM purchase_returns WHERE id = ? LIMIT 1`, [purchaseReturn.id]);
+      const prRows = (prRowRes as any)?.rows ? (Array.isArray((prRowRes as any).rows) ? (prRowRes as any).rows : (prRowRes as any).rows._array || []) : [];
+      if (prRows.length > 0 && prRows[0].purchaseId && Number(prRows[0].purchaseId) < 1000000000000) {
+        targetPurchaseId = Number(prRows[0].purchaseId);
+      }
+      if (targetPurchaseId > 1000000000000) {
+        throw new Error(`Parent purchase ${targetPurchaseId} pending server sync`);
+      }
+    }
+
+    if (targetPurchaseId) {
       const response = await apiClient.post(API_ENDPOINTS.PURCHASE_RETURNS.BASE, {
-        purchaseId: Number(purchaseReturn.purchaseId),
+        purchaseId: targetPurchaseId,
         returnNumber: purchaseReturn.returnNumber,
         returnDate: purchaseReturn.date ? new Date(purchaseReturn.date).toISOString() : new Date().toISOString(),
         reason: purchaseReturn.reason,

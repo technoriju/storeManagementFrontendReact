@@ -502,13 +502,16 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({
         })),
       });
 
+      // Reset & close immediately for fast UX
+      setItems([]);
+      onClose();
+
+      // Non-blocking product store refresh in background
       try {
-        await useProductStore.getState().fetchProducts(true);
+        useProductStore.getState().fetchProducts(true).catch(() => {});
       } catch (_) {}
 
       Alert.alert('Success', 'Purchase return created! Products restocked from inventory and supplier balance adjusted.');
-      setItems([]);
-      onClose();
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to create purchase return');
     }

@@ -222,6 +222,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         if (returnedId && returnedId !== entity.id && Number(entity.id) > 1000000000000) {
           await db.execute(`UPDATE purchases SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
           await db.execute(`UPDATE purchase_items SET purchaseId = ?, syncStatus = 'synced' WHERE purchaseId = ?`, [returnedId, entity.id]);
+          await db.execute(`UPDATE purchase_returns SET purchaseId = ? WHERE purchaseId = ?`, [returnedId, entity.id]);
           await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
         } else {
           await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
