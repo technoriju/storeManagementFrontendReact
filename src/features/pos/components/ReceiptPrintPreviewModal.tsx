@@ -154,13 +154,13 @@ export function getItemDisplayUnit(item: ReceiptItem): string {
   if (item.unitType === 'base' && baseUnit) {
     return baseUnit;
   }
+  if (item.unit && baseUnit && String(item.unit).trim().toLowerCase() === String(baseUnit).trim().toLowerCase()) {
+    return baseUnit;
+  }
   if (item.unit && subUnit && String(item.unit).trim().toLowerCase() === String(subUnit).trim().toLowerCase()) {
     return subUnit;
   }
-  if (item.unit && baseUnit && String(item.unit).trim().toLowerCase() === String(baseUnit).trim().toLowerCase() && item.unitType !== 'sub') {
-    return baseUnit;
-  }
-  return item.unit || (item.unitType === 'sub' ? subUnit : baseUnit) || 'Pcs';
+  return item.unit || (item.unitType === 'sub' ? subUnit : baseUnit) || 'Unit';
 }
 
 export function formatItemMeta(item: ReceiptItem): string {

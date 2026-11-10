@@ -157,13 +157,14 @@ export class SaleRepository extends BaseRepository<Sale> {
           taxAmount: Number(row.taxAmount || 0),
           unitCost: Number(row.unitCost || 0),
           unit: (() => {
-            const rUnit = row.unit ? String(row.unit) : undefined;
+            const rUnit = row.unit ? String(row.unit).trim() : undefined;
             const rType = row.unitType;
+            if (rUnit) return rUnit;
             if (rType === 'sub' && subUnit) return subUnit;
             if (rType === 'base' && (row.baseUnitName || row.fallbackBaseUnitName)) return String(row.baseUnitName || row.fallbackBaseUnitName).trim();
-            return rUnit || (rType === 'sub' ? subUnit : undefined);
+            return (rType === 'sub' ? subUnit : undefined) || (row.baseUnitName || row.fallbackBaseUnitName ? String(row.baseUnitName || row.fallbackBaseUnitName).trim() : undefined);
           })(),
-          unitType: row.unitType || undefined,
+          unitType: row.unitType || 'base',
           baseUnitName: (row.baseUnitName || row.fallbackBaseUnitName || '').trim() || undefined,
           conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
           brand: brand && brand !== 'N/A' ? brand : undefined,
@@ -721,28 +722,34 @@ export class SaleRepository extends BaseRepository<Sale> {
 
         const baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName) ? it.baseUnitName : (existingItem?.baseUnitName || it.product?.baseUnitName || it.product?.baseUnit?.name || undefined);
         let effectiveUnitType: 'base' | 'sub' | undefined = (it.unitType === 'base' || it.unitType === 'sub') ? it.unitType : (existingItem?.unitType === 'base' || existingItem?.unitType === 'sub' ? existingItem.unitType : undefined);
-        if (!effectiveUnitType && conversionRate > 1 && subUnit) {
-          try {
-            const prodList = useProductStore.getState().products || [];
-            const matchedProd = prodList.find((p: any) => p.id === Number(it.productId));
-            const baseRef = Number(matchedProd?.wholesalePrice || matchedProd?.retailPrice || matchedProd?.price || it.product?.wholesalePrice || it.product?.retailPrice || it.product?.price || 0);
-            const subRef = conversionRate > 0 ? baseRef / conversionRate : baseRef;
-            if (baseRef > 0 && Math.abs(unitPrice - subRef) < Math.abs(unitPrice - baseRef)) {
-              effectiveUnitType = 'sub';
+        let unit: string | undefined = (typeof it.unit === 'string' && it.unit) ? it.unit : (existingItem?.unit || undefined);
+
+        if (!effectiveUnitType) {
+          if (unit && subUnit && unit.trim().toLowerCase() === subUnit.trim().toLowerCase()) {
+            effectiveUnitType = 'sub';
+          } else if (unit && baseUnitName && unit.trim().toLowerCase() === baseUnitName.trim().toLowerCase()) {
+            effectiveUnitType = 'base';
+          } else if (conversionRate > 1 && subUnit) {
+            try {
+              const prodList = useProductStore.getState().products || [];
+              const matchedProd = prodList.find((p: any) => p.id === Number(it.productId));
+              const baseRef = Number(matchedProd?.wholesalePrice || matchedProd?.retailPrice || matchedProd?.price || it.product?.wholesalePrice || it.product?.retailPrice || it.product?.price || 0);
+              const subRef = conversionRate > 0 ? baseRef / conversionRate : baseRef;
+              if (baseRef > 0 && Math.abs(unitPrice - subRef) < Math.abs(unitPrice - baseRef)) {
+                effectiveUnitType = 'sub';
+              } else {
+                effectiveUnitType = 'base';
+              }
+            } catch (_) {
+              effectiveUnitType = 'base';
             }
-          } catch (_) {}
+          } else {
+            effectiveUnitType = 'base';
+          }
         }
-        let unit: string | undefined;
-        if (effectiveUnitType === 'sub' && subUnit) {
-          unit = subUnit;
-        } else if (effectiveUnitType === 'base' && baseUnitName) {
-          unit = baseUnitName;
-        } else if (existingItem?.unit) {
-          unit = existingItem.unit;
-        } else if (typeof it.unit === 'string' && it.unit) {
-          unit = it.unit;
-        } else {
-          unit = it.unit?.name || baseUnitName || subUnit || undefined;
+
+        if (!unit) {
+          unit = effectiveUnitType === 'sub' ? (subUnit || 'Pcs') : (baseUnitName || 'Unit');
         }
         const unitType = effectiveUnitType;
 
@@ -848,7 +855,7 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.taxAmount,
                 it.unitCost || 0,
                 it.unit || null,
-                it.unitType || 'sub',
+                it.unitType || 'base',
                 it.conversionRate || 1,
                 it.brandName || it.brand || null,
                 it.subUnitName || it.subUnit || null,
@@ -928,7 +935,7 @@ export class SaleRepository extends BaseRepository<Sale> {
                 it.taxAmount,
                 it.unitCost || 0,
                 it.unit || null,
-                it.unitType || 'sub',
+                it.unitType || 'base',
                 it.conversionRate || 1,
                 it.brandName || it.brand || null,
                 it.subUnitName || it.subUnit || null,
@@ -972,7 +979,7 @@ export class SaleRepository extends BaseRepository<Sale> {
     for (const item of items) {
       const itemId = Date.now() + Math.floor(Math.random() * 10000);
       const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
-      const unitType = item.unitType || 'sub';
+      const unitType = item.unitType || 'base';
 
       const fullItem: SaleItem = {
         ...item,
@@ -1250,7 +1257,7 @@ export class SaleRepository extends BaseRepository<Sale> {
     for (const item of newItems) {
       const itemId = Date.now() + Math.floor(Math.random() * 10000);
       const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
-      const unitType = item.unitType || 'sub';
+      const unitType = item.unitType || 'base';
       const fullItem: SaleItem = {
         ...item,
         id: itemId,

@@ -139,6 +139,41 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
     }
   }
 
+  public async getReturnedQuantitiesForPurchase(purchaseId: number | string): Promise<Record<number, number>> {
+    try {
+      const res = await db.execute(
+        `SELECT pri.productId, SUM(pri.quantity) as totalReturned
+         FROM purchase_return_items pri
+         JOIN purchase_returns pr ON pri.purchaseReturnId = pr.id
+         WHERE pr.purchaseId = ? AND (pr.status IS NULL OR LOWER(pr.status) != 'cancelled')
+         GROUP BY pri.productId`,
+        [Number(purchaseId)]
+      );
+      let rawRows: any[] = [];
+      if (res.rows && Array.isArray(res.rows)) {
+        rawRows = res.rows;
+      } else if (res.rows && typeof res.rows === 'object') {
+        if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+          rawRows = (res.rows as any)._array;
+        } else if ('item' in res.rows && typeof (res.rows as any).length === 'number') {
+          for (let i = 0; i < (res.rows as any).length; i++) {
+            rawRows.push((res.rows as any).item(i));
+          }
+        }
+      }
+      const map: Record<number, number> = {};
+      for (const row of rawRows) {
+        if (row && row.productId) {
+          map[Number(row.productId)] = Number(row.totalReturned || 0);
+        }
+      }
+      return map;
+    } catch (e) {
+      console.warn('Failed to get returned quantities for purchase:', e);
+      return {};
+    }
+  }
+
   private requestSync(): void {
     void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.syncNow());
   }
@@ -432,9 +467,21 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
     const items = payloadData?.items || (await this.getItemsForPurchaseReturn(purchaseReturn.id));
     purchaseReturn.items = items;
 
-    if (purchaseReturn.purchaseId) {
+    let targetPurchaseId = purchaseReturn.purchaseId ? Number(purchaseReturn.purchaseId) : null;
+    if (targetPurchaseId && targetPurchaseId > 1000000000000) {
+      const prRowRes = await db.execute(`SELECT purchaseId FROM purchase_returns WHERE id = ? LIMIT 1`, [purchaseReturn.id]);
+      const prRows = (prRowRes as any)?.rows ? (Array.isArray((prRowRes as any).rows) ? (prRowRes as any).rows : (prRowRes as any).rows._array || []) : [];
+      if (prRows.length > 0 && prRows[0].purchaseId && Number(prRows[0].purchaseId) < 1000000000000) {
+        targetPurchaseId = Number(prRows[0].purchaseId);
+      }
+      if (targetPurchaseId > 1000000000000) {
+        throw new Error(`Parent purchase ${targetPurchaseId} pending server sync`);
+      }
+    }
+
+    if (targetPurchaseId) {
       const response = await apiClient.post(API_ENDPOINTS.PURCHASE_RETURNS.BASE, {
-        purchaseId: Number(purchaseReturn.purchaseId),
+        purchaseId: targetPurchaseId,
         returnNumber: purchaseReturn.returnNumber,
         returnDate: purchaseReturn.date ? new Date(purchaseReturn.date).toISOString() : new Date().toISOString(),
         reason: purchaseReturn.reason,
@@ -579,6 +626,69 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
+    try {
+      const existing = await this.getById(id);
+      if (existing) {
+        const items = existing.items || (await this.getItemsForPurchaseReturn(id));
+        const now = new Date().toISOString();
+
+        // 1. Revert product stock in local SQLite
+        for (const item of items) {
+          if (!item.productId) continue;
+          const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+          const unitType = item.unitType || 'base';
+          const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+          try {
+            await db.execute(
+              `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ?`,
+              [baseQty, now, item.productId]
+            );
+          } catch (stockErr) {
+            console.warn(`Failed to revert stock for product ${item.productId}:`, stockErr);
+          }
+        }
+
+        const returnTotal = Number(existing.totalAmount || 0);
+
+        // 2. Revert parent purchase due in local SQLite
+        if (existing.purchaseId) {
+          try {
+            const purRes = await db.execute(`SELECT grandTotal, paid, due, paymentStatus FROM purchases WHERE id = ? LIMIT 1`, [existing.purchaseId]);
+            const pRows = (purRes as any)?.rows ? (Array.isArray((purRes as any).rows) ? (purRes as any).rows : (purRes as any).rows._array || []) : [];
+            if (pRows.length > 0) {
+              const pDue = Number(pRows[0].due || 0);
+              const pPaid = Number(pRows[0].paid || 0);
+              const newDue = Number((pDue + returnTotal).toFixed(2));
+              let newStatus = pRows[0].paymentStatus;
+              if (newDue === 0 && pPaid > 0) newStatus = 'Paid';
+              else if (pPaid > 0) newStatus = 'Partial';
+              else newStatus = 'Unpaid';
+              await db.execute(
+                `UPDATE purchases SET due = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+                [newDue, newStatus, now, existing.purchaseId]
+              );
+            }
+          } catch (pErr) {
+            console.warn('Failed to revert local purchase due on return delete:', pErr);
+          }
+        }
+
+        // 3. Revert supplier balance in local SQLite
+        if (existing.supplierId) {
+          try {
+            await db.execute(
+              `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+              [returnTotal, now, existing.supplierId]
+            );
+          } catch (sErr) {
+            console.warn('Failed to revert local supplier balance on return delete:', sErr);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error during local return delete rollback:', e);
+    }
+
     await db.execute('DELETE FROM purchase_return_items WHERE purchaseReturnId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {

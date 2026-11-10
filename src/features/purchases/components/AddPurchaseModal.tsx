@@ -203,17 +203,38 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               setSupplierId(existingPurchase.supplierId ? String(existingPurchase.supplierId) : '');
               setDate(existingPurchase.date ? existingPurchase.date.split('T')[0] : new Date().toISOString().split('T')[0]);
               setReference(existingPurchase.reference || existingPurchase.invoiceNumber || `PO-${numericId}`);
-              setStatus((existingPurchase.status as any) || 'Received');
-              setOrderTax(String(existingPurchase.orderTax || 0));
-              setOrderDiscount(String(existingPurchase.discount || 0));
-              setShipping(String(existingPurchase.shipping || 0));
-              setDescription(existingPurchase.notes || '');
 
+              // Populate Status
+              const rawStatus = String(existingPurchase.status || 'Received');
+              const mappedStatus = (rawStatus.toUpperCase() === 'COMPLETED' || rawStatus === 'Received')
+                ? 'Received'
+                : (rawStatus === 'Ordered' ? 'Ordered' : 'Pending');
+              setStatus(mappedStatus);
+
+              // Populate Payment Status & Amount
               const paidNum = Number(existingPurchase.paid || 0);
-              const totalNum = Number(existingPurchase.total || 0);
-              setPaymentStatus((existingPurchase.paymentStatus as any) || (paidNum >= totalNum && totalNum > 0 ? 'Paid' : paidNum > 0 ? 'Partial' : 'Unpaid'));
+              const dueNum = Number(existingPurchase.due || 0);
+              const totalNum = Number(existingPurchase.total || existingPurchase.grandTotal || 0);
+
+              let pStatus: 'Paid' | 'Unpaid' | 'Partial' = 'Paid';
+              if (existingPurchase.paymentStatus) {
+                const s = String(existingPurchase.paymentStatus).toLowerCase();
+                if (s === 'paid') pStatus = 'Paid';
+                else if (s === 'unpaid') pStatus = 'Unpaid';
+                else if (s === 'partial') pStatus = 'Partial';
+              } else {
+                if (dueNum === 0 && (paidNum > 0 || totalNum === 0)) pStatus = 'Paid';
+                else if (paidNum > 0) pStatus = 'Partial';
+                else pStatus = 'Unpaid';
+              }
+              setPaymentStatus(pStatus);
               setAmountReceived(paidNum > 0 ? String(paidNum) : '');
 
+              // Populate Shipping & Description
+              setShipping(existingPurchase.shipping ? String(existingPurchase.shipping) : '0');
+              setDescription(existingPurchase.notes || '');
+
+              // Populate Previous Balance
               const prevDueVal = Number(existingPurchase.previousDue || 0);
               const advVal = Number(existingPurchase.advancePayment || 0);
               if (existingPurchase.showPreviousBalance && prevDueVal > 0) {
@@ -224,34 +245,68 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                 setShowPreviousBalance(true);
                 setBalanceType('advance');
                 setPreviousBalanceAmount(String(advVal));
+              } else if (paidNum + dueNum > totalNum && totalNum > 0) {
+                const inferredDue = (paidNum + dueNum) - totalNum;
+                setShowPreviousBalance(true);
+                setBalanceType('due');
+                setPreviousBalanceAmount(String(inferredDue));
               }
-
               if (existingItems && existingItems.length > 0) {
                 const latestProds = useProductStore.getState().products;
                 const mappedItems: PurchaseItemRow[] = existingItems.map((item: any) => {
                   const prod = latestProds.find((p) => p.id === Number(item.productId)) || products.find((p) => p.id === Number(item.productId));
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
+                  const q = Number(item.quantity || 1);
+                  const p = Number(item.unitPrice || 0);
+                  const d = Number(item.discount || 0);
+                  const net = Math.max(0, q * p - d);
+
+                  let effectiveGst = Number(item.gst || 0);
+                  if (!effectiveGst && Number(item.taxAmount || 0) > 0 && net > 0) {
+                    effectiveGst = Number(((Number(item.taxAmount) / net) * 100).toFixed(2));
+                  } else if (!effectiveGst && prod?.gst) {
+                    effectiveGst = Number(prod.gst);
+                  }
 
                   return {
                     productId: Number(item.productId),
                     productName: item.productName || prod?.name || `Product #${item.productId}`,
                     sku: item.sku || prod?.sku,
-                    quantity: Number(item.quantity || 1),
-                    unitPrice: Number(item.unitPrice || 0),
-                    discount: Number(item.discount || 0),
-                    gst: Number(item.gst || 0),
+                    quantity: q,
+                    unitPrice: p,
+                    discount: d,
+                    gst: effectiveGst,
                     unit: item.unit || (item.unitType === 'sub' ? (item.subUnitName || 'Pcs') : (item.baseUnitName || 'Box')),
                     unitType: item.unitType ? (item.unitType as any) : 'base',
                     baseUnitName: item.baseUnitName || 'Box',
                     subUnitName: item.subUnitName || 'Pcs',
                     conversionRate: cRate,
-                    basePrice: item.unitType === 'base' ? Number(item.unitPrice) : Number((item.unitPrice * cRate).toFixed(2)),
-                    subPrice: item.unitType === 'sub' ? Number(item.unitPrice) : (cRate > 0 ? Number((item.unitPrice / cRate).toFixed(2)) : Number(item.unitPrice)),
+                    basePrice: item.unitType === 'base' ? p : Number((p * cRate).toFixed(2)),
+                    subPrice: item.unitType === 'sub' ? p : (cRate > 0 ? Number((p / cRate).toFixed(2)) : p),
                   };
                 });
                 setItems(mappedItems);
+
+                // Isolate order-level discount so item discounts are not counted twice
+                const itemsDiscountTotal = mappedItems.reduce((sum, it) => sum + Number(it.discount || 0), 0);
+                const totalStoredDiscount = Number(existingPurchase.discount || 0);
+                const effectiveOrderDiscount = Math.max(0, Number((totalStoredDiscount - itemsDiscountTotal).toFixed(2)));
+                setOrderDiscount(effectiveOrderDiscount > 0 ? String(effectiveOrderDiscount) : '0');
+
+                // Isolate order-level tax so line item tax is not doubled
+                const itemsTaxTotal = mappedItems.reduce((sum, it) => {
+                  const net = Math.max(0, Number(it.quantity || 0) * Number(it.unitPrice || 0) - Number(it.discount || 0));
+                  return sum + (net * Number(it.gst || 0) / 100);
+                }, 0);
+                let effectiveOrderTax = Number(existingPurchase.orderTax || 0);
+                if (itemsTaxTotal > 0 && effectiveOrderTax >= itemsTaxTotal && (!existingPurchase.gst || Number(existingPurchase.gst) === 0)) {
+                  effectiveOrderTax = Math.max(0, Number((effectiveOrderTax - itemsTaxTotal).toFixed(2)));
+                }
+                setOrderTax(effectiveOrderTax > 0 ? String(effectiveOrderTax) : '0');
               } else {
                 setItems([]);
+                setOrderTax(String(existingPurchase.orderTax || 0));
+                setOrderDiscount(String(existingPurchase.discount || 0));
               }
             }
           } catch (err) {
@@ -459,11 +514,13 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   }, [allSuppliers, supplierId]);
 
   useEffect(() => {
-    // Immediately clear previous balance states so new supplier doesn't show old supplier's dues
-    setShowPreviousBalance(false);
-    setPreviousBalanceAmount('0');
-    setSupplierRawBalance(0);
-    setUnpaidPurchasesCount(0);
+    if (!editPurchaseId) {
+      // Immediately clear previous balance states so new supplier doesn't show old supplier's dues
+      setShowPreviousBalance(false);
+      setPreviousBalanceAmount('0');
+      setSupplierRawBalance(0);
+      setUnpaidPurchasesCount(0);
+    }
 
     if (!supplierId || !selectedSupplier) {
       setIsLoadingBalance(false);
@@ -508,9 +565,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
             setShowPreviousBalance(true);
           } else {
             setSupplierRawBalance(0);
-            setBalanceType('due');
-            setPreviousBalanceAmount('0');
-            setShowPreviousBalance(false);
+            if (!editPurchaseId) {
+              setBalanceType('due');
+              setPreviousBalanceAmount('0');
+              setShowPreviousBalance(false);
+            }
           }
         }
       })
@@ -518,9 +577,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         if (!isCurrent) return;
         console.warn('Failed to fetch supplier purchase dues:', err);
         setSupplierRawBalance(0);
-        setBalanceType('due');
-        setPreviousBalanceAmount('0');
-        setShowPreviousBalance(false);
+        if (!editPurchaseId) {
+          setBalanceType('due');
+          setPreviousBalanceAmount('0');
+          setShowPreviousBalance(false);
+        }
       })
       .finally(() => {
         if (isCurrent) {
@@ -732,8 +793,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         finalDue = 0;
       } else if (paymentStatus === 'Unpaid') {
         finalPaid = adjustedAdvance;
-        finalDue = netPayable;
-        effectivePaymentStatus = adjustedAdvance >= grandTotal ? 'Paid' : (adjustedAdvance > 0 ? 'Partial' : 'Unpaid');
+        finalDue = Math.max(0, totalPayableWithDue - finalPaid);
+        effectivePaymentStatus = adjustedAdvance >= totalPayableWithDue ? 'Paid' : (adjustedAdvance > 0 ? 'Partial' : 'Unpaid');
       } else if (paymentStatus === 'Partial') {
         const parsed = parseFloat(amountReceived);
         const cashPaid = !isNaN(parsed) && parsed > 0 ? parsed : 0;
@@ -746,7 +807,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         finalPaid = status === 'Received'
           ? (showPreviousBalance && balanceType === 'due' ? totalPayableWithDue : grandTotal)
           : adjustedAdvance;
-        finalDue = status === 'Received' ? 0 : netPayable;
+        finalDue = status === 'Received' ? 0 : Math.max(0, totalPayableWithDue - finalPaid);
         effectivePaymentStatus = status === 'Received' ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
       }
 
@@ -1540,6 +1601,44 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                       }
                     </Text>
                   </View>
+                  {paymentStatus === 'Partial' && (
+                    <>
+                      <View style={[styles.summaryLine, { marginTop: 4 }]}>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Amount Paid</Text>
+                        <Text style={{ color: '#10B981', fontWeight: '600', fontSize: 13 }}>
+                          ₹{(parseFloat(amountReceived) || 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.summaryLine}>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Remaining Due</Text>
+                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                          ₹{Math.max(
+                            0,
+                            (showPreviousBalance
+                              ? balanceType === 'due'
+                                ? grandTotal + (parseFloat(previousBalanceAmount) || 0)
+                                : Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0))
+                              : grandTotal) - (parseFloat(amountReceived) || 0)
+                          ).toFixed(2)}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                  {paymentStatus === 'Unpaid' && (
+                    <View style={[styles.summaryLine, { marginTop: 4 }]}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Total Due</Text>
+                      <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                        ₹{
+                          (showPreviousBalance
+                            ? balanceType === 'due'
+                              ? grandTotal + (parseFloat(previousBalanceAmount) || 0)
+                              : Math.max(0, grandTotal - (parseFloat(previousBalanceAmount) || 0))
+                            : grandTotal
+                          ).toFixed(2)
+                        }
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>

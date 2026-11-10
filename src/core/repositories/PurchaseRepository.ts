@@ -173,7 +173,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
       const items = entity.items || (await this.getItemsForPurchase(entity.id));
       const supplierId = entity.supplierId && Number(entity.supplierId) > 0 ? Number(entity.supplierId) : 1;
-      const apiPayload = {
+      const apiPayload: any = {
         branchId: 1,
         warehouseId: 1,
         supplierId,
@@ -184,12 +184,13 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         taxTotal: Number((entity.orderTax || 0) + (entity.gst || 0)),
         discountTotal: Number(entity.discount || 0),
         grandTotal: Number(entity.total || 0),
-        paymentAmount: Number(entity.paid || 0),
-        paymentMethod: 'CASH',
         paid: Number(entity.paid || 0),
         due: Number(entity.due || 0),
         paymentStatus: entity.paymentStatus || 'Unpaid',
         notes: entity.notes || undefined,
+        previousDue: entity.previousDue !== undefined ? Number(entity.previousDue) : 0,
+        advancePayment: entity.advancePayment !== undefined ? Number(entity.advancePayment) : 0,
+        showPreviousBalance: Boolean(entity.showPreviousBalance),
         items: items.map((it) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
@@ -201,6 +202,11 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           conversionRate: Number(it.conversionRate || 1),
         })),
       };
+
+      if (operation !== 'update') {
+        apiPayload.paymentAmount = Number(entity.paid || 0);
+        apiPayload.paymentMethod = 'CASH';
+      }
 
       let response: any;
       if (operation === 'update') {
@@ -216,6 +222,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         if (returnedId && returnedId !== entity.id && Number(entity.id) > 1000000000000) {
           await db.execute(`UPDATE purchases SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
           await db.execute(`UPDATE purchase_items SET purchaseId = ?, syncStatus = 'synced' WHERE purchaseId = ?`, [returnedId, entity.id]);
+          await db.execute(`UPDATE purchase_returns SET purchaseId = ? WHERE purchaseId = ?`, [returnedId, entity.id]);
           await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
         } else {
           await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
@@ -311,30 +318,10 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       ? String(p.date).slice(0, 10)
       : new Date().toISOString().slice(0, 10);
 
-    const purchase: Purchase = {
-      id: purchaseId,
-      invoiceNumber: String(p.invoiceNumber || `PO-${purchaseId}`),
-      reference: p.reference ? String(p.reference) : String(p.invoiceNumber || `PO-${purchaseId}`),
-      supplierId: Number(p.supplierId || p.supplier?.id || 0),
-      supplierName: p.supplier?.name || p.supplierName || 'Unknown Supplier',
-      date: dateStr,
-      subtotal: Number(p.subTotal ?? p.subtotal ?? 0),
-      discount: Number(p.discountTotal ?? p.discount ?? 0),
-      orderTax: Number(p.taxTotal ?? p.orderTax ?? 0),
-      shipping: Number(p.shipping ?? 0),
-      gst: Number(p.gst ?? 0),
-      total,
-      paid,
-      due,
-      status: (p.status === 'COMPLETED' ? 'Received' : p.status || 'Received') as any,
-      paymentStatus: paymentStatus as any,
-      notes: p.notes ? String(p.notes) : undefined,
-      createdAt: p.createdAt ? String(p.createdAt) : new Date().toISOString(),
-      updatedAt: p.updatedAt ? String(p.updatedAt) : new Date().toISOString(),
-      syncStatus: 'synced',
-    };
-
     const items: PurchaseItem[] = [];
+    let itemsTaxSum = 0;
+    let itemsDiscountSum = 0;
+
     if (Array.isArray(p.items)) {
       for (const it of p.items) {
         const itemId = Number(it.id || Date.now() + Math.floor(Math.random() * 10000));
@@ -347,6 +334,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
+        let itemGst = Number(it.gst || 0);
+        const netItemSubtotal = Math.max(0, quantity * unitPrice - discount);
+        if (!itemGst && taxAmount > 0 && netItemSubtotal > 0) {
+          itemGst = Number(((taxAmount / netItemSubtotal) * 100).toFixed(2));
+        }
+
+        itemsTaxSum += taxAmount;
+        itemsDiscountSum += discount;
+
         items.push({
           id: itemId,
           purchaseId,
@@ -355,19 +351,51 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           quantity,
           unitPrice,
           discount,
-          gst: Number(it.gst || 0),
+          gst: itemGst,
           taxAmount,
           unitCost: Number(it.unitCost || unitPrice),
           unit: it.unit ? String(it.unit) : undefined,
           unitType,
           conversionRate,
           total: itemTotal,
-          createdAt: it.createdAt ? String(it.createdAt) : purchase.createdAt,
-          updatedAt: it.updatedAt ? String(it.updatedAt) : purchase.updatedAt,
+          createdAt: it.createdAt ? String(it.createdAt) : new Date().toISOString(),
+          updatedAt: it.updatedAt ? String(it.updatedAt) : new Date().toISOString(),
           syncStatus: 'synced',
         });
       }
     }
+
+    const totalTaxVal = Number(p.taxTotal ?? p.orderTax ?? 0);
+    const orderTax = p.orderTax !== undefined && p.orderTax !== null && Number(p.orderTax) > 0 && Number(p.gst || 0) > 0
+      ? Number(p.orderTax)
+      : Math.max(0, Number((totalTaxVal - itemsTaxSum).toFixed(2)));
+    const gstVal = Number(p.gst ?? itemsTaxSum);
+
+    const purchase: Purchase = {
+      id: purchaseId,
+      invoiceNumber: String(p.invoiceNumber || `PO-${purchaseId}`),
+      reference: p.reference ? String(p.reference) : String(p.invoiceNumber || `PO-${purchaseId}`),
+      supplierId: Number(p.supplierId || p.supplier?.id || 0),
+      supplierName: p.supplier?.name || p.supplierName || 'Unknown Supplier',
+      date: dateStr,
+      subtotal: Number(p.subTotal ?? p.subtotal ?? 0),
+      discount: Number(p.discountTotal ?? p.discount ?? 0),
+      orderTax,
+      shipping: Number(p.shipping ?? 0),
+      gst: gstVal,
+      total,
+      paid,
+      due,
+      status: (p.status === 'COMPLETED' ? 'Received' : p.status || 'Received') as any,
+      paymentStatus: paymentStatus as any,
+      notes: p.notes ? String(p.notes) : undefined,
+      previousDue: p.previousDue !== undefined ? Number(p.previousDue) : 0,
+      advancePayment: p.advancePayment !== undefined ? Number(p.advancePayment) : 0,
+      showPreviousBalance: Boolean(p.showPreviousBalance),
+      createdAt: p.createdAt ? String(p.createdAt) : new Date().toISOString(),
+      updatedAt: p.updatedAt ? String(p.updatedAt) : new Date().toISOString(),
+      syncStatus: 'synced',
+    };
 
     return { purchase, items };
   }
@@ -486,11 +514,16 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     }
   }
 
-  public async fetchByIdFromApi(id: number): Promise<Purchase | null> {
+  public async fetchByIdFromApi(id: number | string): Promise<Purchase | null> {
     try {
       const response = await apiClient.get<any>(API_ENDPOINTS.PURCHASES.BY_ID(id));
       const raw = response.data?.data || response.data;
-      if (!raw || !raw.id) return await this.getById(id);
+      if (!raw || !raw.id) {
+        if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+          return await this.getById(Number(id));
+        }
+        return await this.getByInvoiceNumber(String(id));
+      }
 
       const { purchase, items } = this.normalizeApiPurchase(raw);
       if (raw?.supplier && raw.supplier.outstandingBalance !== undefined) {
@@ -545,10 +578,41 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         }
       }
 
-      return await this.getById(id);
+      return await this.getById(purchase.id);
     } catch (e) {
       console.warn(`[PurchaseRepository] fetchByIdFromApi(${id}) error:`, e);
-      return await this.getById(id);
+      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+        return await this.getById(Number(id));
+      }
+      return null;
+    }
+  }
+
+  public async getByInvoiceNumber(invoiceNumber: string): Promise<Purchase | null> {
+    const term = (invoiceNumber || '').trim();
+    if (!term) return null;
+    try {
+      // 1. Fetch verified purchase from server first
+      try {
+        const serverPurchase = await this.fetchByIdFromApi(term);
+        if (serverPurchase) return serverPurchase;
+      } catch (_) {}
+
+      // 2. Fallback to local SQLite
+      const res = await db.execute(
+        `SELECT * FROM purchases WHERE UPPER(invoiceNumber) = UPPER(?) OR UPPER(reference) = UPPER(?) LIMIT 1`,
+        [term, term]
+      );
+      const rows = res.rows && Array.isArray(res.rows) ? res.rows : (res.rows?._array || []);
+      if (rows.length > 0) {
+        const purchase = this.fromRow(rows[0]);
+        purchase.items = await this.getItemsForPurchase(purchase.id);
+        return purchase;
+      }
+      return null;
+    } catch (e) {
+      console.warn('Failed to get purchase by invoice number:', e);
+      return null;
     }
   }
 
@@ -893,6 +957,10 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       const targetServerId = updatedPurchase.invoiceNumber || updatedPurchase.reference || purchaseId;
       const apiPayload = {
         ...updatedPurchase,
+        subTotal: Number(updatedPurchase.subtotal || 0),
+        taxTotal: Number((updatedPurchase.orderTax || 0) + (updatedPurchase.gst || 0)),
+        discountTotal: Number(updatedPurchase.discount || 0),
+        grandTotal: Number(updatedPurchase.total || 0),
         items: fullItems.map((it) => ({
           productId: String(it.productId),
           quantity: Number(it.quantity),
@@ -1131,24 +1199,19 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         console.warn('Failed to query purchases for supplier balance:', err);
       }
 
-      // If editing an existing purchase and we have a server balance, subtract the excluded purchase's due from server balance
-      if (excludePurchaseId && suppBal !== null && suppBal > 0) {
+      // If editing an existing purchase and we have a server balance, subtract the excluded purchase's net impact (total - paid) from server balance
+      if (excludePurchaseId && suppBal !== null) {
         try {
           const exPurchRes = await db.execute(
-            `SELECT total, paid, due, paymentStatus FROM purchases WHERE (id = ? OR invoiceNumber = ?) LIMIT 1`,
+            `SELECT total, paid, due, paymentStatus, previousDue, advancePayment FROM purchases WHERE (id = ? OR invoiceNumber = ?) LIMIT 1`,
             [Number(excludePurchaseId), String(excludePurchaseId)]
           );
           const exRows = this.extractRows(exPurchRes);
           if (exRows.length > 0 && exRows[0]) {
             const exTot = Number(exRows[0].total || 0);
             const exPaid = Number(exRows[0].paid || 0);
-            let exDue = Number(exRows[0].due !== undefined ? exRows[0].due : 0);
-            if (exDue <= 0 && exTot > exPaid && String(exRows[0].paymentStatus || '').toLowerCase() !== 'paid') {
-              exDue = exTot - exPaid;
-            }
-            if (exDue > 0) {
-              suppBal = Math.max(0, suppBal - exDue);
-            }
+            const netImpact = exTot - exPaid;
+            suppBal = suppBal - netImpact;
           }
         } catch (_) {}
       }
