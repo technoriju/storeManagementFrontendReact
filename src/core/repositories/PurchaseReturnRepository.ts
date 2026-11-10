@@ -139,6 +139,41 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
     }
   }
 
+  public async getReturnedQuantitiesForPurchase(purchaseId: number | string): Promise<Record<number, number>> {
+    try {
+      const res = await db.execute(
+        `SELECT pri.productId, SUM(pri.quantity) as totalReturned
+         FROM purchase_return_items pri
+         JOIN purchase_returns pr ON pri.purchaseReturnId = pr.id
+         WHERE pr.purchaseId = ? AND (pr.status IS NULL OR LOWER(pr.status) != 'cancelled')
+         GROUP BY pri.productId`,
+        [Number(purchaseId)]
+      );
+      let rawRows: any[] = [];
+      if (res.rows && Array.isArray(res.rows)) {
+        rawRows = res.rows;
+      } else if (res.rows && typeof res.rows === 'object') {
+        if ('_array' in res.rows && Array.isArray((res.rows as any)._array)) {
+          rawRows = (res.rows as any)._array;
+        } else if ('item' in res.rows && typeof (res.rows as any).length === 'number') {
+          for (let i = 0; i < (res.rows as any).length; i++) {
+            rawRows.push((res.rows as any).item(i));
+          }
+        }
+      }
+      const map: Record<number, number> = {};
+      for (const row of rawRows) {
+        if (row && row.productId) {
+          map[Number(row.productId)] = Number(row.totalReturned || 0);
+        }
+      }
+      return map;
+    } catch (e) {
+      console.warn('Failed to get returned quantities for purchase:', e);
+      return {};
+    }
+  }
+
   private requestSync(): void {
     void import('../sync/SyncEngine').then(({ syncEngine }) => syncEngine.syncNow());
   }

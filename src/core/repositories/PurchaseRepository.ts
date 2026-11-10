@@ -513,11 +513,16 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     }
   }
 
-  public async fetchByIdFromApi(id: number): Promise<Purchase | null> {
+  public async fetchByIdFromApi(id: number | string): Promise<Purchase | null> {
     try {
       const response = await apiClient.get<any>(API_ENDPOINTS.PURCHASES.BY_ID(id));
       const raw = response.data?.data || response.data;
-      if (!raw || !raw.id) return await this.getById(id);
+      if (!raw || !raw.id) {
+        if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+          return await this.getById(Number(id));
+        }
+        return await this.getByInvoiceNumber(String(id));
+      }
 
       const { purchase, items } = this.normalizeApiPurchase(raw);
       if (raw?.supplier && raw.supplier.outstandingBalance !== undefined) {
@@ -572,10 +577,41 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         }
       }
 
-      return await this.getById(id);
+      return await this.getById(purchase.id);
     } catch (e) {
       console.warn(`[PurchaseRepository] fetchByIdFromApi(${id}) error:`, e);
-      return await this.getById(id);
+      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+        return await this.getById(Number(id));
+      }
+      return null;
+    }
+  }
+
+  public async getByInvoiceNumber(invoiceNumber: string): Promise<Purchase | null> {
+    const term = (invoiceNumber || '').trim();
+    if (!term) return null;
+    try {
+      // 1. Fetch verified purchase from server first
+      try {
+        const serverPurchase = await this.fetchByIdFromApi(term);
+        if (serverPurchase) return serverPurchase;
+      } catch (_) {}
+
+      // 2. Fallback to local SQLite
+      const res = await db.execute(
+        `SELECT * FROM purchases WHERE UPPER(invoiceNumber) = UPPER(?) OR UPPER(reference) = UPPER(?) LIMIT 1`,
+        [term, term]
+      );
+      const rows = res.rows && Array.isArray(res.rows) ? res.rows : (res.rows?._array || []);
+      if (rows.length > 0) {
+        const purchase = this.fromRow(rows[0]);
+        purchase.items = await this.getItemsForPurchase(purchase.id);
+        return purchase;
+      }
+      return null;
+    } catch (e) {
+      console.warn('Failed to get purchase by invoice number:', e);
+      return null;
     }
   }
 
