@@ -67,12 +67,12 @@ export const AddPurchaseReturnModal: React.FC<Props> = ({ visible, onClose }) =>
   const [items, setItems] = useState<ReturnItemRow[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const qtyInputRefs = useRef<(TextInput | null)[]>([]);
+  const qtyInputRefs = useRef<any[]>([]);
 
   const focusQtyInput = (index: number) => {
     const target = qtyInputRefs.current[index];
     if (target) {
-      target.focus();
+      target?.focus?.();
       try {
         (target as any)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
       } catch {}

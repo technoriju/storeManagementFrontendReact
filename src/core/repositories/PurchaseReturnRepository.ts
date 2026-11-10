@@ -579,6 +579,69 @@ export class PurchaseReturnRepository extends BaseRepository<PurchaseReturn> {
   }
 
   public override async delete(id: number, shouldSync = true): Promise<void> {
+    try {
+      const existing = await this.getById(id);
+      if (existing) {
+        const items = existing.items || (await this.getItemsForPurchaseReturn(id));
+        const now = new Date().toISOString();
+
+        // 1. Revert product stock in local SQLite
+        for (const item of items) {
+          if (!item.productId) continue;
+          const conversionRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : 1;
+          const unitType = item.unitType || 'base';
+          const baseQty = unitType === 'sub' ? Number(item.quantity) / conversionRate : Number(item.quantity);
+          try {
+            await db.execute(
+              `UPDATE products SET stockQuantity = stockQuantity + ?, updatedAt = ? WHERE id = ?`,
+              [baseQty, now, item.productId]
+            );
+          } catch (stockErr) {
+            console.warn(`Failed to revert stock for product ${item.productId}:`, stockErr);
+          }
+        }
+
+        const returnTotal = Number(existing.totalAmount || 0);
+
+        // 2. Revert parent purchase due in local SQLite
+        if (existing.purchaseId) {
+          try {
+            const purRes = await db.execute(`SELECT grandTotal, paid, due, paymentStatus FROM purchases WHERE id = ? LIMIT 1`, [existing.purchaseId]);
+            const pRows = (purRes as any)?.rows ? (Array.isArray((purRes as any).rows) ? (purRes as any).rows : (purRes as any).rows._array || []) : [];
+            if (pRows.length > 0) {
+              const pDue = Number(pRows[0].due || 0);
+              const pPaid = Number(pRows[0].paid || 0);
+              const newDue = Number((pDue + returnTotal).toFixed(2));
+              let newStatus = pRows[0].paymentStatus;
+              if (newDue === 0 && pPaid > 0) newStatus = 'Paid';
+              else if (pPaid > 0) newStatus = 'Partial';
+              else newStatus = 'Unpaid';
+              await db.execute(
+                `UPDATE purchases SET due = ?, paymentStatus = ?, updatedAt = ? WHERE id = ?`,
+                [newDue, newStatus, now, existing.purchaseId]
+              );
+            }
+          } catch (pErr) {
+            console.warn('Failed to revert local purchase due on return delete:', pErr);
+          }
+        }
+
+        // 3. Revert supplier balance in local SQLite
+        if (existing.supplierId) {
+          try {
+            await db.execute(
+              `UPDATE suppliers SET outstandingBalance = COALESCE(outstandingBalance, 0) + ?, updatedAt = ? WHERE id = ?`,
+              [returnTotal, now, existing.supplierId]
+            );
+          } catch (sErr) {
+            console.warn('Failed to revert local supplier balance on return delete:', sErr);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error during local return delete rollback:', e);
+    }
+
     await db.execute('DELETE FROM purchase_return_items WHERE purchaseReturnId = ?', [id]);
     await db.execute(`DELETE FROM ${this.tableName} WHERE id = ?`, [id]);
     if (shouldSync) {
