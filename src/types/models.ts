@@ -262,6 +262,7 @@ export interface SaleReturnItem {
   id?: number;
   saleReturnId?: number;
   productId: number;
+  productUnitId?: number;
   productName?: string;
   quantity: number;
   unitPrice: number;
@@ -278,6 +279,7 @@ export interface SaleReturnItem {
 
 export interface SaleReturn extends BaseEntity {
   saleId?: number;
+  saleInvoiceNumber?: string;
   returnNumber: string;
   reference?: string;
   customerId?: number;
