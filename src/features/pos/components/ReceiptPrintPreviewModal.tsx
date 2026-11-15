@@ -298,21 +298,31 @@ export interface InvoicePageLayout {
 }
 
 export function getItemHeightMm(item: ReceiptItem, paperFormat: ReceiptPaperFormat = '140x210mm'): number {
-  let lines = 1;
+  const isLandscape = paperFormat === 'halfA4Landscape';
+  // Column width for item name in portrait is ~55mm (~36-40 chars), in landscape ~75mm (~48-55 chars)
+  const charLimit = isLandscape ? 48 : 36;
   const nameLen = (item.productName || '').length;
-  const charLimit = paperFormat === 'halfA4Landscape' ? 40 : 25;
-  if (nameLen > charLimit) lines += Math.ceil((nameLen - charLimit) / charLimit);
+  let extraLines = 0;
+  if (nameLen > charLimit) {
+    extraLines += Math.ceil((nameLen - charLimit) / charLimit);
+  }
   const brand = getItemBrand(item);
   const subUnit = getItemSubUnit(item);
   const conversionRate = getItemConversionRate(item);
-  if (brand || subUnit || conversionRate) lines += 1;
-  const displayUnit = getItemDisplayUnit(item);
-  if (displayUnit && subUnit && subUnit.toLowerCase() !== displayUnit.toLowerCase() && item.unitType !== 'sub') lines = Math.max(lines, 2);
-
-  if (paperFormat === 'halfA4Landscape') {
-    return 5.5 + (lines - 1) * 3.6;
+  if (brand || subUnit || conversionRate) {
+    extraLines += 1;
   }
-  return 5.6 + (lines - 1) * 3.6;
+  const displayUnit = getItemDisplayUnit(item);
+  if (displayUnit && subUnit && subUnit.toLowerCase() !== displayUnit.toLowerCase() && item.unitType !== 'sub') {
+    extraLines = Math.max(extraLines, 1);
+  }
+
+  // Realistic rendered row heights:
+  // Base single-line row: ~4.6mm in portrait, ~4.4mm in landscape
+  // Each extra line of wrapped text or metadata adds ~2.6mm in portrait, ~2.4mm in landscape
+  const baseHeight = isLandscape ? 4.4 : 4.6;
+  const lineIncrement = isLandscape ? 2.4 : 2.6;
+  return baseHeight + extraLines * lineIncrement;
 }
 
 export function paginateInvoiceItems({
@@ -324,6 +334,10 @@ export function paginateInvoiceItems({
   previousDue = 0,
   advancePayment = 0,
   shipping = 0,
+  showTaxBreakdown = true,
+  showSignatures = true,
+  discount = 0,
+  gst = 0,
 }: {
   items: ReceiptItem[];
   paperFormat: ReceiptPaperFormat;
@@ -333,6 +347,10 @@ export function paginateInvoiceItems({
   previousDue?: number;
   advancePayment?: number;
   shipping?: number;
+  showTaxBreakdown?: boolean;
+  showSignatures?: boolean;
+  discount?: number;
+  gst?: number;
 }): { pages: InvoicePageLayout[]; totalPages: number } {
   if (items.length === 0) {
     return {
@@ -342,51 +360,61 @@ export function paginateInvoiceItems({
   }
 
   const isLandscape = paperFormat === 'halfA4Landscape';
-  const pageHeight = isLandscape ? 136.5 : 200;
-  const headerHeight = isLandscape ? 48 : 52;
+  // Usable printable height inside page margins:
+  // 140x210mm portrait: 210mm page - 6mm margins - 2mm safety = 202mm
+  // Half A4 landscape (210x148.5mm): 148.5mm page - 8mm margins - 2.5mm safety = 138mm
+  const pageUsableHeight = isLandscape ? 138 : 202;
 
-  let footerHeight = isLandscape ? 52 : 58;
-  if (isWholesale && showBankDetails) footerHeight += 12;
-  if (shipping > 0) footerHeight += 4;
-  if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 10;
+  // Header overhead on Page 1 (store details, badges, buyer/parties grid, table thead)
+  const page1HeaderHeight = isLandscape
+    ? (isWholesale ? 42 : 38)
+    : (isWholesale ? 48 : 44);
 
-  const availWithFooter = pageHeight - headerHeight - footerHeight;
-  const availWithoutFooter = pageHeight - headerHeight - 6;
+  // Subsequent pages (Page 2+) overhead: slim continuation bar (4mm) + table thead (6mm) = 10mm
+  // Note: Store header and customer grid are ONLY shown on Page 1!
+  const subsequentHeaderHeight = 10;
+
+  // Footer height calculation based on visible blocks (words, bank, totals, signatures):
+  let footerHeight = isLandscape ? 28 : 32; // Base: words box + totals table
+  if (discount > 0) footerHeight += 3;
+  if (showTaxBreakdown && gst > 0) footerHeight += 3;
+  if (shipping > 0) footerHeight += 3;
+  if (isBalanceActive && (previousDue > 0 || advancePayment > 0)) footerHeight += 5;
+  if (isWholesale && showBankDetails) footerHeight += 4;
+  if (showSignatures) footerHeight += 11;
+
+  // Space available on Page 1:
+  const page1AvailWithFooter = pageUsableHeight - page1HeaderHeight - footerHeight;
+  const page1AvailWithoutFooter = pageUsableHeight - page1HeaderHeight - 4; // 4mm for bottom continuation note
+
+  // Space available on subsequent pages (Page 2+):
+  const subAvailWithFooter = pageUsableHeight - subsequentHeaderHeight - footerHeight;
+  const subAvailWithoutFooter = pageUsableHeight - subsequentHeaderHeight - 4;
 
   const totalItemsHeight = items.reduce((s, it) => s + getItemHeightMm(it, paperFormat), 0);
 
-  // 1. If all items AND entire footer fit on Page 1: Single page invoice!
-  if (totalItemsHeight <= availWithFooter) {
+  // 1. Single Page Invoice: All items + footer fit on Page 1
+  if (totalItemsHeight <= page1AvailWithFooter) {
     return {
       pages: [{ pageIndex: 0, items, startIndex: 0, hasFooter: true }],
       totalPages: 1,
     };
   }
 
-  // 2. Multi-page: Footer cannot fit on Page 1 without splitting.
-  // Rule: Fill Page 1 as much as possible with items.
-  // If all items fit on Page 1 without footer:
-  // Page 1 gets ALL items, Page 2 gets header + entire footer!
-  if (totalItemsHeight <= availWithoutFooter) {
-    return {
-      pages: [
-        { pageIndex: 0, items, startIndex: 0, hasFooter: false },
-        { pageIndex: 1, items: [], startIndex: items.length, hasFooter: true },
-      ],
-      totalPages: 2,
-    };
-  }
-
-  // 3. Items exceed Page 1 capacity even without footer:
-  // Pack as many items as fit on Page 1, then rest of items and footer go to next page(s).
+  // 2. Multi-page: Pack items across pages.
+  // Never create a page with zero items.
   const pages: InvoicePageLayout[] = [];
   let remaining = [...items];
   let curStart = 0;
 
   while (remaining.length > 0) {
+    const isFirstPage = pages.length === 0;
+    const availWithoutFooter = isFirstPage ? page1AvailWithoutFooter : subAvailWithoutFooter;
+    const availWithFooter = isFirstPage ? page1AvailWithFooter : subAvailWithFooter;
+
     const remHeight = remaining.reduce((s, it) => s + getItemHeightMm(it, paperFormat), 0);
 
-    // Can remaining items AND footer fit on this page?
+    // Can all remaining items AND footer fit on this page?
     if (remHeight <= availWithFooter) {
       pages.push({
         pageIndex: pages.length,
@@ -397,34 +425,23 @@ export function paginateInvoiceItems({
       break;
     }
 
-    // Can all remaining items fit on this page WITHOUT footer?
-    // Pack all remaining items on this page, and move footer to next page.
-    if (remHeight <= availWithoutFooter) {
-      pages.push({
-        pageIndex: pages.length,
-        items: remaining,
-        startIndex: curStart,
-        hasFooter: false,
-      });
-      curStart += remaining.length;
-      pages.push({
-        pageIndex: pages.length,
-        items: [],
-        startIndex: curStart,
-        hasFooter: true,
-      });
-      break;
-    }
+    // Remaining items + footer do not fit on this page.
+    // If all remaining items fit WITHOUT footer, reserve at least 1-2 items for the next page
+    // so the last page has products alongside the footer!
+    const minItemsToLeave = Math.min(2, Math.max(1, Math.floor(remaining.length / 4)));
+    const maxItemsForThisPage = Math.max(1, remaining.length - minItemsToLeave);
 
-    // Pack as many items as fit on this page without footer:
     let accHeight = 0;
     let count = 0;
     for (const it of remaining) {
+      if (count >= maxItemsForThisPage) break;
       const h = getItemHeightMm(it, paperFormat);
       if (accHeight + h > availWithoutFooter && count > 0) break;
       accHeight += h;
       count++;
     }
+
+    if (count === 0) count = 1;
 
     pages.push({
       pageIndex: pages.length,
@@ -432,18 +449,9 @@ export function paginateInvoiceItems({
       startIndex: curStart,
       hasFooter: false,
     });
+
     curStart += count;
     remaining = remaining.slice(count);
-
-    if (remaining.length === 0) {
-      pages.push({
-        pageIndex: pages.length,
-        items: [],
-        startIndex: curStart,
-        hasFooter: true,
-      });
-      break;
-    }
   }
 
   return { pages, totalPages: pages.length };
@@ -792,6 +800,10 @@ export function generateReceiptHtml({
       previousDue,
       advancePayment,
       shipping,
+      showTaxBreakdown,
+      showSignatures,
+      discount,
+      gst,
     });
 
     return `<!DOCTYPE html>
@@ -824,16 +836,38 @@ export function generateReceiptHtml({
       width: 132mm;
       max-width: 132mm;
       margin: 0 auto;
-      padding: 1mm 0;
+      padding: 0;
       box-sizing: border-box;
       page-break-after: always;
       break-after: page;
-      page-break-inside: avoid;
-      break-inside: avoid;
     }
     .invoice-page:last-child {
       page-break-after: auto;
       break-after: auto;
+    }
+    .subsequent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid #0f172a;
+      padding-bottom: 2px;
+      margin-bottom: 3px;
+      font-size: 8.5px;
+      color: #0f172a;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .subsequent-title {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .subsequent-badge {
+      font-size: 8px;
+      font-weight: 700;
+      color: #475569;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 2px;
     }
     .header-table {
       width: 100%;
@@ -871,9 +905,9 @@ export function generateReceiptHtml({
     .section-title { font-size: 8px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 1px; }
     .cust-name { font-size: 12px; font-weight: bold; color: #0f172a; line-height: 1.15; }
     .party-sub { font-size: 8.5px; color: #334155; line-height: 1.25; }
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; border: 1px solid #cbd5e1; }
-    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 3px 3px; border: 1px solid #cbd5e1; }
-    .items-table td { font-size: 8.5px; padding: 2.5px 3px; border: 1px solid #e2e8f0; line-height: 1.2; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 2px; border: 1px solid #cbd5e1; }
+    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 2.5px 3px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 8.5px; padding: 2px 3px; border: 1px solid #e2e8f0; line-height: 1.2; }
     .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
     .continuation-note {
@@ -881,7 +915,7 @@ export function generateReceiptHtml({
       font-size: 8.5px;
       font-weight: 600;
       color: #64748b;
-      margin-top: 3px;
+      margin-top: 2px;
       padding: 2px 0;
       border-top: 1px dashed #cbd5e1;
       page-break-inside: avoid;
@@ -891,7 +925,7 @@ export function generateReceiptHtml({
       display: flex;
       justify-content: space-between;
       gap: 8px;
-      margin-top: 4px;
+      margin-top: 3px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -927,7 +961,7 @@ export function generateReceiptHtml({
       font-size: 8px;
       color: #64748b;
       line-height: 1.2;
-      margin-top: 3px;
+      margin-top: 2px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -939,7 +973,7 @@ export function generateReceiptHtml({
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .totals-table td { padding: 2.5px 5px; font-size: 9.5px; border-bottom: 1px solid #f1f5f9; }
+    .totals-table td { padding: 2px 5px; font-size: 9.5px; border-bottom: 1px solid #f1f5f9; }
     .grand-total-row {
       background: ${colorMode === 'bw' ? '#000000' : '#0f172a'};
       color: #fff;
@@ -954,7 +988,7 @@ export function generateReceiptHtml({
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      margin-top: 8px;
+      margin-top: 5px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -964,7 +998,7 @@ export function generateReceiptHtml({
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-top: 4px;
+      margin-top: 3px;
       background: #f8fafc;
       padding: 3px;
       border: 1px solid #e2e8f0;
@@ -988,13 +1022,14 @@ export function generateReceiptHtml({
 </head>
 <body>
 ${pages.map((page, pageIdx) => {
+  const isFirstPage = pageIdx === 0;
   const isLastPage = page.hasFooter;
   const pageStartIndex = page.startIndex;
   const pageTitleNote = totalPages > 1 ? ` (Page ${pageIdx + 1} of ${totalPages})` : '';
-  const hasItemsOnPage = page.items.length > 0;
 
   return `
   <div class="invoice-page">
+    ${isFirstPage ? `
     <table class="header-table">
       <tr>
         <td style="vertical-align: top; width: 62%;">
@@ -1042,8 +1077,13 @@ ${pages.map((page, pageIdx) => {
         <div style="font-size: 8.5px; color: #64748b;">Supply: ${business.state || ''} (${business.stateCode || ''})</div>
       </div>
     </div>
+    ` : `
+    <div class="subsequent-header">
+      <div class="subsequent-title">${business.businessName || 'Tarama Enterprise'} &bull; Invoice: <strong>${invNumber}</strong></div>
+      <div class="subsequent-badge">Page ${pageIdx + 1} of ${totalPages} (Continued)</div>
+    </div>
+    `}
 
-    ${hasItemsOnPage ? `
     <table class="items-table">
       <thead>
         <tr>
@@ -1107,17 +1147,10 @@ ${pages.map((page, pageIdx) => {
         }).join('')}
       </tbody>
     </table>
-    ` : `
-    <div style="font-size: 9px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
-      Bill Summary & Settlement (All ${items.length} products listed on Page 1):
-    </div>
-    `}
 
     ${!isLastPage ? `
       <div class="continuation-note">
-        ${page.items.length === items.length
-          ? `All products listed above. Continued on Page ${pageIdx + 2} of ${totalPages} for Bill Summary & Signatures &rarr;`
-          : `Continued on Page ${pageIdx + 2} of ${totalPages} &rarr;`}
+        Continued on Page ${pageIdx + 2} of ${totalPages} &rarr;
       </div>
     ` : `
       <div class="bottom-grid">
@@ -1267,6 +1300,10 @@ ${pages.map((page, pageIdx) => {
     previousDue,
     advancePayment,
     shipping,
+    showTaxBreakdown,
+    showSignatures,
+    discount,
+    gst,
   });
 
   return `<!DOCTYPE html>
@@ -1327,18 +1364,40 @@ ${pages.map((page, pageIdx) => {
       width: 198mm;
       max-width: 198mm;
       margin: 0 auto;
-      padding: 2mm 0;
+      padding: 0;
       box-sizing: border-box;
       page-break-after: always;
       break-after: page;
-      page-break-inside: avoid;
-      break-inside: avoid;
     }
     .invoice-page:last-child {
       page-break-after: auto;
       break-after: auto;
     }
-    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 5px; margin-bottom: 5px; page-break-inside: avoid; break-inside: avoid; }
+    .subsequent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid #0f172a;
+      padding-bottom: 2px;
+      margin-bottom: 4px;
+      font-size: 9px;
+      color: #0f172a;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .subsequent-title {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .subsequent-badge {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: #475569;
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 2px;
+    }
+    .header-table { width: 100%; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 4px; page-break-inside: avoid; break-inside: avoid; }
     .store-name { font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; }
     .store-sub { font-size: 9.5px; color: #334155; line-height: 1.3; }
     .inv-badge {
@@ -1356,8 +1415,8 @@ ${pages.map((page, pageIdx) => {
       display: flex;
       justify-content: space-between;
       border-bottom: 1px solid #cbd5e1;
-      padding-bottom: 5px;
-      margin-bottom: 5px;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
       gap: 14px;
       page-break-inside: avoid;
       break-inside: avoid;
@@ -1367,9 +1426,9 @@ ${pages.map((page, pageIdx) => {
     .section-title { font-size: 8.5px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
     .cust-name { font-size: 12px; font-weight: bold; color: #0f172a; }
     .party-sub { font-size: 9px; color: #334155; line-height: 1.3; }
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 1px solid #cbd5e1; }
-    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 4px 5px; border: 1px solid #cbd5e1; }
-    .items-table td { font-size: 9px; padding: 3px 5px; border: 1px solid #e2e8f0; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; border: 1px solid #cbd5e1; }
+    .items-table th { background: #f1f5f9; font-size: 8.5px; font-weight: 700; color: #1e293b; padding: 3px 4px; border: 1px solid #cbd5e1; }
+    .items-table td { font-size: 8.5px; padding: 2.5px 4px; border: 1px solid #e2e8f0; line-height: 1.2; }
     .items-table tr { page-break-inside: avoid; break-inside: avoid; }
     .alt-row { background: #f8fafc; }
     .continuation-note {
@@ -1377,28 +1436,28 @@ ${pages.map((page, pageIdx) => {
       font-size: 8.5px;
       font-weight: 600;
       color: #64748b;
-      margin-top: 5px;
-      padding: 3px 0;
+      margin-top: 3px;
+      padding: 2px 0;
       border-top: 1px dashed #cbd5e1;
       page-break-inside: avoid;
       break-inside: avoid;
     }
-    .bottom-grid { display: flex; justify-content: space-between; gap: 14px; margin-top: 5px; page-break-inside: avoid; break-inside: avoid; }
+    .bottom-grid { display: flex; justify-content: space-between; gap: 14px; margin-top: 3px; page-break-inside: avoid; break-inside: avoid; }
     .bottom-left { flex: 1.3; }
     .bottom-right { flex: 1; }
-    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 6px; border-radius: 3px; font-size: 8.5px; margin-bottom: 4px; page-break-inside: avoid; break-inside: avoid; }
-    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 4px 6px; border-radius: 3px; font-size: 8px; margin-bottom: 4px; page-break-inside: avoid; break-inside: avoid; }
+    .words-box { background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 6px; border-radius: 3px; font-size: 8.5px; margin-bottom: 3px; page-break-inside: avoid; break-inside: avoid; }
+    .bank-box { background: ${colorMode === 'bw' ? '#f8fafc' : '#f0fdf4'}; border: 1px solid ${colorMode === 'bw' ? '#cbd5e1' : '#bbf7d0'}; padding: 3px 6px; border-radius: 3px; font-size: 8px; margin-bottom: 3px; page-break-inside: avoid; break-inside: avoid; }
     .bank-title { font-weight: bold; color: ${colorMode === 'bw' ? '#000000' : '#166534'}; font-size: 8.5px; margin-bottom: 2px; }
-    .terms-box { font-size: 8px; color: #64748b; line-height: 1.25; margin-top: 4px; page-break-inside: avoid; break-inside: avoid; }
+    .terms-box { font-size: 8px; color: #64748b; line-height: 1.2; margin-top: 3px; page-break-inside: avoid; break-inside: avoid; }
     .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; background: #fafafa; page-break-inside: avoid; break-inside: avoid; }
     .totals-table td { padding: 2px 6px; font-size: 9px; border-bottom: 1px solid #f1f5f9; }
     .grand-total-row { background: ${colorMode === 'bw' ? '#000000' : '#0f172a'}; color: #fff; font-weight: bold; }
     .grand-total-row td { color: ${colorMode === 'bw' ? '#ffffff' : '#facc15'}; font-size: 12px; font-weight: 900; }
-    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 8px; page-break-inside: avoid; break-inside: avoid; }
+    .signatures-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5px; page-break-inside: avoid; break-inside: avoid; }
     .sign-box { width: 140px; text-align: center; }
-    .sign-line { border-bottom: 1px solid #334155; margin-bottom: 3px; height: 16px; }
-    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 4px; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 3px; page-break-inside: avoid; break-inside: avoid; }
-    .qr-inline .receipt-qr-img { width: 44px; height: 44px; object-fit: contain; }
+    .sign-line { border-bottom: 1px solid #334155; margin-bottom: 2px; height: 14px; }
+    .qr-inline { display: flex; align-items: center; gap: 6px; margin-top: 3px; background: #f8fafc; padding: 3px; border: 1px solid #e2e8f0; border-radius: 3px; page-break-inside: avoid; break-inside: avoid; }
+    .qr-inline .receipt-qr-img { width: 40px; height: 40px; object-fit: contain; }
     @media print {
       body { width: 100%; margin: 0; padding: 0; }
       .invoice-page {
@@ -1414,13 +1473,14 @@ ${pages.map((page, pageIdx) => {
 </head>
 <body>
 ${pagesLs.map((page, pageIdx) => {
+  const isFirstPage = pageIdx === 0;
   const isLastPage = page.hasFooter;
   const pageStartIndex = page.startIndex;
   const pageTitleNote = totalPagesLs > 1 ? ` (Page ${pageIdx + 1} of ${totalPagesLs})` : '';
-  const hasItemsOnPage = page.items.length > 0;
 
   return `
   <div class="invoice-page">
+    ${isFirstPage ? `
     <table class="header-table">
       <tr>
         <td style="vertical-align: top; width: 60%;">
@@ -1476,8 +1536,13 @@ ${pagesLs.map((page, pageIdx) => {
         <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">Place of Supply: ${business.state || ''} (${business.stateCode || ''})</div>
       </div>
     </div>
+    ` : `
+    <div class="subsequent-header">
+      <div class="subsequent-title">${business.businessName || 'Tarama Enterprise'} &bull; Invoice: <strong>${invNumber}</strong></div>
+      <div class="subsequent-badge">Page ${pageIdx + 1} of ${totalPagesLs} (Continued)</div>
+    </div>
+    `}
 
-    ${hasItemsOnPage ? `
     <table class="items-table">
       <thead>
         <tr>
@@ -1544,17 +1609,10 @@ ${pagesLs.map((page, pageIdx) => {
         }).join('')}
       </tbody>
     </table>
-    ` : `
-    <div style="font-size: 8.5px; font-weight: 700; color: #475569; text-transform: uppercase; margin: 6px 0 4px 0; padding-bottom: 2px; border-bottom: 1px dashed #cbd5e1;">
-      Bill Summary & Settlement (All ${items.length} products listed on Page 1):
-    </div>
-    `}
 
     ${!isLastPage ? `
       <div class="continuation-note">
-        ${page.items.length === items.length
-          ? `All products listed above. Continued on Page ${pageIdx + 2} of ${totalPagesLs} for Bill Summary & Signatures &rarr;`
-          : `Continued on Page ${pageIdx + 2} of ${totalPagesLs} &rarr;`}
+        Continued on Page ${pageIdx + 2} of ${totalPagesLs} &rarr;
       </div>
     ` : `
       <div class="bottom-grid">
@@ -1886,6 +1944,37 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
   const cgstAmount = Number((gst / 2).toFixed(2));
   const sgstAmount = Number((gst / 2).toFixed(2));
 
+  // Multi-page layout pagination for preview
+  const p140Pagination = paginateInvoiceItems({
+    items,
+    paperFormat: '140x210mm',
+    isWholesale,
+    showBankDetails,
+    isBalanceActive,
+    previousDue,
+    advancePayment,
+    shipping,
+    showTaxBreakdown,
+    showSignatures,
+    discount,
+    gst,
+  });
+
+  const lsPagination = paginateInvoiceItems({
+    items,
+    paperFormat: 'halfA4Landscape',
+    isWholesale,
+    showBankDetails,
+    isBalanceActive,
+    previousDue,
+    advancePayment,
+    shipping,
+    showTaxBreakdown,
+    showSignatures,
+    discount,
+    gst,
+  });
+
   const renderControlsContent = () => (
     <>
       <View style={styles.selectorGroup}>
@@ -2031,6 +2120,767 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
     </>
   );
 
+  const renderP140Page = (page: InvoicePageLayout, pageIdx: number, totalPages: number) => {
+    const isFirstPage = pageIdx === 0;
+    const isLastPage = page.hasFooter;
+    const pageStartIndex = page.startIndex;
+
+    return (
+      <View key={pageIdx} style={[styles.p140Sheet, pageIdx > 0 && { marginTop: 24 }]}>
+        <View style={styles.p140Inner}>
+          {isFirstPage ? (
+            <>
+              {/* Header */}
+              <View style={styles.p140HeaderTable}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.p140StoreName}>{business.businessName || 'Tarama Enterprise'}</Text>
+                  {business.tagline ? <Text style={styles.p140Tagline}>{business.tagline}</Text> : null}
+                  <Text style={styles.p140StoreSub}>{business.address || ''}</Text>
+                  <Text style={styles.p140StoreSub}>Phone: {business.phone || ''}</Text>
+                  <Text style={[styles.p140StoreSub, { fontWeight: '700', color: '#0F172A', marginTop: 2 }]}>
+                    GSTIN: {business.gstin || ''} | State: {business.state || 'West Bengal'} ({business.stateCode || '19'})
+                  </Text>
+                </View>
+
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <View style={[styles.p140Badge, { backgroundColor: isWholesale ? '#1E293B' : '#047857' }]}>
+                    <Text style={styles.p140BadgeText}>
+                      {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+                    </Text>
+                  </View>
+                  <Text style={styles.p140Original}>ORIGINAL FOR RECIPIENT</Text>
+
+                  <View style={styles.p140MetaGrid}>
+                    <View style={styles.p140MetaRow}>
+                      <Text style={styles.p140MetaKey}>Invoice No:</Text>
+                      <Text style={styles.p140MetaVal}>{invNumber}{totalPages > 1 ? ` (Page ${pageIdx + 1} of ${totalPages})` : ''}</Text>
+                    </View>
+                    <View style={styles.p140MetaRow}>
+                      <Text style={styles.p140MetaKey}>Date:</Text>
+                      <Text style={styles.p140MetaVal}>{invDate}</Text>
+                    </View>
+                    <View style={styles.p140MetaRow}>
+                      <Text style={styles.p140MetaKey}>Mode:</Text>
+                      <Text style={styles.p140MetaVal}>{paymentMethod.toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.p140MetaRow}>
+                      <Text style={styles.p140MetaKey}>Biller:</Text>
+                      <Text style={styles.p140MetaVal}>{biller}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Parties */}
+              <View style={styles.p140PartiesRow}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.p140SectionHead}>
+                    {isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}
+                  </Text>
+                  <Text style={styles.p140CustName}>{custName}</Text>
+                  {custPhone ? <Text style={styles.p140PartySub}>Phone: {custPhone}</Text> : null}
+                  {custAddress ? <Text style={styles.p140PartySub}>Address: {custAddress}</Text> : null}
+                  {isWholesale && custGstin ? (
+                    <Text style={[styles.p140PartySub, { fontWeight: '700', marginTop: 1 }]}>
+                      GSTIN: {custGstin}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <Text style={[styles.p140StatusPaid, { color: due === 0 ? '#059669' : paid > 0 ? '#D97706' : '#DC2626' }]}>
+                    STATUS: {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
+                  </Text>
+                  <Text style={styles.p140PartySub}>Place of Supply: {business.state} ({business.stateCode})</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.p140SubsequentHeader}>
+              <Text style={styles.p140SubsequentTitle}>
+                {business.businessName || 'Tarama Enterprise'} • Invoice: {invNumber}
+              </Text>
+              <Text style={styles.p140SubsequentBadge}>
+                Page {pageIdx + 1} of {totalPages} (Continued)
+              </Text>
+            </View>
+          )}
+
+          {/* Items Table */}
+          <View style={styles.p140Table}>
+            <View style={styles.p140TableHead}>
+              <Text style={[styles.p140Th, { width: 22, textAlign: 'center' }]}>#</Text>
+              <Text style={[styles.p140Th, { flex: 2 }]}>ITEM & DESCRIPTION</Text>
+              {isWholesale && <Text style={[styles.p140Th, { width: 42, textAlign: 'center' }]}>HSN</Text>}
+              <Text style={[styles.p140Th, { width: 38, textAlign: 'center' }]}>QTY</Text>
+              <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>RATE</Text>
+              <Text style={[styles.p140Th, { width: 42, textAlign: 'right' }]}>DISC</Text>
+              {showTaxBreakdown && (
+                <>
+                  <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>TAXABLE</Text>
+                  <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>GST%</Text>
+                </>
+              )}
+              <Text style={[styles.p140Th, { width: 66, textAlign: 'right' }]}>TOTAL</Text>
+            </View>
+
+            {page.items.map((item, idx) => {
+              const globalIdx = pageStartIndex + idx + 1;
+              const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+              const rawAmt = Number(item.unitPrice || 0) * itemQty;
+              const discAmt = Number(item.discount || 0);
+              const taxableAmt = Math.max(0, rawAmt - discAmt);
+              const metaText = formatItemMeta(item);
+
+              return (
+                <View key={idx} style={[styles.p140TableRow, idx % 2 === 1 && styles.p140TableRowAlt]}>
+                  <Text style={[styles.p140Td, { width: 22, textAlign: 'center' }]}>{globalIdx}</Text>
+                  <View style={{ flex: 2 }}>
+                    <Text style={[styles.p140Td, { fontWeight: '600', color: '#0F172A' }]}>
+                      {item.productName || `Item #${globalIdx}`}
+                    </Text>
+                    {metaText ? <Text style={{ fontSize: 8.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
+                  </View>
+                  {isWholesale && (
+                    <Text style={[styles.p140Td, { width: 42, textAlign: 'center' }]}>{item.hsn || '-'}</Text>
+                  )}
+                  <Text style={[styles.p140Td, { width: 38, textAlign: 'center' }]}>
+                    {item.quantity} {getItemDisplayUnit(item)}
+                  </Text>
+                  <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
+                    {Number(item.unitPrice).toFixed(2)}
+                  </Text>
+                  <Text style={[styles.p140Td, { width: 42, textAlign: 'right' }]}>
+                    {discAmt > 0 ? discAmt.toFixed(2) : '-'}
+                  </Text>
+                  {showTaxBreakdown && (
+                    <>
+                      <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
+                        {taxableAmt.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.p140Td, { width: 36, textAlign: 'center' }]}>
+                        {item.gst || 0}%
+                      </Text>
+                    </>
+                  )}
+                  <Text style={[styles.p140Td, { width: 66, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
+                    {Number(item.total).toFixed(2)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {!isLastPage && (
+            <View style={styles.p140ContinuationNote}>
+              <Text style={styles.p140ContinuationText}>
+                Continued on Page {pageIdx + 2} of {totalPages} →
+              </Text>
+            </View>
+          )}
+
+          {isLastPage && (
+            <>
+              {/* Bottom Section */}
+              <View style={styles.p140BottomGrid}>
+                {/* Left: Words, Bank, Terms */}
+                <View style={{ flex: 1.2, paddingRight: 10 }}>
+                  <View style={styles.p140WordsBox}>
+                    <Text style={styles.p140WordsTitle}>Invoice Amount in Words:</Text>
+                    <Text style={styles.p140WordsVal}>{words}</Text>
+                  </View>
+
+                  {isWholesale && showBankDetails && (
+                    <View style={styles.p140BankBox}>
+                      <Text style={styles.p140BankTitle}>BANK DETAILS FOR WIRE TRANSFER / NEFT:</Text>
+                      <Text style={styles.p140BankText}>
+                        Bank: <Text style={{ fontWeight: '700' }}>{business.bankName}</Text>
+                      </Text>
+                      <Text style={styles.p140BankText}>
+                        A/C: <Text style={{ fontWeight: '700' }}>{business.accountNumber}</Text> | IFSC: <Text style={{ fontWeight: '700' }}>{business.ifscCode}</Text>
+                      </Text>
+                    </View>
+                  )}
+
+                  {showTerms && (
+                    <View style={styles.p140TermsBox}>
+                      <Text style={styles.p140TermsHead}>Terms & Conditions:</Text>
+                      <Text style={styles.p140TermsText}>1. Goods once sold will not be exchanged after 7 days.</Text>
+                      <Text style={styles.p140TermsText}>2. Subject to local jurisdiction.</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Right: Calculations & QR */}
+                <View style={{ flex: 1 }}>
+                  <View style={styles.p140TotalsTable}>
+                    <View style={styles.p140TotalRow}>
+                      <Text style={styles.p140TotalKey}>Subtotal:</Text>
+                      <Text style={styles.p140TotalVal}>₹{subtotal.toFixed(2)}</Text>
+                    </View>
+                    {discount > 0 && (
+                      <View style={styles.p140TotalRow}>
+                        <Text style={styles.p140TotalKey}>Discount:</Text>
+                        <Text style={[styles.p140TotalVal, { color: '#DC2626' }]}>-₹{discount.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {showTaxBreakdown && gst > 0 && (
+                      <>
+                        <View style={styles.p140TotalRow}>
+                          <Text style={styles.p140TotalKey}>CGST:</Text>
+                          <Text style={styles.p140TotalVal}>₹{cgstAmount.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.p140TotalRow}>
+                          <Text style={styles.p140TotalKey}>SGST:</Text>
+                          <Text style={styles.p140TotalVal}>₹{sgstAmount.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+                    {shipping > 0 && (
+                      <View style={styles.p140TotalRow}>
+                        <Text style={styles.p140TotalKey}>Shipping:</Text>
+                        <Text style={styles.p140TotalVal}>+₹{shipping.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.p140GrandTotalRow}>
+                      <Text style={styles.p140GrandTotalKey}>
+                        {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'GRAND TOTAL:'}
+                      </Text>
+                      <Text style={styles.p140GrandTotalVal}>₹{total.toFixed(2)}</Text>
+                    </View>
+
+                    {isBalanceActive && previousDue > 0 && (
+                      <>
+                        <View style={styles.p140TotalRow}>
+                          <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due:</Text>
+                          <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.p140GrandTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 2.5 }]}>
+                          <Text style={[styles.p140GrandTotalKey, { color: '#991B1B', fontSize: 10.5 }]}>TOTAL PAYABLE:</Text>
+                          <Text style={[styles.p140GrandTotalVal, { color: '#991B1B', fontSize: 11.5 }]}>₹{totalPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+
+                    {isBalanceActive && advancePayment > 0 && (
+                      <>
+                        <View style={styles.p140TotalRow}>
+                          <Text style={[styles.p140TotalKey, { color: '#16A34A', fontWeight: '700' }]}>Advance Credit:</Text>
+                          <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.p140GrandTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
+                          <Text style={[styles.p140GrandTotalKey, { color: '#166534', fontSize: 10.5 }]}>NET PAYABLE:</Text>
+                          <Text style={[styles.p140GrandTotalVal, { color: '#166534', fontSize: 11.5 }]}>₹{netPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+
+                    <View style={styles.p140TotalRow}>
+                      <Text style={styles.p140TotalKey}>{isBalanceActive && advancePayment > 0 ? "Cash Received:" : "Received:"}</Text>
+                      <Text style={[styles.p140TotalVal, { color: '#059669', fontWeight: '700' }]}>₹{(isBalanceActive && advancePayment > 0 ? cashPaid : paid).toFixed(2)}</Text>
+                    </View>
+
+                    {isBalanceActive && previousDue > 0 ? (
+                      <View style={styles.p140TotalRow}>
+                        <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
+                        <Text style={[styles.p140TotalVal, { color: netBalanceDue > 0 ? '#DC2626' : '#059669', fontWeight: '700' }]}>
+                          ₹{netBalanceDue.toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : ((isBalanceActive && advancePayment > 0) || advancePayment > 0) ? (
+                      netDue > 0 ? (
+                        <View style={styles.p140TotalRow}>
+                          <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Balance Due:</Text>
+                          <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>
+                            ₹{netDue.toFixed(2)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.p140TotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
+                          <Text style={[styles.p140TotalKey, { color: '#166534', fontWeight: '700' }]}>Balance Advance:</Text>
+                          <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>
+                            ₹{(remainingAdvance > 0 ? remainingAdvance : advancePayment).toFixed(2)}
+                          </Text>
+                        </View>
+                      )
+                    ) : (
+                      due > 0 && (
+                        <View style={styles.p140TotalRow}>
+                          <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Balance Due:</Text>
+                          <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>₹{due.toFixed(2)}</Text>
+                        </View>
+                      )
+                    )}
+                  </View>
+
+                  {/* QR Code */}
+                  {showQrCode && (
+                    <View style={styles.p140QrRow}>
+                      <Image source={{ uri: QR_CODE_DATA_URI }} style={styles.p140QrImg} resizeMode="contain" />
+                      <View>
+                        <Text style={styles.p140QrCaption}>Scan with UPI to Pay</Text>
+                        <Text style={styles.p140QrUpi}>{business.upiId}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Signatures */}
+              {showSignatures && (
+                <View style={styles.p140SignaturesRow}>
+                  <View style={styles.p140SignBox}>
+                    <View style={styles.p140SignLine} />
+                    <Text style={styles.p140SignLabel}>Customer Signature</Text>
+                  </View>
+                  <View style={styles.p140SignBox}>
+                    <Text style={styles.p140SignCompany}>For {business.businessName}</Text>
+                    <View style={styles.p140SignLine} />
+                    <Text style={styles.p140SignLabel}>Authorized Signatory</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderLsPage = (page: InvoicePageLayout, pageIdx: number, totalPages: number) => {
+    const isFirstPage = pageIdx === 0;
+    const isLastPage = page.hasFooter;
+    const pageStartIndex = page.startIndex;
+
+    return (
+      <View key={pageIdx} style={[styles.landscapeSheet, pageIdx > 0 && { marginTop: 24 }]}>
+        <View style={styles.landscapeInner}>
+          {isFirstPage ? (
+            <>
+              {/* Header Row */}
+              <View style={styles.lsHeaderRow}>
+                {/* Left: Seller Information */}
+                <View style={styles.lsSellerCol}>
+                  <Text style={styles.lsStoreName}>{business.businessName}</Text>
+                  {!!business.tagline && (
+                    <Text style={[styles.lsTagline, colorMode === 'bw' && { color: '#334155' }]}>
+                      {business.tagline}
+                    </Text>
+                  )}
+                  <Text style={styles.lsStoreAddress}>{business.address}</Text>
+                  <View style={styles.lsContactRow}>
+                    <Text style={styles.lsContactText}>Phone: {business.phone}</Text>
+                    <Text style={styles.lsContactText}>Email: {business.email}</Text>
+                  </View>
+                  <View style={styles.lsTaxRow}>
+                    <Text style={styles.lsTaxBold}>GSTIN: {business.gstin}</Text>
+                    <Text style={styles.lsTaxBold}>PAN: {business.pan || 'N/A'}</Text>
+                    <Text style={styles.lsTaxBold}>State: {business.state} ({business.stateCode})</Text>
+                  </View>
+                </View>
+
+                {/* Right: Invoice Type Badge & Details */}
+                <View style={styles.lsInvoiceMetaCol}>
+                  <View
+                    style={[
+                      styles.lsInvoiceTypeBadge,
+                      colorMode === 'bw'
+                        ? styles.lsBadgeBw
+                        : isWholesale
+                        ? styles.lsBadgeWholesale
+                        : styles.lsBadgeRetail,
+                    ]}
+                  >
+                    <Text style={styles.lsInvoiceTypeBadgeText}>
+                      {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
+                    </Text>
+                  </View>
+                  <Text style={styles.lsOriginalCopyText}>ORIGINAL FOR RECIPIENT</Text>
+
+                  <View style={styles.lsMetaGrid}>
+                    <View style={styles.lsMetaItem}>
+                      <Text style={styles.lsMetaKey}>Invoice No:</Text>
+                      <Text style={styles.lsMetaValBold}>{invNumber}{totalPages > 1 ? ` (Page ${pageIdx + 1} of ${totalPages})` : ''}</Text>
+                    </View>
+                    <View style={styles.lsMetaItem}>
+                      <Text style={styles.lsMetaKey}>Date:</Text>
+                      <Text style={styles.lsMetaVal}>{invDate}</Text>
+                    </View>
+                    <View style={styles.lsMetaItem}>
+                      <Text style={styles.lsMetaKey}>Payment Mode:</Text>
+                      <Text style={styles.lsMetaVal}>{paymentMethod.toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.lsMetaItem}>
+                      <Text style={styles.lsMetaKey}>Biller:</Text>
+                      <Text style={styles.lsMetaVal}>{biller}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Parties Section: Billed To / Shipped To */}
+              <View style={styles.lsPartiesSection}>
+                <View style={styles.lsPartyCol}>
+                  <Text style={styles.lsSectionHeader}>
+                    {isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}
+                  </Text>
+                  <Text style={styles.lsCustomerName}>{custName}</Text>
+                  {!!custPhone && <Text style={styles.lsPartyText}>Mobile: {custPhone}</Text>}
+                  {!!custAddress && <Text style={styles.lsPartyText}>Address: {custAddress}</Text>}
+                  {isWholesale && (
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
+                      <Text style={styles.lsPartyGstin}>
+                        Buyer GSTIN: <Text style={{ fontWeight: '700' }}>{custGstin || 'Unregistered / B2C'}</Text>
+                      </Text>
+                      <Text style={styles.lsPartyText}>State Code: {business.stateCode}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.lsPartyStatusCol}>
+                  <View style={styles.lsStatusBadgeBox}>
+                    <Text style={styles.lsStatusTitle}>STATUS:</Text>
+                    <Text
+                      style={[
+                        styles.lsStatusVal,
+                        colorMode === 'bw'
+                          ? { color: '#000000' }
+                          : due === 0
+                          ? { color: '#059669' }
+                          : { color: '#DC2626' },
+                      ]}
+                    >
+                      {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
+                    </Text>
+                  </View>
+                  <Text style={styles.lsPlaceOfSupply}>
+                    Place of Supply: {business.state} ({business.stateCode})
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.lsSubsequentHeader}>
+              <Text style={styles.lsSubsequentTitle}>
+                {business.businessName || 'Tarama Enterprise'} • Invoice: {invNumber}
+              </Text>
+              <Text style={styles.lsSubsequentBadge}>
+                Page {pageIdx + 1} of {totalPages} (Continued)
+              </Text>
+            </View>
+          )}
+
+          {/* Table of Items */}
+          <View style={styles.lsTable}>
+            {/* Header */}
+            <View style={styles.lsTableHead}>
+              <Text style={[styles.lsTh, { width: 30 }]}>#</Text>
+              <Text style={[styles.lsTh, { flex: 3 }]}>ITEM & DESCRIPTION</Text>
+              {isWholesale && <Text style={[styles.lsTh, { width: 60 }]}>HSN</Text>}
+              <Text style={[styles.lsTh, { width: 45, textAlign: 'center' }]}>QTY</Text>
+              <Text style={[styles.lsTh, { width: 45, textAlign: 'center' }]}>UNIT</Text>
+              <Text style={[styles.lsTh, { width: 65, textAlign: 'right' }]}>RATE (₹)</Text>
+              <Text style={[styles.lsTh, { width: 55, textAlign: 'right' }]}>DISC (₹)</Text>
+              {showTaxBreakdown && (
+                <>
+                  <Text style={[styles.lsTh, { width: 70, textAlign: 'right' }]}>TAXABLE</Text>
+                  <Text style={[styles.lsTh, { width: 50, textAlign: 'center' }]}>GST%</Text>
+                </>
+              )}
+              <Text style={[styles.lsTh, { width: 80, textAlign: 'right' }]}>AMOUNT (₹)</Text>
+            </View>
+
+            {/* Rows */}
+            {page.items.map((item, idx) => {
+              const globalIdx = pageStartIndex + idx + 1;
+              const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
+              const rawAmt = Number(item.unitPrice || 0) * itemQty;
+              const discAmt = Number(item.discount || 0);
+              const taxableAmt = Math.max(0, rawAmt - discAmt);
+              return (
+                <View
+                  key={idx}
+                  style={[styles.lsTableRow, idx % 2 === 1 && styles.lsTableRowAlt]}
+                >
+                  <Text style={[styles.lsTd, { width: 30 }]}>{globalIdx}</Text>
+                  <View style={{ flex: 3 }}>
+                    <Text style={styles.lsTdBold}>
+                      {item.productName || `Item #${globalIdx}`}
+                    </Text>
+                    {(() => {
+                      const metaText = formatItemMeta(item);
+                      return metaText ? (
+                        <Text style={{ fontSize: 9, color: '#64748B', marginTop: 2 }}>
+                          {metaText}
+                        </Text>
+                      ) : null;
+                    })()}
+                  </View>
+                  {isWholesale && (
+                    <Text style={[styles.lsTd, { width: 60 }]}>{item.hsn || '9983'}</Text>
+                  )}
+                  <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
+                    {item.quantity}
+                  </Text>
+                  <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
+                    {getItemDisplayUnit(item)}
+                    {(() => {
+                      const sub = getItemSubUnit(item);
+                      const du = getItemDisplayUnit(item);
+                      return sub && sub.toLowerCase() !== du.toLowerCase() && item.unitType !== 'sub' ? `\n(Sub: ${sub})` : '';
+                    })()}
+                  </Text>
+                  <Text style={[styles.lsTd, { width: 65, textAlign: 'right' }]}>
+                    {Number(item.unitPrice).toFixed(2)}
+                  </Text>
+                  <Text style={[styles.lsTd, { width: 55, textAlign: 'right' }]}>
+                    {discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}
+                  </Text>
+                  {showTaxBreakdown && (
+                    <>
+                      <Text style={[styles.lsTd, { width: 70, textAlign: 'right' }]}>
+                        {taxableAmt.toFixed(2)}
+                      </Text>
+                      <Text style={[styles.lsTd, { width: 50, textAlign: 'center' }]}>
+                        {item.gst || 0}%
+                      </Text>
+                    </>
+                  )}
+                  <Text style={[styles.lsTdBold, { width: 80, textAlign: 'right' }]}>
+                    {Number(item.total).toFixed(2)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {!isLastPage && (
+            <View style={styles.lsContinuationNote}>
+              <Text style={styles.lsContinuationText}>
+                Continued on Page {pageIdx + 2} of {totalPages} →
+              </Text>
+            </View>
+          )}
+
+          {isLastPage && (
+            <>
+              {/* Bottom Area: Left (Words, Bank, QR, Terms) & Right (Calculation Breakdown) */}
+              <View style={styles.lsBottomRow}>
+                {/* Left Block */}
+                <View style={styles.lsBottomLeftCol}>
+                  <View style={styles.lsAmountInWordsBox}>
+                    <Text style={styles.lsWordsLabel}>Invoice Amount in Words:</Text>
+                    <Text style={styles.lsWordsText}>{amountToWords(total)}</Text>
+                  </View>
+
+                  {/* Bank Details for Wholesale */}
+                  {isWholesale && showBankDetails && (
+                    <View style={[styles.lsBankBox, colorMode === 'bw' && styles.lsBankBoxBw]}>
+                      <Text style={[styles.lsBankTitle, colorMode === 'bw' && { color: '#000000' }]}>
+                        BANK DETAILS FOR WIRE TRANSFER / NEFT:
+                      </Text>
+                      <View style={styles.lsBankGrid}>
+                        <Text style={styles.lsBankText}>
+                          Bank: <Text style={styles.lsBoldText}>{business.bankName}</Text>
+                        </Text>
+                        <Text style={styles.lsBankText}>
+                          A/C No: <Text style={styles.lsBoldText}>{business.accountNumber}</Text>
+                        </Text>
+                        <Text style={styles.lsBankText}>
+                          IFSC: <Text style={styles.lsBoldText}>{business.ifscCode}</Text>
+                        </Text>
+                        <Text style={styles.lsBankText}>
+                          Branch: <Text style={styles.lsBoldText}>{business.branch}</Text>
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Terms & Conditions */}
+                  {showTerms && (
+                    <View style={styles.lsTermsBox}>
+                      <Text style={styles.lsTermsTitle}>Terms & Conditions:</Text>
+                      <Text style={styles.lsTermsLine}>
+                        1. Payment due upon receipt of invoice.
+                      </Text>
+                      <Text style={styles.lsTermsLine}>
+                        2. Goods once sold will not be returned or exchanged without original invoice.
+                      </Text>
+                      <Text style={styles.lsTermsLine}>
+                        3. All disputes subject to local court jurisdiction.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Right Block: Totals & Summary Table */}
+                <View style={styles.lsBottomRightCol}>
+                  <View style={styles.lsSummaryTable}>
+                    <View style={styles.lsSumRow}>
+                      <Text style={styles.lsSumKey}>Subtotal:</Text>
+                      <Text style={styles.lsSumVal}>₹{subtotal.toFixed(2)}</Text>
+                    </View>
+                    {discount > 0 && (
+                      <View style={styles.lsSumRow}>
+                        <Text style={styles.lsSumKey}>Discount:</Text>
+                        <Text style={[styles.lsSumVal, { color: '#DC2626' }]}>-₹{discount.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {showTaxBreakdown && gst > 0 && (
+                      <>
+                        <View style={styles.lsSumRow}>
+                          <Text style={styles.lsSumKey}>CGST ({(gst > 0 ? 'Tax' : '')}):</Text>
+                          <Text style={styles.lsSumVal}>₹{cgstAmount.toFixed(2)}</Text>
+                        </View>
+                        <View style={styles.lsSumRow}>
+                          <Text style={styles.lsSumKey}>SGST:</Text>
+                          <Text style={styles.lsSumVal}>₹{sgstAmount.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+                    {shipping > 0 && (
+                      <View style={styles.lsSumRow}>
+                        <Text style={styles.lsSumKey}>Shipping:</Text>
+                        <Text style={styles.lsSumVal}>+₹{shipping.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={styles.lsTotalRow}>
+                      <Text style={styles.lsTotalKey}>
+                        {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}
+                      </Text>
+                      <Text style={styles.lsTotalVal}>₹{total.toFixed(2)}</Text>
+                    </View>
+
+                    {isBalanceActive && previousDue > 0 && (
+                      <>
+                        <View style={styles.lsSumRow}>
+                          <Text style={[styles.lsSumKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due Balance:</Text>
+                          <Text style={[styles.lsSumVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.lsTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 3 }]}>
+                          <Text style={[styles.lsTotalKey, { color: '#991B1B', fontSize: 10 }]}>TOTAL PAYABLE:</Text>
+                          <Text style={[styles.lsTotalVal, { color: '#991B1B', fontSize: 11 }]}>₹{totalPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+
+                    {isBalanceActive && advancePayment > 0 && (
+                      <>
+                        <View style={styles.lsSumRow}>
+                          <Text style={[styles.lsSumKey, { color: '#16A34A', fontWeight: '700' }]}>Previous Advance Credit:</Text>
+                          <Text style={[styles.lsSumVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.lsTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 3 }]}>
+                          <Text style={[styles.lsTotalKey, { color: '#166534', fontSize: 10 }]}>NET PAYABLE:</Text>
+                          <Text style={[styles.lsTotalVal, { color: '#166534', fontSize: 11 }]}>₹{netPayable.toFixed(2)}</Text>
+                        </View>
+                      </>
+                    )}
+
+                    <View style={styles.lsSumRow}>
+                      <Text style={styles.lsSumKey}>Amount Received:</Text>
+                      <Text
+                        style={[
+                          styles.lsSumVal,
+                          { color: colorMode === 'bw' ? '#000000' : '#059669', fontWeight: '700' },
+                        ]}
+                      >
+                        ₹{paid.toFixed(2)}
+                      </Text>
+                    </View>
+                    {isBalanceActive && previousDue > 0 ? (
+                      <View style={styles.lsSumRow}>
+                        <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
+                        <Text
+                          style={[
+                            styles.lsSumVal,
+                            {
+                              color: colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#DC2626' : '#059669'),
+                              fontWeight: '700',
+                            },
+                          ]}
+                        >
+                          ₹{netBalanceDue.toFixed(2)}
+                        </Text>
+                      </View>
+                    ) : isBalanceActive && advancePayment > 0 ? (
+                      <>
+                        <View style={styles.lsSumRow}>
+                          <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Balance Due:</Text>
+                          <Text
+                            style={[
+                              styles.lsSumVal,
+                              {
+                                color: colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#DC2626' : '#059669'),
+                                fontWeight: '700',
+                              },
+                            ]}
+                          >
+                            ₹{netDue.toFixed(2)}
+                          </Text>
+                        </View>
+                        {remainingAdvance > 0 && (
+                          <View style={styles.lsSumRow}>
+                            <Text style={[styles.lsSumKey, { color: '#2563EB', fontWeight: '700' }]}>Remaining Advance:</Text>
+                            <Text style={[styles.lsSumVal, { color: '#2563EB', fontWeight: '700' }]}>₹{remainingAdvance.toFixed(2)}</Text>
+                          </View>
+                        )}
+                      </>
+                    ) : (
+                      <View style={styles.lsSumRow}>
+                        <Text style={styles.lsSumKey}>Balance Due:</Text>
+                        <Text
+                          style={[
+                            styles.lsSumVal,
+                            {
+                              color: colorMode === 'bw' ? '#000000' : (due > 0 ? '#DC2626' : '#64748B'),
+                              fontWeight: '700',
+                            },
+                          ]}
+                        >
+                          ₹{due.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* UPI QR & Quick Verification */}
+                  {showQrCode && (
+                    <View style={styles.lsQrInlineBox}>
+                      <Image
+                        source={{ uri: QR_CODE_DATA_URI }}
+                        style={styles.lsQrImg}
+                        resizeMode="contain"
+                      />
+                      <View style={{ marginLeft: 8 }}>
+                        <Text style={styles.lsQrTitle}>Scan to Pay UPI</Text>
+                        <Text style={styles.lsQrSub}>{business.upiId}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Signatures Row */}
+              {showSignatures && (
+                <View style={styles.lsSignaturesRow}>
+                  <View style={styles.lsSignColLeft}>
+                    <View style={styles.lsSignLine} />
+                    <Text style={styles.lsSignCaption}>Customer's Signature</Text>
+                  </View>
+                  <View style={styles.lsSignColRight}>
+                    <Text style={styles.lsForCompanyText}>For {business.businessName}</Text>
+                    <View style={styles.lsSignLine} />
+                    <Text style={styles.lsSignCaption}>Authorized Signatory</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={[styles.modalBackdrop, { padding: isMobile ? 0 : 16 }]}>
@@ -2169,9 +3019,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                   style={[
                     isThermal
                       ? styles.thermalSheet
-                      : paperFormat === '140x210mm'
-                      ? styles.p140Sheet
-                      : styles.landscapeSheet,
+                      : styles.multiPageCanvasWrapper,
                     {
                       transform: zoomScale !== 1 ? [{ scale: zoomScale }] : undefined,
                       ...(Platform.OS === 'web' ? { transformOrigin: 'top center' } : {}),
@@ -2421,702 +3269,13 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     <Text style={styles.thermalPoweredBy}>Printed via Billing System</Text>
                   </View>
                 ) : paperFormat === '140x210mm' ? (
-                  /* ======================================================== */
-                  /*        140 MM X 210 MM PORTRAIT INVOICE LAYOUT          */
-                  /* ======================================================== */
-                  <View style={styles.p140Inner}>
-                    {/* Header */}
-                    <View style={styles.p140HeaderTable}>
-                      <View style={{ flex: 1.4 }}>
-                        <Text style={styles.p140StoreName}>{business.businessName || 'Tarama Enterprise'}</Text>
-                        {business.tagline ? <Text style={styles.p140Tagline}>{business.tagline}</Text> : null}
-                        <Text style={styles.p140StoreSub}>{business.address || ''}</Text>
-                        <Text style={styles.p140StoreSub}>Phone: {business.phone || ''}</Text>
-                        <Text style={[styles.p140StoreSub, { fontWeight: '700', color: '#0F172A', marginTop: 2 }]}>
-                          GSTIN: {business.gstin || ''} | State: {business.state || 'West Bengal'} ({business.stateCode || '19'})
-                        </Text>
-                      </View>
-
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <View style={[styles.p140Badge, { backgroundColor: isWholesale ? '#1E293B' : '#047857' }]}>
-                          <Text style={styles.p140BadgeText}>
-                            {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
-                          </Text>
-                        </View>
-                        <Text style={styles.p140Original}>ORIGINAL FOR RECIPIENT</Text>
-
-                        <View style={styles.p140MetaGrid}>
-                          <View style={styles.p140MetaRow}>
-                            <Text style={styles.p140MetaKey}>Invoice No:</Text>
-                            <Text style={styles.p140MetaVal}>{invNumber}</Text>
-                          </View>
-                          <View style={styles.p140MetaRow}>
-                            <Text style={styles.p140MetaKey}>Date:</Text>
-                            <Text style={styles.p140MetaVal}>{invDate}</Text>
-                          </View>
-                          <View style={styles.p140MetaRow}>
-                            <Text style={styles.p140MetaKey}>Mode:</Text>
-                            <Text style={styles.p140MetaVal}>{paymentMethod.toUpperCase()}</Text>
-                          </View>
-                          <View style={styles.p140MetaRow}>
-                            <Text style={styles.p140MetaKey}>Biller:</Text>
-                            <Text style={styles.p140MetaVal}>{biller}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Parties */}
-                    <View style={styles.p140PartiesRow}>
-                      <View style={{ flex: 1.4 }}>
-                        <Text style={styles.p140SectionHead}>
-                          {isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}
-                        </Text>
-                        <Text style={styles.p140CustName}>{custName}</Text>
-                        {custPhone ? <Text style={styles.p140PartySub}>Phone: {custPhone}</Text> : null}
-                        {custAddress ? <Text style={styles.p140PartySub}>Address: {custAddress}</Text> : null}
-                        {isWholesale && custGstin ? (
-                          <Text style={[styles.p140PartySub, { fontWeight: '700', marginTop: 1 }]}>
-                            GSTIN: {custGstin}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={[styles.p140StatusPaid, { color: due === 0 ? '#059669' : paid > 0 ? '#D97706' : '#DC2626' }]}>
-                          STATUS: {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
-                        </Text>
-                        <Text style={styles.p140PartySub}>Place of Supply: {business.state} ({business.stateCode})</Text>
-                      </View>
-                    </View>
-
-                    {/* Items Table */}
-                    <View style={styles.p140Table}>
-                      <View style={styles.p140TableHead}>
-                        <Text style={[styles.p140Th, { width: 22, textAlign: 'center' }]}>#</Text>
-                        <Text style={[styles.p140Th, { flex: 2 }]}>ITEM & DESCRIPTION</Text>
-                        {isWholesale && <Text style={[styles.p140Th, { width: 42, textAlign: 'center' }]}>HSN</Text>}
-                        <Text style={[styles.p140Th, { width: 38, textAlign: 'center' }]}>QTY</Text>
-                        <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>RATE</Text>
-                        <Text style={[styles.p140Th, { width: 42, textAlign: 'right' }]}>DISC</Text>
-                        {showTaxBreakdown && (
-                          <>
-                            <Text style={[styles.p140Th, { width: 50, textAlign: 'right' }]}>TAXABLE</Text>
-                            <Text style={[styles.p140Th, { width: 36, textAlign: 'center' }]}>GST%</Text>
-                          </>
-                        )}
-                        <Text style={[styles.p140Th, { width: 66, textAlign: 'right' }]}>TOTAL</Text>
-                      </View>
-
-                      {items.map((item, idx) => {
-                        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
-                        const rawAmt = Number(item.unitPrice || 0) * itemQty;
-                        const discAmt = Number(item.discount || 0);
-                        const taxableAmt = Math.max(0, rawAmt - discAmt);
-                        const metaText = formatItemMeta(item);
-
-                        return (
-                          <View key={idx} style={[styles.p140TableRow, idx % 2 === 1 && styles.p140TableRowAlt]}>
-                            <Text style={[styles.p140Td, { width: 22, textAlign: 'center' }]}>{idx + 1}</Text>
-                            <View style={{ flex: 2 }}>
-                              <Text style={[styles.p140Td, { fontWeight: '600', color: '#0F172A' }]}>
-                                {item.productName || `Item #${idx + 1}`}
-                              </Text>
-                              {metaText ? <Text style={{ fontSize: 8.5, color: '#64748B', marginTop: 1 }}>{metaText}</Text> : null}
-                            </View>
-                            {isWholesale && (
-                              <Text style={[styles.p140Td, { width: 42, textAlign: 'center' }]}>{item.hsn || '-'}</Text>
-                            )}
-                            <Text style={[styles.p140Td, { width: 38, textAlign: 'center' }]}>
-                              {item.quantity} {getItemDisplayUnit(item)}
-                            </Text>
-                            <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
-                              {Number(item.unitPrice).toFixed(2)}
-                            </Text>
-                            <Text style={[styles.p140Td, { width: 42, textAlign: 'right' }]}>
-                              {discAmt > 0 ? discAmt.toFixed(2) : '-'}
-                            </Text>
-                            {showTaxBreakdown && (
-                              <>
-                                <Text style={[styles.p140Td, { width: 50, textAlign: 'right' }]}>
-                                  {taxableAmt.toFixed(2)}
-                                </Text>
-                                <Text style={[styles.p140Td, { width: 36, textAlign: 'center' }]}>
-                                  {item.gst || 0}%
-                                </Text>
-                              </>
-                            )}
-                            <Text style={[styles.p140Td, { width: 66, textAlign: 'right', fontWeight: '700', color: '#0F172A' }]}>
-                              {Number(item.total).toFixed(2)}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-
-                    {/* Bottom Section */}
-                    <View style={styles.p140BottomGrid}>
-                      {/* Left: Words, Bank, Terms */}
-                      <View style={{ flex: 1.2, paddingRight: 10 }}>
-                        <View style={styles.p140WordsBox}>
-                          <Text style={styles.p140WordsTitle}>Invoice Amount in Words:</Text>
-                          <Text style={styles.p140WordsVal}>{words}</Text>
-                        </View>
-
-                        {isWholesale && showBankDetails && (
-                          <View style={styles.p140BankBox}>
-                            <Text style={styles.p140BankTitle}>BANK DETAILS FOR WIRE TRANSFER / NEFT:</Text>
-                            <Text style={styles.p140BankText}>
-                              Bank: <Text style={{ fontWeight: '700' }}>{business.bankName}</Text>
-                            </Text>
-                            <Text style={styles.p140BankText}>
-                              A/C: <Text style={{ fontWeight: '700' }}>{business.accountNumber}</Text> | IFSC: <Text style={{ fontWeight: '700' }}>{business.ifscCode}</Text>
-                            </Text>
-                          </View>
-                        )}
-
-                        {showTerms && (
-                          <View style={styles.p140TermsBox}>
-                            <Text style={styles.p140TermsHead}>Terms & Conditions:</Text>
-                            <Text style={styles.p140TermsText}>1. Goods once sold will not be exchanged after 7 days.</Text>
-                            <Text style={styles.p140TermsText}>2. Subject to local jurisdiction.</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Right: Calculations & QR */}
-                      <View style={{ flex: 1 }}>
-                        <View style={styles.p140TotalsTable}>
-                          <View style={styles.p140TotalRow}>
-                            <Text style={styles.p140TotalKey}>Subtotal:</Text>
-                            <Text style={styles.p140TotalVal}>₹{subtotal.toFixed(2)}</Text>
-                          </View>
-                          {discount > 0 && (
-                            <View style={styles.p140TotalRow}>
-                              <Text style={styles.p140TotalKey}>Discount:</Text>
-                              <Text style={[styles.p140TotalVal, { color: '#DC2626' }]}>-₹{discount.toFixed(2)}</Text>
-                            </View>
-                          )}
-                          {showTaxBreakdown && gst > 0 && (
-                            <>
-                              <View style={styles.p140TotalRow}>
-                                <Text style={styles.p140TotalKey}>CGST:</Text>
-                                <Text style={styles.p140TotalVal}>₹{cgstAmount.toFixed(2)}</Text>
-                              </View>
-                              <View style={styles.p140TotalRow}>
-                                <Text style={styles.p140TotalKey}>SGST:</Text>
-                                <Text style={styles.p140TotalVal}>₹{sgstAmount.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-                          {shipping > 0 && (
-                            <View style={styles.p140TotalRow}>
-                              <Text style={styles.p140TotalKey}>Shipping:</Text>
-                              <Text style={styles.p140TotalVal}>+₹{shipping.toFixed(2)}</Text>
-                            </View>
-                          )}
-                          <View style={styles.p140GrandTotalRow}>
-                            <Text style={styles.p140GrandTotalKey}>
-                              {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL:' : 'GRAND TOTAL:'}
-                            </Text>
-                            <Text style={styles.p140GrandTotalVal}>₹{total.toFixed(2)}</Text>
-                          </View>
-
-                          {isBalanceActive && previousDue > 0 && (
-                            <>
-                              <View style={styles.p140TotalRow}>
-                                <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due:</Text>
-                                <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
-                              </View>
-                              <View style={[styles.p140GrandTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 2.5 }]}>
-                                <Text style={[styles.p140GrandTotalKey, { color: '#991B1B', fontSize: 10.5 }]}>TOTAL PAYABLE:</Text>
-                                <Text style={[styles.p140GrandTotalVal, { color: '#991B1B', fontSize: 11.5 }]}>₹{totalPayable.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-
-                          {isBalanceActive && advancePayment > 0 && (
-                            <>
-                              <View style={styles.p140TotalRow}>
-                                <Text style={[styles.p140TotalKey, { color: '#16A34A', fontWeight: '700' }]}>Advance Credit:</Text>
-                                <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
-                              </View>
-                              <View style={[styles.p140GrandTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
-                                <Text style={[styles.p140GrandTotalKey, { color: '#166534', fontSize: 10.5 }]}>NET PAYABLE:</Text>
-                                <Text style={[styles.p140GrandTotalVal, { color: '#166534', fontSize: 11.5 }]}>₹{netPayable.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-
-                          <View style={styles.p140TotalRow}>
-                            <Text style={styles.p140TotalKey}>{isBalanceActive && advancePayment > 0 ? "Cash Received:" : "Received:"}</Text>
-                            <Text style={[styles.p140TotalVal, { color: '#059669', fontWeight: '700' }]}>₹{(isBalanceActive && advancePayment > 0 ? cashPaid : paid).toFixed(2)}</Text>
-                          </View>
-
-                          {isBalanceActive && previousDue > 0 ? (
-                            <View style={styles.p140TotalRow}>
-                              <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
-                              <Text style={[styles.p140TotalVal, { color: netBalanceDue > 0 ? '#DC2626' : '#059669', fontWeight: '700' }]}>
-                                ₹{netBalanceDue.toFixed(2)}
-                              </Text>
-                            </View>
-                          ) : ((isBalanceActive && advancePayment > 0) || advancePayment > 0) ? (
-                            netDue > 0 ? (
-                              <View style={styles.p140TotalRow}>
-                                <Text style={[styles.p140TotalKey, { fontWeight: '700' }]}>Balance Due:</Text>
-                                <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>
-                                  ₹{netDue.toFixed(2)}
-                                </Text>
-                              </View>
-                            ) : (
-                              <View style={[styles.p140TotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 2.5 }]}>
-                                <Text style={[styles.p140TotalKey, { color: '#166534', fontWeight: '700' }]}>Balance Advance:</Text>
-                                <Text style={[styles.p140TotalVal, { color: '#16A34A', fontWeight: '700' }]}>
-                                  ₹{(remainingAdvance > 0 ? remainingAdvance : advancePayment).toFixed(2)}
-                                </Text>
-                              </View>
-                            )
-                          ) : (
-                            due > 0 && (
-                              <View style={styles.p140TotalRow}>
-                                <Text style={[styles.p140TotalKey, { color: '#DC2626', fontWeight: '700' }]}>Balance Due:</Text>
-                                <Text style={[styles.p140TotalVal, { color: '#DC2626', fontWeight: '700' }]}>₹{due.toFixed(2)}</Text>
-                              </View>
-                            )
-                          )}
-                        </View>
-
-                        {/* QR Code */}
-                        {showQrCode && (
-                          <View style={styles.p140QrRow}>
-                            <Image source={{ uri: QR_CODE_DATA_URI }} style={styles.p140QrImg} resizeMode="contain" />
-                            <View>
-                              <Text style={styles.p140QrCaption}>Scan with UPI to Pay</Text>
-                              <Text style={styles.p140QrUpi}>{business.upiId}</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Signatures */}
-                    {showSignatures && (
-                      <View style={styles.p140SignaturesRow}>
-                        <View style={styles.p140SignBox}>
-                          <View style={styles.p140SignLine} />
-                          <Text style={styles.p140SignLabel}>Customer Signature</Text>
-                        </View>
-                        <View style={styles.p140SignBox}>
-                          <Text style={styles.p140SignCompany}>For {business.businessName}</Text>
-                          <View style={styles.p140SignLine} />
-                          <Text style={styles.p140SignLabel}>Authorized Signatory</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                  p140Pagination.pages.map((page, pageIdx) =>
+                    renderP140Page(page, pageIdx, p140Pagination.totalPages)
+                  )
                 ) : (
-                  /* ======================================================== */
-                  /*       HALF A4 LANDSCAPE (210mm x 148.5mm) LAYOUT        */
-                  /* ======================================================== */
-                  <View style={styles.landscapeInner}>
-                    {/* Header Row */}
-                    <View style={styles.lsHeaderRow}>
-                      {/* Left: Seller Information */}
-                      <View style={styles.lsSellerCol}>
-                        <Text style={styles.lsStoreName}>{business.businessName}</Text>
-                        {!!business.tagline && (
-                          <Text style={[styles.lsTagline, colorMode === 'bw' && { color: '#334155' }]}>
-                            {business.tagline}
-                          </Text>
-                        )}
-                        <Text style={styles.lsStoreAddress}>{business.address}</Text>
-                        <View style={styles.lsContactRow}>
-                          <Text style={styles.lsContactText}>Phone: {business.phone}</Text>
-                          <Text style={styles.lsContactText}>Email: {business.email}</Text>
-                        </View>
-                        <View style={styles.lsTaxRow}>
-                          <Text style={styles.lsTaxBold}>GSTIN: {business.gstin}</Text>
-                          <Text style={styles.lsTaxBold}>PAN: {business.pan || 'N/A'}</Text>
-                          <Text style={styles.lsTaxBold}>State: {business.state} ({business.stateCode})</Text>
-                        </View>
-                      </View>
-
-                      {/* Right: Invoice Type Badge & Details */}
-                      <View style={styles.lsInvoiceMetaCol}>
-                        <View
-                          style={[
-                            styles.lsInvoiceTypeBadge,
-                            colorMode === 'bw'
-                              ? styles.lsBadgeBw
-                              : isWholesale
-                              ? styles.lsBadgeWholesale
-                              : styles.lsBadgeRetail,
-                          ]}
-                        >
-                          <Text style={styles.lsInvoiceTypeBadgeText}>
-                            {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
-                          </Text>
-                        </View>
-                        <Text style={styles.lsOriginalCopyText}>ORIGINAL FOR RECIPIENT</Text>
-
-                        <View style={styles.lsMetaGrid}>
-                          <View style={styles.lsMetaItem}>
-                            <Text style={styles.lsMetaKey}>Invoice No:</Text>
-                            <Text style={styles.lsMetaValBold}>{invNumber}</Text>
-                          </View>
-                          <View style={styles.lsMetaItem}>
-                            <Text style={styles.lsMetaKey}>Date:</Text>
-                            <Text style={styles.lsMetaVal}>{invDate}</Text>
-                          </View>
-                          <View style={styles.lsMetaItem}>
-                            <Text style={styles.lsMetaKey}>Payment Mode:</Text>
-                            <Text style={styles.lsMetaVal}>{paymentMethod.toUpperCase()}</Text>
-                          </View>
-                          <View style={styles.lsMetaItem}>
-                            <Text style={styles.lsMetaKey}>Biller:</Text>
-                            <Text style={styles.lsMetaVal}>{biller}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Parties Section: Billed To / Shipped To */}
-                    <View style={styles.lsPartiesSection}>
-                      <View style={styles.lsPartyCol}>
-                        <Text style={styles.lsSectionHeader}>
-                          {isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}
-                        </Text>
-                        <Text style={styles.lsCustomerName}>{custName}</Text>
-                        {!!custPhone && <Text style={styles.lsPartyText}>Mobile: {custPhone}</Text>}
-                        {!!custAddress && <Text style={styles.lsPartyText}>Address: {custAddress}</Text>}
-                        {isWholesale && (
-                          <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
-                            <Text style={styles.lsPartyGstin}>
-                              Buyer GSTIN: <Text style={{ fontWeight: '700' }}>{custGstin || 'Unregistered / B2C'}</Text>
-                            </Text>
-                            <Text style={styles.lsPartyText}>State Code: {business.stateCode}</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.lsPartyStatusCol}>
-                        <View style={styles.lsStatusBadgeBox}>
-                          <Text style={styles.lsStatusTitle}>STATUS:</Text>
-                          <Text
-                            style={[
-                              styles.lsStatusVal,
-                              colorMode === 'bw'
-                                ? { color: '#000000' }
-                                : due === 0
-                                ? { color: '#059669' }
-                                : { color: '#DC2626' },
-                            ]}
-                          >
-                            {due === 0 ? 'FULLY PAID' : paid > 0 ? 'PARTIAL DUE' : 'UNPAID'}
-                          </Text>
-                        </View>
-                        <Text style={styles.lsPlaceOfSupply}>
-                          Place of Supply: {business.state} ({business.stateCode})
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Table of Items */}
-                    <View style={styles.lsTable}>
-                      {/* Header */}
-                      <View style={styles.lsTableHead}>
-                        <Text style={[styles.lsTh, { width: 30 }]}>#</Text>
-                        <Text style={[styles.lsTh, { flex: 3 }]}>ITEM & DESCRIPTION</Text>
-                        {isWholesale && <Text style={[styles.lsTh, { width: 60 }]}>HSN</Text>}
-                        <Text style={[styles.lsTh, { width: 45, textAlign: 'center' }]}>QTY</Text>
-                        <Text style={[styles.lsTh, { width: 45, textAlign: 'center' }]}>UNIT</Text>
-                        <Text style={[styles.lsTh, { width: 65, textAlign: 'right' }]}>RATE (₹)</Text>
-                        <Text style={[styles.lsTh, { width: 55, textAlign: 'right' }]}>DISC (₹)</Text>
-                        {showTaxBreakdown && (
-                          <>
-                            <Text style={[styles.lsTh, { width: 70, textAlign: 'right' }]}>TAXABLE</Text>
-                            <Text style={[styles.lsTh, { width: 50, textAlign: 'center' }]}>GST%</Text>
-                          </>
-                        )}
-                        <Text style={[styles.lsTh, { width: 80, textAlign: 'right' }]}>AMOUNT (₹)</Text>
-                      </View>
-
-                      {/* Rows */}
-                      {items.map((item, idx) => {
-                        const itemQty = item.quantity !== undefined && item.quantity !== null ? Number(item.quantity) : 1;
-                        const rawAmt = Number(item.unitPrice || 0) * itemQty;
-                        const discAmt = Number(item.discount || 0);
-                        const taxableAmt = Math.max(0, rawAmt - discAmt);
-                        return (
-                          <View
-                            key={idx}
-                            style={[styles.lsTableRow, idx % 2 === 1 && styles.lsTableRowAlt]}
-                          >
-                            <Text style={[styles.lsTd, { width: 30 }]}>{idx + 1}</Text>
-                            <View style={{ flex: 3 }}>
-                              <Text style={styles.lsTdBold}>
-                                {item.productName || `Item #${idx + 1}`}
-                              </Text>
-                              {(() => {
-                                const metaText = formatItemMeta(item);
-                                return metaText ? (
-                                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 2 }}>
-                                    {metaText}
-                                  </Text>
-                                ) : null;
-                              })()}
-                            </View>
-                            {isWholesale && (
-                              <Text style={[styles.lsTd, { width: 60 }]}>{item.hsn || '9983'}</Text>
-                            )}
-                            <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
-                              {item.quantity}
-                            </Text>
-                            <Text style={[styles.lsTd, { width: 45, textAlign: 'center' }]}>
-                              {getItemDisplayUnit(item)}
-                              {(() => {
-                                const sub = getItemSubUnit(item);
-                                const du = getItemDisplayUnit(item);
-                                return sub && sub.toLowerCase() !== du.toLowerCase() && item.unitType !== 'sub' ? `\n(Sub: ${sub})` : '';
-                              })()}
-                            </Text>
-                            <Text style={[styles.lsTd, { width: 65, textAlign: 'right' }]}>
-                              {Number(item.unitPrice).toFixed(2)}
-                            </Text>
-                            <Text style={[styles.lsTd, { width: 55, textAlign: 'right' }]}>
-                              {discAmt > 0 ? Number(discAmt).toFixed(2) : '-'}
-                            </Text>
-                            {showTaxBreakdown && (
-                              <>
-                                <Text style={[styles.lsTd, { width: 70, textAlign: 'right' }]}>
-                                  {taxableAmt.toFixed(2)}
-                                </Text>
-                                <Text style={[styles.lsTd, { width: 50, textAlign: 'center' }]}>
-                                  {item.gst || 0}%
-                                </Text>
-                              </>
-                            )}
-                            <Text style={[styles.lsTdBold, { width: 80, textAlign: 'right' }]}>
-                              {Number(item.total).toFixed(2)}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-
-                    {/* Bottom Area: Left (Words, Bank, QR, Terms) & Right (Calculation Breakdown) */}
-                    <View style={styles.lsBottomRow}>
-                      {/* Left Block */}
-                      <View style={styles.lsBottomLeftCol}>
-                        <View style={styles.lsAmountInWordsBox}>
-                          <Text style={styles.lsWordsLabel}>Invoice Amount in Words:</Text>
-                          <Text style={styles.lsWordsText}>{amountToWords(total)}</Text>
-                        </View>
-
-                        {/* Bank Details for Wholesale */}
-                        {isWholesale && showBankDetails && (
-                          <View style={[styles.lsBankBox, colorMode === 'bw' && styles.lsBankBoxBw]}>
-                            <Text style={[styles.lsBankTitle, colorMode === 'bw' && { color: '#000000' }]}>
-                              BANK DETAILS FOR WIRE TRANSFER / NEFT:
-                            </Text>
-                            <View style={styles.lsBankGrid}>
-                              <Text style={styles.lsBankText}>
-                                Bank: <Text style={styles.lsBoldText}>{business.bankName}</Text>
-                              </Text>
-                              <Text style={styles.lsBankText}>
-                                A/C No: <Text style={styles.lsBoldText}>{business.accountNumber}</Text>
-                              </Text>
-                              <Text style={styles.lsBankText}>
-                                IFSC: <Text style={styles.lsBoldText}>{business.ifscCode}</Text>
-                              </Text>
-                              <Text style={styles.lsBankText}>
-                                Branch: <Text style={styles.lsBoldText}>{business.branch}</Text>
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-
-                        {/* Terms & Conditions */}
-                        {showTerms && (
-                          <View style={styles.lsTermsBox}>
-                            <Text style={styles.lsTermsTitle}>Terms & Conditions:</Text>
-                            <Text style={styles.lsTermsLine}>
-                              1. Payment due upon receipt of invoice.
-                            </Text>
-                            <Text style={styles.lsTermsLine}>
-                              2. Goods once sold will not be returned or exchanged without original invoice.
-                            </Text>
-                            <Text style={styles.lsTermsLine}>
-                              3. All disputes subject to local court jurisdiction.
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Right Block: Totals & Summary Table */}
-                      <View style={styles.lsBottomRightCol}>
-                        <View style={styles.lsSummaryTable}>
-                          <View style={styles.lsSumRow}>
-                            <Text style={styles.lsSumKey}>Subtotal:</Text>
-                            <Text style={styles.lsSumVal}>₹{subtotal.toFixed(2)}</Text>
-                          </View>
-                          {discount > 0 && (
-                            <View style={styles.lsSumRow}>
-                              <Text style={styles.lsSumKey}>Discount:</Text>
-                              <Text style={[styles.lsSumVal, { color: '#DC2626' }]}>-₹{discount.toFixed(2)}</Text>
-                            </View>
-                          )}
-                          {showTaxBreakdown && gst > 0 && (
-                            <>
-                              <View style={styles.lsSumRow}>
-                                <Text style={styles.lsSumKey}>CGST (9% / State):</Text>
-                                <Text style={styles.lsSumVal}>₹{cgstAmount.toFixed(2)}</Text>
-                              </View>
-                              <View style={styles.lsSumRow}>
-                                <Text style={styles.lsSumKey}>SGST (9% / Central):</Text>
-                                <Text style={styles.lsSumVal}>₹{sgstAmount.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-                          {shipping > 0 && (
-                            <View style={styles.lsSumRow}>
-                              <Text style={styles.lsSumKey}>Shipping:</Text>
-                              <Text style={styles.lsSumVal}>+₹{shipping.toFixed(2)}</Text>
-                            </View>
-                          )}
-                          <View style={[styles.lsTotalRow, colorMode === 'bw' && { backgroundColor: '#000000' }]}>
-                            <Text style={styles.lsTotalKey}>
-                              {isBalanceActive && (previousDue > 0 || advancePayment > 0) ? 'CURRENT BILL TOTAL:' : 'TOTAL AMOUNT:'}
-                            </Text>
-                            <Text style={[styles.lsTotalVal, colorMode === 'bw' && { color: '#FFFFFF' }]}>
-                              ₹{total.toFixed(2)}
-                            </Text>
-                          </View>
-
-                          {isBalanceActive && previousDue > 0 && (
-                            <>
-                              <View style={styles.lsSumRow}>
-                                <Text style={[styles.lsSumKey, { color: '#DC2626', fontWeight: '700' }]}>Previous Due Balance:</Text>
-                                <Text style={[styles.lsSumVal, { color: '#DC2626', fontWeight: '700' }]}>+₹{previousDue.toFixed(2)}</Text>
-                              </View>
-                              <View style={[styles.lsTotalRow, { backgroundColor: '#FEE2E2', paddingVertical: 3 }]}>
-                                <Text style={[styles.lsTotalKey, { color: '#991B1B', fontSize: 10 }]}>TOTAL PAYABLE:</Text>
-                                <Text style={[styles.lsTotalVal, { color: '#991B1B', fontSize: 11 }]}>₹{totalPayable.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-
-                          {isBalanceActive && advancePayment > 0 && (
-                            <>
-                              <View style={styles.lsSumRow}>
-                                <Text style={[styles.lsSumKey, { color: '#16A34A', fontWeight: '700' }]}>Previous Advance Credit:</Text>
-                                <Text style={[styles.lsSumVal, { color: '#16A34A', fontWeight: '700' }]}>-₹{adjustedAdvance.toFixed(2)}</Text>
-                              </View>
-                              <View style={[styles.lsTotalRow, { backgroundColor: '#DCFCE7', paddingVertical: 3 }]}>
-                                <Text style={[styles.lsTotalKey, { color: '#166534', fontSize: 10 }]}>NET PAYABLE:</Text>
-                                <Text style={[styles.lsTotalVal, { color: '#166534', fontSize: 11 }]}>₹{netPayable.toFixed(2)}</Text>
-                              </View>
-                            </>
-                          )}
-
-                          <View style={styles.lsSumRow}>
-                            <Text style={styles.lsSumKey}>Amount Received:</Text>
-                            <Text
-                              style={[
-                                styles.lsSumVal,
-                                { color: colorMode === 'bw' ? '#000000' : '#059669', fontWeight: '700' },
-                              ]}
-                            >
-                              ₹{paid.toFixed(2)}
-                            </Text>
-                          </View>
-                          {isBalanceActive && previousDue > 0 ? (
-                            <View style={styles.lsSumRow}>
-                              <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Net Balance Due:</Text>
-                              <Text
-                                style={[
-                                  styles.lsSumVal,
-                                  {
-                                    color: colorMode === 'bw' ? '#000000' : (netBalanceDue > 0 ? '#DC2626' : '#059669'),
-                                    fontWeight: '700',
-                                  },
-                                ]}
-                              >
-                                ₹{netBalanceDue.toFixed(2)}
-                              </Text>
-                            </View>
-                          ) : isBalanceActive && advancePayment > 0 ? (
-                            <>
-                              <View style={styles.lsSumRow}>
-                                <Text style={[styles.lsSumKey, { fontWeight: '700' }]}>Balance Due:</Text>
-                                <Text
-                                  style={[
-                                    styles.lsSumVal,
-                                    {
-                                      color: colorMode === 'bw' ? '#000000' : (netDue > 0 ? '#DC2626' : '#059669'),
-                                      fontWeight: '700',
-                                    },
-                                  ]}
-                                >
-                                  ₹{netDue.toFixed(2)}
-                                </Text>
-                              </View>
-                              {remainingAdvance > 0 && (
-                                <View style={styles.lsSumRow}>
-                                  <Text style={[styles.lsSumKey, { color: '#2563EB', fontWeight: '700' }]}>Remaining Advance:</Text>
-                                  <Text style={[styles.lsSumVal, { color: '#2563EB', fontWeight: '700' }]}>₹{remainingAdvance.toFixed(2)}</Text>
-                                </View>
-                              )}
-                            </>
-                          ) : (
-                            <View style={styles.lsSumRow}>
-                              <Text style={styles.lsSumKey}>Balance Due:</Text>
-                              <Text
-                                style={[
-                                  styles.lsSumVal,
-                                  {
-                                    color: colorMode === 'bw' ? '#000000' : (due > 0 ? '#DC2626' : '#64748B'),
-                                    fontWeight: '700',
-                                  },
-                                ]}
-                              >
-                                ₹{due.toFixed(2)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* UPI QR & Quick Verification */}
-                        {showQrCode && (
-                          <View style={styles.lsQrInlineBox}>
-                            <Image
-                              source={{ uri: QR_CODE_DATA_URI }}
-                              style={styles.lsQrImg}
-                              resizeMode="contain"
-                            />
-                            <View style={{ marginLeft: 8 }}>
-                              <Text style={styles.lsQrTitle}>Scan to Pay UPI</Text>
-                              <Text style={styles.lsQrSub}>{business.upiId}</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Signatures Row */}
-                    {showSignatures && (
-                      <View style={styles.lsSignaturesRow}>
-                        <View style={styles.lsSignColLeft}>
-                          <View style={styles.lsSignLine} />
-                          <Text style={styles.lsSignCaption}>Customer's Signature</Text>
-                        </View>
-                        <View style={styles.lsSignColRight}>
-                          <Text style={styles.lsForCompanyText}>For {business.businessName}</Text>
-                          <View style={styles.lsSignLine} />
-                          <Text style={styles.lsSignCaption}>Authorized Signatory</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                  lsPagination.pages.map((page, pageIdx) =>
+                    renderLsPage(page, pageIdx, lsPagination.totalPages)
+                  )
                 )}
               </View>
             </ScrollView>
@@ -3681,6 +3840,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  multiPageCanvasWrapper: {
+    alignItems: 'center',
+    width: '100%',
+  },
+
   /* ------------------------------------------------------------------------ */
   /*          HALF A4 LANDSCAPE (210mm x 148.5mm) STYLES                      */
   /* ------------------------------------------------------------------------ */
@@ -3699,6 +3863,42 @@ const styles = StyleSheet.create({
   },
   landscapeInner: {
     width: '100%',
+  },
+  lsSubsequentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#0F172A',
+    paddingBottom: 6,
+    marginBottom: 8,
+  },
+  lsSubsequentTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  lsSubsequentBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  lsContinuationNote: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#CBD5E1',
+    borderStyle: 'dashed',
+  },
+  lsContinuationText: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#64748B',
   },
   lsHeaderRow: {
     flexDirection: 'row',
@@ -4198,6 +4398,42 @@ const styles = StyleSheet.create({
   },
   p140Inner: {
     width: '100%',
+  },
+  p140SubsequentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#0F172A',
+    paddingBottom: 6,
+    marginBottom: 8,
+  },
+  p140SubsequentTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  p140SubsequentBadge: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  p140ContinuationNote: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#CBD5E1',
+    borderStyle: 'dashed',
+  },
+  p140ContinuationText: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#64748B',
   },
   p140HeaderTable: {
     flexDirection: 'row',
