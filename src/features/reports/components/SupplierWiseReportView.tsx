@@ -272,7 +272,12 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             </Text>
           </View>
 
-          <View style={styles.rightActionsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={isMobile ? { width: '100%' } : undefined}
+            contentContainerStyle={styles.rightActionsRow}
+          >
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
@@ -380,7 +385,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
               <Printer size={12} color="#FFF" />
               <Text style={styles.primaryActionText}>Print</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </View>
 
         {/* Supplier Profile Banner */}
@@ -728,7 +733,12 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
         hideSubtitleOnMobile
         searchPlaceholder="Search supplier by name, phone, or ID..."
         headerActions={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={isMobile ? { width: '100%' } : undefined}
+            contentContainerStyle={styles.headerActionsScroll}
+          >
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.primary, backgroundColor: '#F5F3FF' }]}
               onPress={() => setIsSupplierDropdownOpen(!isSupplierDropdownOpen)}
@@ -769,7 +779,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
               <Printer size={12} color="#FFF" />
               <Text style={styles.primaryActionText}>Print</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         }
         columns={[
           { key: 'supplierCode', title: 'Supplier ID', width: 120, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.textSecondary }}>{val}</Text> },
@@ -886,6 +896,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  headerActionsScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
   },
   exportBtn: {
     flexDirection: 'row',

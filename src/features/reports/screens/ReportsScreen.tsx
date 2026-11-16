@@ -1195,7 +1195,12 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
 
   // Header action buttons
   const headerActions = (
-    <View style={[styles.actionButtonsRow, isMobile && styles.actionButtonsRowMobile]}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={isMobile ? { width: '100%' } : undefined}
+      contentContainerStyle={[styles.actionButtonsRow, isMobile && styles.actionButtonsRowMobile]}
+    >
       <Pressable
         style={[styles.iconButton, isMobile && styles.iconButtonMobile, { borderColor: theme.colors.border }]}
         onPress={() => loadReportData()}
@@ -1238,7 +1243,7 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
         {isExporting ? <ActivityIndicator size={12} color="#FFF" /> : <Printer size={isMobile ? 12 : 14} color="#FFF" />}
         <Text style={[styles.primaryActionText, isMobile && styles.primaryActionTextMobile]}>Print</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 
   // Date Range filter control
@@ -1555,7 +1560,8 @@ const styles = StyleSheet.create({
   },
   actionButtonsRowMobile: {
     gap: 6,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    paddingVertical: 2,
   },
   iconButton: {
     padding: 8,
