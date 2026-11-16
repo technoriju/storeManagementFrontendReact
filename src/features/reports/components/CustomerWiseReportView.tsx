@@ -490,7 +490,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         {activeSubTab === 'invoices' ? (
           <AdvancedTable
             title={`Invoices for ${cust.name}`}
-            subtitle={`${dateRangeLabel} • ${filteredInvoices.length} invoices found`}
+            subtitle={!isMobile ? `${dateRangeLabel} • ${filteredInvoices.length} invoices found` : undefined}
+            hideSubtitleOnMobile
             searchPlaceholder={`Search ${cust.name}'s invoices (e.g. INV-..., status, date)...`}
             columns={[
               { key: 'invoiceNumber', title: 'Invoice #', width: 140, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
@@ -536,7 +537,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
         ) : (
           <AdvancedTable
             title={`Payments Received from ${cust.name}`}
-            subtitle={`${dateRangeLabel} • ${filteredPayments.length} payment receipts`}
+            subtitle={!isMobile ? `${dateRangeLabel} • ${filteredPayments.length} payment receipts` : undefined}
+            hideSubtitleOnMobile
             searchPlaceholder="Search payments by voucher #, method, or ref..."
             columns={[
               { key: 'voucherNo', title: 'Voucher #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
@@ -721,7 +723,8 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
       {/* Customer Summary Table */}
       <AdvancedTable
         title="Customer-Wise Summary"
-        subtitle={`${dateRangeLabel} • ${totalAllCount} registered accounts`}
+        subtitle={!isMobile ? `${dateRangeLabel} • ${totalAllCount} registered accounts` : undefined}
+        hideSubtitleOnMobile
         searchPlaceholder="Search customer by name, mobile, or ID..."
         headerActions={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

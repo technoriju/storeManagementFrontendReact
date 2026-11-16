@@ -86,9 +86,11 @@ export const AnnualReportView: React.FC<AnnualReportViewProps> = ({
         <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile, { borderBottomColor: theme.colors.divider }]}>
           <View>
             <Text style={[styles.cardTitle, isMobile && styles.cardTitleMobile, { color: theme.colors.text }]}>Month-by-Month Financial Performance</Text>
-            <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-              Comparative sales volume, procurement, and bottom-line margin • {dateRangeLabel}
-            </Text>
+            {!isMobile && (
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                Comparative sales volume, procurement, and bottom-line margin • {dateRangeLabel}
+              </Text>
+            )}
           </View>
         </View>
 

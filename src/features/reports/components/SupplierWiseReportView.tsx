@@ -491,7 +491,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
         {activeSubTab === 'bills' ? (
           <AdvancedTable
             title={`Bills from ${supp.name}`}
-            subtitle={`${dateRangeLabel} • ${filteredBills.length} procurement orders found`}
+            subtitle={!isMobile ? `${dateRangeLabel} • ${filteredBills.length} procurement orders found` : undefined}
+            hideSubtitleOnMobile
             searchPlaceholder={`Search ${supp.name}'s purchase bills (e.g. PO-..., status, date)...`}
             columns={[
               { key: 'invoiceNumber', title: 'Bill / PO #', width: 140, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
@@ -537,7 +538,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
         ) : (
           <AdvancedTable
             title={`Payments Disbursed to ${supp.name}`}
-            subtitle={`${dateRangeLabel} • ${filteredPayments.length} payment vouchers`}
+            subtitle={!isMobile ? `${dateRangeLabel} • ${filteredPayments.length} payment vouchers` : undefined}
+            hideSubtitleOnMobile
             searchPlaceholder="Search payouts by voucher #, method, or ref..."
             columns={[
               { key: 'voucherNo', title: 'Voucher #', width: 130, render: (val: string) => <Text style={{ fontWeight: '600', color: theme.colors.text }}>{val}</Text> },
@@ -722,7 +724,8 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
       {/* Supplier Summary Table */}
       <AdvancedTable
         title="Supplier-Wise Summary"
-        subtitle={`${dateRangeLabel} • ${totalAllCount} active vendors`}
+        subtitle={!isMobile ? `${dateRangeLabel} • ${totalAllCount} active vendors` : undefined}
+        hideSubtitleOnMobile
         searchPlaceholder="Search supplier by name, phone, or ID..."
         headerActions={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

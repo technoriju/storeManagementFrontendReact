@@ -30,6 +30,7 @@ export interface AdvancedTableColumn<T> {
 export interface AdvancedTableProps<T> {
   title?: string;
   subtitle?: string;
+  hideSubtitleOnMobile?: boolean;
   headerActions?: React.ReactNode;
   columns: AdvancedTableColumn<T>[];
   data: T[];
@@ -210,6 +211,7 @@ const CardSkeleton = ({
 export const AdvancedTable = <T extends Record<string, any>>({
   title,
   subtitle,
+  hideSubtitleOnMobile,
   headerActions,
   columns,
   data,
@@ -431,8 +433,12 @@ export const AdvancedTable = <T extends Record<string, any>>({
                 {title}
               </Text>
             )}
-            {subtitle && (
-              <Text style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}>
+            {subtitle && (!isMobile || !hideSubtitleOnMobile) && (
+              <Text 
+                style={[styles.pageSubtitle, { color: theme.colors.textSecondary }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {subtitle}
               </Text>
             )}
@@ -777,7 +783,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     gap: 6,
     marginBottom: 6,
   },
