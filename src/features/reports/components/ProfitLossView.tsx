@@ -105,9 +105,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({
         <View style={[styles.cardHeader, isMobile && styles.cardHeaderMobile, { borderBottomColor: theme.colors.divider }]}>
           <View>
             <Text style={[styles.cardTitle, isMobile && styles.cardTitleMobile, { color: theme.colors.text }]}>Income Statement Breakdown</Text>
-            <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-              GAAP compliant profit & loss accounting schedule • {dateRangeLabel}
-            </Text>
+            {!isMobile && (
+              <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+                GAAP compliant profit & loss accounting schedule • {dateRangeLabel}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -271,13 +273,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   kpiIconBoxMobile: {
-    width: 22,
-    height: 22,
-    borderRadius: 5,
-  },
-  kpiIconBoxMobile: {
-    width: 30,
-    height: 30,
+    width: 26,
+    height: 26,
     borderRadius: 6,
   },
   kpiLabelMobile: {

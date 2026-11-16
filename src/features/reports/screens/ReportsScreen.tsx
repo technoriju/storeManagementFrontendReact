@@ -1380,7 +1380,8 @@ export const ReportsScreen: React.FC<ReportsScreenProps> = ({
           <View style={styles.tableWrapper}>
             <AdvancedTable
               title={activeTabConfig.label}
-              subtitle={`${dateRangeLabel} • ${totalItems || filteredData.length} records`}
+              subtitle={!isMobile ? `${dateRangeLabel} • ${totalItems || filteredData.length} records` : undefined}
+              hideSubtitleOnMobile
               headerActions={headerActions}
               columns={tableColumns}
               data={filteredData}
