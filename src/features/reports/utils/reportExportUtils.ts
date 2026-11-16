@@ -1,5 +1,6 @@
 import { Platform, Linking } from 'react-native';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
 import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.store';
 
 export interface ReportColumnDef {
@@ -272,84 +273,258 @@ export function generateReportHtml(options: ReportExportOptions): string {
 }
 
 /**
- * Generate PDF Blob and data URI using html2canvas + jsPDF
+ * Generate PDF Blob and data URI using high-speed vector jsPDF
  */
 export async function generateReportPdfBlob(options: ReportExportOptions): Promise<{ blob: Blob; fileName: string; dataUri?: string }> {
-  const { title, dateRangeLabel, startDate, endDate } = options;
+  const company = getCompanyProfile();
+  const businessName = (options.businessName && options.businessName.trim()) || company.businessName;
+  const businessAddress = company.address;
+  const businessPhone = company.phone;
+  const businessGstin = company.gstin;
+
+  const { title, dateRangeLabel, startDate, endDate, columns, data, summary, partyName, phone } = options;
+  const filteredRows = filterDataByDateRange(data, startDate, endDate);
+  const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
+
   const rangePart = (startDate && endDate ? `${startDate}_to_${endDate}` : dateRangeLabel).toLowerCase().replace(/[^a-z0-9]/g, '_');
   const fileName = `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${rangePart}.pdf`;
 
-  if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    const htmlString = generateReportHtml(options);
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.style.width = '800px';
-    container.style.height = 'auto';
-    container.style.overflow = 'visible';
-    container.style.boxSizing = 'border-box';
-    container.style.background = '#ffffff';
-    container.style.padding = '20px';
-    container.innerHTML = htmlString;
-    document.body.appendChild(container);
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'a4',
+  });
 
-    try {
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const marginLeft = 28;
+  const marginRight = 28;
+  const contentWidth = pageWidth - marginLeft - marginRight;
+  const maxY = pageHeight - 40;
 
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
+  let y = 35;
+  let pageNum = 1;
+
+  // Header branding
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(16);
+  pdf.setTextColor(30, 41, 59); // slate-800
+  pdf.text(businessName, marginLeft, y);
+
+  y += 14;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(100, 116, 139); // slate-500
+  if (businessAddress) {
+    pdf.text(businessAddress, marginLeft, y);
+    y += 11;
+  }
+  const metaLine = [
+    businessGstin ? `GSTIN: ${businessGstin}` : '',
+    businessPhone ? `Phone: ${businessPhone}` : '',
+  ].filter(Boolean).join('   |   ');
+  if (metaLine) {
+    pdf.text(metaLine, marginLeft, y);
+    y += 12;
+  }
+
+  // Accent divider line
+  pdf.setDrawColor(37, 99, 235); // blue-600
+  pdf.setLineWidth(1.5);
+  pdf.line(marginLeft, y, marginLeft + contentWidth, y);
+  y += 14;
+
+  // Report Title
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(13);
+  pdf.setTextColor(15, 23, 42); // slate-900
+  pdf.text(title, marginLeft, y);
+
+  if (partyName) {
+    y += 13;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(51, 65, 85);
+    pdf.text(`Party: ${partyName}${phone ? ` (${phone})` : ''}`, marginLeft, y);
+  }
+
+  y += 13;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text(`Filter: ${dateRangeLabel}   |   Date Range: ${displayRange}   |   Total Records: ${filteredRows.length}`, marginLeft, y);
+  y += 16;
+
+  // Summary box cards if present
+  if (summary && typeof summary === 'object') {
+    const summaryEntries = Object.entries(summary)
+      .filter(([_, v]) => typeof v === 'number' || (typeof v === 'string' && (v as string).trim() !== ''))
+      .slice(0, 6);
+
+    if (summaryEntries.length > 0) {
+      const cardGap = 8;
+      const numCols = Math.min(summaryEntries.length, 3);
+      const cardWidth = (contentWidth - (cardGap * (numCols - 1))) / numCols;
+      const cardHeight = 32;
+
+      summaryEntries.forEach(([k, v], idx) => {
+        const colIdx = idx % numCols;
+        const rowIdx = Math.floor(idx / numCols);
+        const cardX = marginLeft + colIdx * (cardWidth + cardGap);
+        const cardY = y + rowIdx * (cardHeight + 6);
+
+        pdf.setFillColor(248, 250, 252);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.setLineWidth(0.75);
+        pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 3, 3, 'FD');
+
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7);
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(label.toUpperCase(), cardX + 6, cardY + 11);
+
+        const formatted = typeof v === 'number' ? `INR ${v.toLocaleString('en-IN')}` : String(v);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text(formatted, cardX + 6, cardY + 24);
       });
 
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4',
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      const blob = pdf.output('blob');
-      const dataUri = pdf.output('datauristring');
-      return { blob, fileName, dataUri };
-    } finally {
-      container.remove();
+      const totalSummaryRows = Math.ceil(summaryEntries.length / numCols);
+      y += totalSummaryRows * (cardHeight + 6) + 10;
     }
   }
 
-  // Programmatic jsPDF fallback
-  const { jsPDF } = await import('jspdf');
-  const pdf = new jsPDF();
-  const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
+  // Calculate Column Widths
+  const sNoWidth = 26;
+  const tableCols = columns.map((c) => {
+    const key = c.key.toLowerCase();
+    let w = c.width || 0;
+    if (!w) {
+      if (key.includes('date')) w = 62;
+      else if (key.includes('total') || key.includes('amount') || key.includes('paid') || key.includes('due') || key.includes('balance') || key.includes('price')) w = 68;
+      else if (key.includes('status')) w = 55;
+      else if (key.includes('phone') || key.includes('mobile')) w = 70;
+      else if (key.includes('invoice') || key.includes('voucher') || key.includes('no') || key.includes('ref') || key.includes('sku')) w = 70;
+      else w = 90;
+    }
+    return { ...c, assignedWidth: w };
+  });
 
-  pdf.setFontSize(16);
-  pdf.text(`${options.businessName || 'Store'} - ${options.title}`, 14, 20);
-  pdf.setFontSize(10);
-  pdf.text(`Date Range: ${displayRange}`, 14, 28);
-  if (options.partyName) {
-    pdf.text(`Party: ${options.partyName} ${options.phone ? `(${options.phone})` : ''}`, 14, 34);
+  const totalAssigned = tableCols.reduce((sum, c) => sum + c.assignedWidth, 0);
+  const availableForCols = contentWidth - sNoWidth;
+  const scaleFactor = availableForCols / totalAssigned;
+  tableCols.forEach((c) => {
+    c.assignedWidth = Math.round(c.assignedWidth * scaleFactor);
+  });
+  const currentSum = tableCols.reduce((sum, c) => sum + c.assignedWidth, 0);
+  if (tableCols.length > 0) {
+    tableCols[tableCols.length - 1].assignedWidth += (availableForCols - currentSum);
   }
+
+  const headerHeight = 18;
+  const rowHeight = 17;
+
+  const renderTableHeader = () => {
+    pdf.setFillColor(241, 245, 249);
+    pdf.rect(marginLeft, y, contentWidth, headerHeight, 'F');
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(1);
+    pdf.line(marginLeft, y + headerHeight, marginLeft + contentWidth, y + headerHeight);
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(51, 65, 85);
+
+    let hX = marginLeft;
+    pdf.text('#', hX + 4, y + 12);
+    hX += sNoWidth;
+
+    tableCols.forEach((c) => {
+      pdf.text(c.title.toUpperCase(), hX + 4, y + 12);
+      hX += c.assignedWidth;
+    });
+
+    y += headerHeight;
+  };
+
+  const renderFooter = (page: number) => {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(148, 163, 184);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.setLineWidth(0.5);
+    pdf.line(marginLeft, pageHeight - 30, marginLeft + contentWidth, pageHeight - 30);
+    pdf.text(`${businessName} • ${title} • Period: ${displayRange}`, marginLeft, pageHeight - 18);
+    pdf.text(`Page ${page}`, marginLeft + contentWidth, pageHeight - 18, { align: 'right' });
+  };
+
+  renderTableHeader();
+
+  if (filteredRows.length === 0) {
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`No transaction records found for date range (${displayRange})`, marginLeft + 12, y + 18);
+    y += 30;
+  } else {
+    filteredRows.forEach((row, idx) => {
+      if (y + rowHeight > maxY) {
+        renderFooter(pageNum);
+        pdf.addPage();
+        pageNum++;
+        y = 35;
+        renderTableHeader();
+      }
+
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(marginLeft, y, contentWidth, rowHeight, 'F');
+      }
+      pdf.setDrawColor(241, 245, 249);
+      pdf.setLineWidth(0.5);
+      pdf.line(marginLeft, y + rowHeight, marginLeft + contentWidth, y + rowHeight);
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(30, 41, 59);
+
+      let rX = marginLeft;
+      pdf.text(String(idx + 1), rX + 4, y + 11.5);
+      rX += sNoWidth;
+
+      tableCols.forEach((c) => {
+        let val = row[c.key];
+        if (val === undefined || val === null) {
+          if (c.key === 'customerName') val = row.customer?.name || row.partyName;
+          else if (c.key === 'supplierName') val = row.supplier?.name || row.partyName;
+          else if (c.key === 'total') val = row.grandTotal || row.amount;
+        }
+
+        let strVal = String(cleanVal(val));
+        const maxTextWidth = c.assignedWidth - 8;
+        if (pdf.getTextWidth(strVal) > maxTextWidth) {
+          while (strVal.length > 3 && pdf.getTextWidth(strVal + '..') > maxTextWidth) {
+            strVal = strVal.slice(0, -1);
+          }
+          strVal += '..';
+        }
+
+        const isNumeric = /^(INR|₹|-?\d+([.,]\d+)?%?)$/.test(strVal.trim());
+        if (isNumeric && c.assignedWidth > 50) {
+          pdf.text(strVal, rX + c.assignedWidth - 4, y + 11.5, { align: 'right' });
+        } else {
+          pdf.text(strVal, rX + 4, y + 11.5);
+        }
+        rX += c.assignedWidth;
+      });
+
+      y += rowHeight;
+    });
+  }
+
+  renderFooter(pageNum);
 
   const blob = pdf.output('blob');
   const dataUri = pdf.output('datauristring');
@@ -573,18 +748,35 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
 
     // Use Web Share API if browser supports file attachments (Mobile Safari, Android Chrome, etc.)
     if (nav?.canShare && pdfResult?.blob) {
-      try {
-        const pdfFile = new File([pdfResult.blob], fileName, { type: 'application/pdf' });
-        if (nav.canShare({ files: [pdfFile] })) {
+      const pdfFile = new File([pdfResult.blob], fileName, {
+        type: 'application/pdf',
+        lastModified: Date.now(),
+      });
+
+      if (nav.canShare({ files: [pdfFile] })) {
+        try {
+          // Attempt 1: Share file with title & message
           await nav.share({
             title: `${title} - ${displayRange}`,
-            text: fullText,
+            text: `${businessName} • ${title} (${displayRange})\nPDF report attached.`,
             files: [pdfFile],
           });
           sharedViaFile = true;
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+          console.warn('Share with text failed, attempting file-only share:', shareErr);
+          try {
+            // Attempt 2: Share file only without text (some mobile apps fail if both are present)
+            await nav.share({
+              files: [pdfFile],
+              title: `${title} - ${displayRange}`,
+            });
+            sharedViaFile = true;
+          } catch (retryErr: any) {
+            if (retryErr.name === 'AbortError') return;
+            console.warn('File-only share failed:', retryErr);
+          }
         }
-      } catch (shareErr: any) {
-        if (shareErr.name === 'AbortError') return;
       }
     }
 
@@ -629,7 +821,7 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
 
         await RNShare.open({
           title: `${title} - ${displayRange}`,
-          message: fullText,
+          message: `${businessName} • ${title} (${displayRange})`,
           url: shareUri,
           type: 'application/pdf',
           filename: fileName,
