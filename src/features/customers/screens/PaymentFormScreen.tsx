@@ -58,9 +58,11 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   const { updateSupplier } = useSupplierStore();
   const queryClient = useQueryClient();
 
+  const resolvedInitPayType = (initialPaymentType as any) === 'give' ? 'pay' : initialPaymentType;
+
   const [activeEntityType, setActiveEntityType] = useState<'customer' | 'supplier'>(initialEntityType);
   const [activePaymentType, setActivePaymentType] = useState<PaymentType>(
-    initialPaymentType || (initialEntityType === 'customer' ? 'receive' : 'pay')
+    resolvedInitPayType || (initialEntityType === 'customer' ? 'receive' : 'pay')
   );
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -75,8 +77,9 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      const normalizedPayType = (initialPaymentType as any) === 'give' ? 'pay' : initialPaymentType;
       setActiveEntityType(initialEntityType);
-      setActivePaymentType(initialPaymentType || (initialEntityType === 'customer' ? 'receive' : 'pay'));
+      setActivePaymentType(normalizedPayType || (initialEntityType === 'customer' ? 'receive' : 'pay'));
       setSelectedPartyId(entityId ? Number(entityId) : null);
       setAmount('');
       setMethod('cash');

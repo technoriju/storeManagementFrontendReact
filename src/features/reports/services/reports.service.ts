@@ -1403,10 +1403,53 @@ export class ReportsService {
       const totalPaid = sales.reduce((sum: number, s: any) => sum + Number(s.paid || 0), 0);
       const totalDue = sales.reduce((sum: number, s: any) => sum + Number(s.due || 0), 0);
 
+      let payments: any[] = [];
+      try {
+        const payApi = await apiClient.get('/payments');
+        const rawPayments = this.unpackApiArray(payApi);
+        payments = rawPayments
+          .filter((p: any) => {
+            const pCustId = String(p.customerId || p.customer?.id || '');
+            const isMatch = pCustId === custIdStr;
+            const pType = (p.type || 'receive').toLowerCase();
+            return isMatch && (pType === 'receive' || pType === 'received');
+          })
+          .map((p: any) => ({
+            id: p.id,
+            voucherNo: p.voucherNo || `PAY-${String(p.id).padStart(3, '0')}`,
+            date: p.paymentDate ? getLocalDateString(p.paymentDate) : (p.date ? getLocalDateString(p.date) : (p.createdAt ? String(p.createdAt).slice(0, 10) : '')),
+            amount: Number(p.amount || 0),
+            paymentMethod: p.method || p.paymentMethod || 'Cash',
+            reference: p.reference || p.referenceNumber || '-',
+            type: p.type || 'receive',
+          }));
+      } catch {}
+
+      if (payments.length === 0) {
+        try {
+          const payRes = await db.execute(`
+            SELECT
+              p.id,
+              'PAY-' || SUBSTR('000' || p.id, -3) as voucherNo,
+              COALESCE(SUBSTR(p.createdAt, 1, 10), '') as date,
+              p.amount,
+              COALESCE(p.method, 'Cash') as paymentMethod,
+              COALESCE(p.reference, '-') as reference,
+              COALESCE(p.type, 'receive') as type
+            FROM payments p
+            WHERE (p.customerId = '${custIdStr}' 
+               OR p.customerId = (SELECT id FROM customers WHERE backendId = '${custIdStr}')
+               OR p.customerId = (SELECT backendId FROM customers WHERE id = '${custIdStr}'))
+            ORDER BY p.id DESC
+          `);
+          payments = this.extractDbRows(payRes);
+        } catch {}
+      }
+
       return {
         customer: custInfo,
         sales,
-        payments: [],
+        payments,
         summary: {
           totalOrders: sales.length,
           totalBilled,
@@ -1451,7 +1494,9 @@ export class ReportsService {
           COALESCE(s.paymentStatus, 'Unpaid') as paymentStatus,
           s.status
         FROM sales s
-        WHERE (s.customerId = '${custIdStr}') AND ${salesDateCondition}
+        WHERE (s.customerId = '${custIdStr}' 
+           OR s.customerId = (SELECT id FROM customers WHERE backendId = '${custIdStr}')
+           OR s.customerId = (SELECT backendId FROM customers WHERE id = '${custIdStr}')) AND ${salesDateCondition}
         ORDER BY s.id DESC
       `);
 
@@ -1465,7 +1510,9 @@ export class ReportsService {
           COALESCE(p.reference, '-') as reference,
           COALESCE(p.type, 'receive') as type
         FROM payments p
-        WHERE (p.customerId = '${custIdStr}') AND ${payDateCondition}
+        WHERE (p.customerId = '${custIdStr}' 
+           OR p.customerId = (SELECT id FROM customers WHERE backendId = '${custIdStr}')
+           OR p.customerId = (SELECT backendId FROM customers WHERE id = '${custIdStr}')) AND ${payDateCondition}
         ORDER BY p.id DESC
       `);
 
@@ -1567,10 +1614,53 @@ export class ReportsService {
       const totalPaid = purchases.reduce((sum: number, p: any) => sum + Number(p.paid || 0), 0);
       const totalDue = Math.max(0, totalPurchased - totalPaid);
 
+      let payments: any[] = [];
+      try {
+        const payApi = await apiClient.get('/payments');
+        const rawPayments = this.unpackApiArray(payApi);
+        payments = rawPayments
+          .filter((p: any) => {
+            const pSuppId = String(p.supplierId || p.supplier?.id || '');
+            const isMatch = pSuppId === suppIdStr;
+            const pType = (p.type || 'pay').toLowerCase();
+            return isMatch && (pType === 'pay' || pType === 'paid' || pType === 'give');
+          })
+          .map((p: any) => ({
+            id: p.id,
+            voucherNo: p.voucherNo || `PAY-${String(p.id).padStart(3, '0')}`,
+            date: p.paymentDate ? String(p.paymentDate).slice(0, 10) : (p.date || (p.createdAt ? String(p.createdAt).slice(0, 10) : '')),
+            amount: Number(p.amount || 0),
+            paymentMethod: p.method || p.paymentMethod || 'Cash',
+            reference: p.reference || p.referenceNumber || '-',
+            type: p.type || 'pay',
+          }));
+      } catch {}
+
+      if (payments.length === 0) {
+        try {
+          const payRes = await db.execute(`
+            SELECT
+              p.id,
+              'PAY-' || SUBSTR('000' || p.id, -3) as voucherNo,
+              COALESCE(SUBSTR(p.createdAt, 1, 10), '') as date,
+              p.amount,
+              COALESCE(p.method, 'Cash') as paymentMethod,
+              COALESCE(p.reference, '-') as reference,
+              COALESCE(p.type, 'pay') as type
+            FROM payments p
+            WHERE (p.supplierId = '${suppIdStr}'
+               OR p.supplierId = (SELECT id FROM suppliers WHERE backendId = '${suppIdStr}')
+               OR p.supplierId = (SELECT backendId FROM suppliers WHERE id = '${suppIdStr}'))
+            ORDER BY p.id DESC
+          `);
+          payments = this.extractDbRows(payRes);
+        } catch {}
+      }
+
       return {
         supplier: suppInfo,
         purchases,
-        payments: [],
+        payments,
         summary: {
           totalOrders: purchases.length,
           totalPurchased,
@@ -1615,7 +1705,9 @@ export class ReportsService {
           COALESCE(p.status, 'Received') as status,
           (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchaseId = p.id) as itemsCount
         FROM purchases p
-        WHERE (p.supplierId = '${suppIdStr}') AND ${purDateCondition}
+        WHERE (p.supplierId = '${suppIdStr}'
+           OR p.supplierId = (SELECT id FROM suppliers WHERE backendId = '${suppIdStr}')
+           OR p.supplierId = (SELECT backendId FROM suppliers WHERE id = '${suppIdStr}')) AND ${purDateCondition}
         ORDER BY p.id DESC
       `);
 
@@ -1629,7 +1721,9 @@ export class ReportsService {
           COALESCE(p.reference, '-') as reference,
           COALESCE(p.type, 'pay') as type
         FROM payments p
-        WHERE (p.supplierId = '${suppIdStr}') AND ${payDateCondition}
+        WHERE (p.supplierId = '${suppIdStr}'
+           OR p.supplierId = (SELECT id FROM suppliers WHERE backendId = '${suppIdStr}')
+           OR p.supplierId = (SELECT backendId FROM suppliers WHERE id = '${suppIdStr}')) AND ${payDateCondition}
         ORDER BY p.id DESC
       `);
 

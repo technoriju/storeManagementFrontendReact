@@ -42,6 +42,11 @@ import {
   downloadInvoiceImage,
 } from '../utils/invoiceImageShare';
 import {
+  shareReportToWhatsApp,
+  exportReportToPdf,
+} from '../../reports/utils/reportExportUtils';
+import { customerRepository } from '../../../core/repositories/CustomerRepository';
+import {
   ReceiptPrintData,
   ReceiptPaperFormat,
   generateReceiptHtml,
@@ -145,6 +150,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
   const [paperFormat, setPaperFormat] = useState<ReceiptPaperFormat>('80mm');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerBalance, setCustomerBalance] = useState<number | null>(null);
   const [isSharingFile, setIsSharingFile] = useState(false);
   const [isConvertingImage, setIsConvertingImage] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -152,8 +158,21 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
   React.useEffect(() => {
     if (sale) {
-      setCustomerPhone(sale.customerPhone || '');
-      setCustomerEmail((sale as any).customerEmail || '');
+      setCustomerPhone(sale.customerPhone || (sale as any).customer?.phone || '');
+      setCustomerEmail((sale as any).customerEmail || (sale as any).customer?.email || '');
+
+      const custId = sale.customerId || (sale as any).customer?.id;
+      if (custId) {
+        customerRepository.getById(Number(custId)).then((cust) => {
+          if (cust) {
+            setCustomerBalance(Number(cust.currentBalance ?? cust.balance ?? 0));
+          }
+        }).catch((err) => console.warn('Could not fetch customer balance', err));
+      } else if ((sale as any).customer?.currentBalance !== undefined) {
+        setCustomerBalance(Number((sale as any).customer.currentBalance));
+      } else {
+        setCustomerBalance(null);
+      }
     }
   }, [sale]);
 
@@ -168,6 +187,12 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
   const isBalanceActive = Boolean(
     receiptData?.showPreviousBalance && (previousDue > 0 || advancePayment > 0)
   );
+
+  const currentCustomerBalance = customerBalance !== null
+    ? customerBalance
+    : (previousDue > 0 ? previousDue + (receiptData?.due || 0) : (receiptData?.due || 0));
+  const isAdvance = currentCustomerBalance < 0;
+  const absCustomerBalance = Math.abs(currentCustomerBalance);
 
   const totalPayable = (receiptData?.total || 0) + (isBalanceActive && previousDue > 0 ? previousDue : 0);
   const paidAmt = Number(receiptData?.paid !== undefined ? receiptData.paid : (receiptData?.total || 0));
@@ -202,6 +227,79 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
   const invNumber = receiptData.invoiceNumber;
   const isThermal = paperFormat === '80mm';
   const isWholesale = receiptData.customerType === 'wholesale';
+
+  // Vector PDF share/export matching report section
+  const handleShareInvoicePdf = async (target: 'whatsapp' | 'download' = 'whatsapp') => {
+    try {
+      setIsConvertingImage(true);
+      setStatusMessage(target === 'whatsapp' ? 'Preparing Invoice PDF for WhatsApp...' : 'Generating Invoice PDF...');
+
+      const targetPhone = (customerPhone || receiptData.customerPhone || '').trim();
+      const invoiceSummary: Record<string, string | number> = {
+        'Total Items': receiptData.items.length,
+        'Grand Total': `Rs. ${receiptData.total.toFixed(2)}`,
+        'Paid Amount': `Rs. ${(receiptData.paid ?? receiptData.total).toFixed(2)}`,
+      };
+
+      if ((receiptData.due || 0) > 0 && Math.abs(currentCustomerBalance - (receiptData.due || 0)) > 0.01) {
+        invoiceSummary['Current Bill Due'] = `Rs. ${(receiptData.due || 0).toFixed(2)}`;
+      }
+
+      if (isAdvance) {
+        invoiceSummary['Advance Payment'] = `Rs. ${absCustomerBalance.toFixed(2)}`;
+      } else {
+        invoiceSummary['Total Due'] = `Rs. ${absCustomerBalance.toFixed(2)}`;
+      }
+
+      const columns = [
+        { key: 'productName', title: 'Item Description', width: 140 },
+        {
+          key: 'quantity',
+          title: 'Qty',
+          width: 50,
+          align: 'center' as const,
+          format: (val: any, row: any) => `${val} ${row?.unit || 'Pcs'}`,
+        },
+        {
+          key: 'unitPrice',
+          title: 'Rate (Rs.)',
+          width: 70,
+          align: 'right' as const,
+          format: (val: any) => `${Number(val || 0).toFixed(2)}`,
+        },
+        {
+          key: 'total',
+          title: 'Total (Rs.)',
+          width: 80,
+          align: 'right' as const,
+          format: (val: any) => `${Number(val || 0).toFixed(2)}`,
+        },
+      ];
+
+      const reportOptions: any = {
+        title: `Sales Invoice #${invNumber}`,
+        partyName: receiptData.customerName || 'Walk-in Customer',
+        phone: targetPhone,
+        dateRangeLabel: `Date: ${receiptData.date}`,
+        columns,
+        data: receiptData.items,
+        summary: invoiceSummary,
+        businessName: business.businessName,
+      };
+
+      if (target === 'whatsapp') {
+        await shareReportToWhatsApp(reportOptions, targetPhone);
+      } else {
+        await exportReportToPdf(reportOptions, `Invoice-${invNumber}`);
+      }
+    } catch (err: any) {
+      console.error('Invoice PDF share error:', err);
+      Alert.alert('Share Failed', err?.message || 'Could not share invoice PDF.');
+    } finally {
+      setIsConvertingImage(false);
+      setStatusMessage('');
+    }
+  };
 
   // 1. Direct Print / Save as PDF
   const handlePrintOrSavePdf = () => {
@@ -722,7 +820,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
                       </View>
 
                       <View style={styles.sumRow}>
-                        <Text style={styles.sumLabel}>Balance Due:</Text>
+                        <Text style={styles.sumLabel}>Current Bill Due:</Text>
                         <Text
                           style={[
                             styles.sumVal,
@@ -735,6 +833,26 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
                           ₹{(receiptData.due || 0).toFixed(2)}
                         </Text>
                       </View>
+
+                      {isAdvance ? (
+                        <View style={styles.sumRow}>
+                          <Text style={[styles.sumLabel, { color: '#16A34A', fontWeight: 'bold' }]}>
+                            Advance Payment:
+                          </Text>
+                          <Text style={[styles.sumVal, { color: '#16A34A', fontWeight: 'bold' }]}>
+                            ₹{absCustomerBalance.toFixed(2)}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.sumRow}>
+                          <Text style={[styles.sumLabel, { color: '#DC2626', fontWeight: 'bold' }]}>
+                            Total Due:
+                          </Text>
+                          <Text style={[styles.sumVal, { color: '#DC2626', fontWeight: 'bold' }]}>
+                            ₹{absCustomerBalance.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
                     </>
                   )}
                 </View>
@@ -772,42 +890,32 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
               styles.bottomBar,
               isMobile && { flexDirection: 'column', gap: 8 }
             ]}>
-              {/* Share as Image Button */}
+              {/* WhatsApp PDF Share Button (Green) - matches report section */}
               <TouchableOpacity
                 style={[
                   styles.actionBtn,
-                  { backgroundColor: '#10B981' },
+                  { backgroundColor: '#25D366' },
                   isMobile && { flex: 0, width: '100%', paddingVertical: 12 }
                 ]}
-                onPress={handleShareImage}
-                disabled={isConvertingImage}
-              >
-                <ImageIcon size={18} color="white" />
-                <Text style={styles.actionBtnText}>Share Whatsapp / Others</Text>
-              </TouchableOpacity>
-
-              {/* WhatsApp Button (converts & sends image) */}
-              {/* <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#25D366' }]}
-                onPress={handleWhatsApp}
+                onPress={() => handleShareInvoicePdf('whatsapp')}
                 disabled={isConvertingImage}
               >
                 <MessageCircle size={18} color="white" />
-                <Text style={styles.actionBtnText}>WhatsApp</Text>
-              </TouchableOpacity> */}
+                <Text style={styles.actionBtnText}>Share via WhatsApp</Text>
+              </TouchableOpacity>
 
-              {/* Save Image Button */}
+              {/* Save PDF Button */}
               <TouchableOpacity
                 style={[
                   styles.actionBtn,
                   { backgroundColor: '#3B82F6' },
                   isMobile && { flex: 0, width: '100%', paddingVertical: 12 }
                 ]}
-                onPress={handleSaveImage}
+                onPress={() => handleShareInvoicePdf('download')}
                 disabled={isConvertingImage}
               >
                 <Download size={18} color="white" />
-                <Text style={styles.actionBtnText}>Save PNG</Text>
+                <Text style={styles.actionBtnText}>Save PDF</Text>
               </TouchableOpacity>
 
               {/* Print / Save as PDF Button */}
@@ -828,6 +936,14 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
             {/* Secondary Options Row */}
             <View style={styles.bottomRowSecondary}>
               <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>Other formats:</Text>
+              <TouchableOpacity style={styles.secondaryPillBtn} onPress={handleShareImage}>
+                <ImageIcon size={13} color={theme.colors.textSecondary} />
+                <Text style={styles.secondaryPillText}>Share Image</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryPillBtn} onPress={handleSaveImage}>
+                <Download size={13} color={theme.colors.textSecondary} />
+                <Text style={styles.secondaryPillText}>Save PNG</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.secondaryPillBtn} onPress={handleShareDocument}>
                 <FileText size={13} color={theme.colors.textSecondary} />
                 <Text style={styles.secondaryPillText}>HTML Doc</Text>

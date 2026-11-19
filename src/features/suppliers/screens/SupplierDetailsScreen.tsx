@@ -143,7 +143,7 @@ export const SupplierDetailsScreen = ({ route, navigation, supplierId, onNavigat
 
           <TouchableOpacity 
             style={[styles.actionBtn, isMobile && styles.actionBtnMobile, { backgroundColor: '#10B981' }]} 
-            onPress={() => onNavigate ? onNavigate('payment_form', supplier.id, { entityType: 'supplier', paymentType: 'give' }) : navigation?.navigate('PaymentForm', { supplierId: supplier.id })}
+            onPress={() => onNavigate ? onNavigate('payment_form', supplier.id, { entityType: 'supplier', paymentType: 'pay' }) : navigation?.navigate('PaymentForm', { supplierId: supplier.id })}
           >
             <CreditCard size={14} color="white" />
             <Text style={[styles.actionBtnText, isMobile && styles.actionBtnTextMobile]}>Pay</Text>

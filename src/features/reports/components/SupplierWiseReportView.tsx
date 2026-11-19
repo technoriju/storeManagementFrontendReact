@@ -281,6 +281,17 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
+                const dueVal = Number(supp.outstandingBalance !== undefined ? supp.outstandingBalance : summ.totalDue || 0);
+                const supplierSummary: any = {
+                  totalOrders: summ.totalOrders,
+                  totalPurchased: summ.totalPurchased,
+                  totalPaid: summ.totalPaid,
+                };
+                if (dueVal < 0) {
+                  supplierSummary.advancePayment = Math.abs(dueVal);
+                } else {
+                  supplierSummary.totalDue = dueVal;
+                }
                 exportReportToPdf({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
@@ -295,7 +306,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredBills,
-                  summary: summ,
+                  summary: supplierSummary,
                   partyName: supp.name,
                   phone: supp.phone,
                 });
@@ -308,6 +319,17 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
+                const dueVal = Number(supp.outstandingBalance !== undefined ? supp.outstandingBalance : summ.totalDue || 0);
+                const supplierSummary: any = {
+                  totalOrders: summ.totalOrders,
+                  totalPurchased: summ.totalPurchased,
+                  totalPaid: summ.totalPaid,
+                };
+                if (dueVal < 0) {
+                  supplierSummary.advancePayment = Math.abs(dueVal);
+                } else {
+                  supplierSummary.totalDue = dueVal;
+                }
                 exportReportToExcel({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
@@ -322,7 +344,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredBills,
-                  summary: summ,
+                  summary: supplierSummary,
                   partyName: supp.name,
                   phone: supp.phone,
                 });
@@ -335,6 +357,17 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
               onPress={() => {
+                const dueVal = Number(supp.outstandingBalance !== undefined ? supp.outstandingBalance : summ.totalDue || 0);
+                const supplierSummary: any = {
+                  totalOrders: summ.totalOrders,
+                  totalPurchased: summ.totalPurchased,
+                  totalPaid: summ.totalPaid,
+                };
+                if (dueVal < 0) {
+                  supplierSummary.advancePayment = Math.abs(dueVal);
+                } else {
+                  supplierSummary.totalDue = dueVal;
+                }
                 shareReportToWhatsApp({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
@@ -349,7 +382,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredBills,
-                  summary: summ,
+                  summary: supplierSummary,
                   partyName: supp.name,
                   phone: supp.phone,
                 });
@@ -362,6 +395,17 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
             <Pressable
               style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
               onPress={() => {
+                const dueVal = Number(supp.outstandingBalance !== undefined ? supp.outstandingBalance : summ.totalDue || 0);
+                const supplierSummary: any = {
+                  totalOrders: summ.totalOrders,
+                  totalPurchased: summ.totalPurchased,
+                  totalPaid: summ.totalPaid,
+                };
+                if (dueVal < 0) {
+                  supplierSummary.advancePayment = Math.abs(dueVal);
+                } else {
+                  supplierSummary.totalDue = dueVal;
+                }
                 printOrSavePdfReport({
                   title: `Supplier Statement - ${supp.name}`,
                   dateRangeLabel,
@@ -376,7 +420,7 @@ export const SupplierWiseReportView: React.FC<SupplierWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredBills,
-                  summary: summ,
+                  summary: supplierSummary,
                   partyName: supp.name,
                   phone: supp.phone,
                 });

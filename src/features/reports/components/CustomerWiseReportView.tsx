@@ -280,6 +280,12 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
+                const customerSummary = {
+                  totalInvoices: summ.totalOrders,
+                  totalBilled: summ.totalBilled,
+                  totalPaid: summ.totalPaid,
+                  totalDue: Number(summ.outstandingBalance !== undefined ? summ.outstandingBalance : summ.totalDue || 0),
+                };
                 exportReportToPdf({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
@@ -294,7 +300,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredInvoices,
-                  summary: summ,
+                  summary: customerSummary,
                   partyName: cust.name,
                   phone: cust.phone,
                 });
@@ -307,6 +313,12 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: theme.colors.border }]}
               onPress={() => {
+                const customerSummary = {
+                  totalInvoices: summ.totalOrders,
+                  totalBilled: summ.totalBilled,
+                  totalPaid: summ.totalPaid,
+                  totalDue: Number(summ.outstandingBalance !== undefined ? summ.outstandingBalance : summ.totalDue || 0),
+                };
                 exportReportToExcel({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
@@ -321,7 +333,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredInvoices,
-                  summary: summ,
+                  summary: customerSummary,
                   partyName: cust.name,
                   phone: cust.phone,
                 });
@@ -334,6 +346,12 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.outlineActionBtn, { borderColor: '#16A34A', backgroundColor: '#DCFCE720' }]}
               onPress={() => {
+                const customerSummary = {
+                  totalInvoices: summ.totalOrders,
+                  totalBilled: summ.totalBilled,
+                  totalPaid: summ.totalPaid,
+                  totalDue: Number(summ.outstandingBalance !== undefined ? summ.outstandingBalance : summ.totalDue || 0),
+                };
                 shareReportToWhatsApp({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
@@ -348,7 +366,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredInvoices,
-                  summary: summ,
+                  summary: customerSummary,
                   partyName: cust.name,
                   phone: cust.phone,
                 });
@@ -361,6 +379,12 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
             <Pressable
               style={[styles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
               onPress={() => {
+                const customerSummary = {
+                  totalInvoices: summ.totalOrders,
+                  totalBilled: summ.totalBilled,
+                  totalPaid: summ.totalPaid,
+                  totalDue: Number(summ.outstandingBalance !== undefined ? summ.outstandingBalance : summ.totalDue || 0),
+                };
                 printOrSavePdfReport({
                   title: `Customer Statement - ${cust.name}`,
                   dateRangeLabel,
@@ -375,7 +399,7 @@ export const CustomerWiseReportView: React.FC<CustomerWiseReportViewProps> = ({
                     { key: 'paymentStatus', title: 'Status' },
                   ],
                   data: filteredInvoices,
-                  summary: summ,
+                  summary: customerSummary,
                   partyName: cust.name,
                   phone: cust.phone,
                 });
