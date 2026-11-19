@@ -85,6 +85,20 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
     }
   };
 
+  const getCustomerExportSummary = () => {
+    const dueAmt = Number(
+      customer?.outstandingBalance !== undefined
+        ? customer.outstandingBalance
+        : (statementData?.summary?.outstandingBalance ?? statementData?.summary?.totalDue ?? 0)
+    );
+    return {
+      totalInvoices: statementData?.summary?.totalOrders ?? statementData?.sales?.length ?? 0,
+      totalBilled: statementData?.summary?.totalBilled ?? 0,
+      totalPaid: statementData?.summary?.totalPaid ?? 0,
+      totalDue: dueAmt,
+    };
+  };
+
   const handlePrint = () => {
     if (!customer) return;
     printOrSavePdfReport({
@@ -101,7 +115,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         { key: 'paymentStatus', title: 'Status' },
       ],
       data: statementData?.sales || [],
-      summary: statementData?.summary || {},
+      summary: getCustomerExportSummary(),
       partyName: customer.name,
       phone: customer.phone,
     });
@@ -123,7 +137,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         { key: 'paymentStatus', title: 'Status' },
       ],
       data: statementData?.sales || [],
-      summary: statementData?.summary || {},
+      summary: getCustomerExportSummary(),
       partyName: customer.name,
       phone: customer.phone,
     });
@@ -145,7 +159,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         { key: 'paymentStatus', title: 'Status' },
       ],
       data: statementData?.sales || [],
-      summary: statementData?.summary || {},
+      summary: getCustomerExportSummary(),
       partyName: customer.name,
       phone: customer.phone,
     });
@@ -167,7 +181,7 @@ export const CustomerDetailsScreen = ({ route, navigation, customerId, onNavigat
         { key: 'paymentStatus', title: 'Status' },
       ],
       data: statementData?.sales || [],
-      summary: statementData?.summary || {},
+      summary: getCustomerExportSummary(),
       partyName: customer.name,
       phone: customer.phone,
     });

@@ -26,21 +26,17 @@ export const useAddSupplier = () => {
 
   return useMutation({
     mutationFn: async (data: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>) => {
-      const newEntity: Supplier = {
-        ...data,
-        id: Math.floor(Math.random() * -1000000000),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        syncStatus: 'pending_insert',
-      };
-      await supplierRepository.insert(newEntity, true);
-      return newEntity;
+      return await supplierRepository.createDirect(data);
     },
     onSuccess: (newItem) => {
       queryClient.setQueryData(SUPPLIER_QUERY_KEY, (old: Supplier[] | undefined) => {
-        return old ? [...old, newItem] : [newItem];
+        if (!old) return [newItem];
+        const filtered = old.filter(
+          (item) => item.id !== newItem.id && item.name?.trim().toLowerCase() !== newItem.name?.trim().toLowerCase()
+        );
+        return [...filtered, newItem];
       });
-      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY, refetchType: 'none' });
+      queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
     },
   });
 };

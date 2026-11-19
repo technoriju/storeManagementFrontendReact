@@ -96,18 +96,13 @@ export const SupplierFormScreen: React.FC<SupplierFormScreenProps> = ({ supplier
           updateSupplier(updated);
         }
       } else {
-        const newSupplier: Supplier = {
-          id: Math.floor(Math.random() * -1000000000),
+        const newSupplier = await supplierRepository.createDirect({
           name: fullName,
           email,
           phone,
           address: fullAddress,
           outstandingBalance: 0,
-          createdAt: now,
-          updatedAt: now,
-          syncStatus: 'pending_insert'
-        };
-        await supplierRepository.insert(newSupplier);
+        });
         addSupplier(newSupplier);
       }
       resetForm();

@@ -5,13 +5,17 @@ import { useInvoiceSettingsStore } from '../../settings/store/invoiceSettings.st
 
 export interface ReportColumnDef {
   key: string;
-  title: string;
+  title?: string;
+  header?: string;
   width?: number;
+  align?: 'left' | 'center' | 'right';
+  format?: (val: any, row?: any) => string;
 }
 
 export interface ReportExportOptions {
   title: string;
-  dateRangeLabel: string;
+  dateRangeLabel?: string;
+  dateRange?: string;
   startDate?: string;
   endDate?: string;
   columns: ReportColumnDef[];
@@ -19,7 +23,11 @@ export interface ReportExportOptions {
   summary?: any;
   businessName?: string;
   phone?: string;
+  phoneNumber?: string;
   partyName?: string;
+  subtitle?: string;
+  businessProfile?: any;
+  notes?: string;
 }
 
 /**
@@ -57,6 +65,17 @@ function cleanVal(val: any): string | number {
     return val.name || val.title || JSON.stringify(val);
   }
   return String(val);
+}
+
+/**
+ * Sanitize strings for jsPDF WinAnsi standard font rendering.
+ * Replaces Rupee symbol ₹ (U+20B9 / 8377) with 'Rs. ' to prevent 8-bit truncation
+ * to 0xB9 which displays as superscript 1 ('¹').
+ */
+function sanitizePdfText(val: any): string {
+  if (val === null || val === undefined) return '';
+  const s = typeof val === 'number' ? String(val) : String(cleanVal(val));
+  return s.replace(/₹/g, 'Rs. ');
 }
 
 /**
@@ -124,7 +143,10 @@ export function generateReportHtml(options: ReportExportOptions): string {
   const businessPhone = company.phone;
   const businessGstin = company.gstin;
 
-  const { title, dateRangeLabel, startDate, endDate, columns, data, summary, partyName, phone } = options;
+  const { title = 'Report', startDate, endDate, columns = [], data = [], summary } = options;
+  const dateRangeLabel = options.dateRangeLabel || options.dateRange || 'All Time';
+  const partyName = options.partyName || (options as any).customerName || (options as any).supplierName || '';
+  const phone = options.phone || options.phoneNumber || '';
 
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
@@ -133,7 +155,7 @@ export function generateReportHtml(options: ReportExportOptions): string {
   const thHtml = columns
     .map(
       (c) =>
-        `<th style="padding: 9px 12px; text-align: left; background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 11.5px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.3px;">${c.title}</th>`
+        `<th style="padding: 9px 12px; text-align: left; background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 11.5px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.3px;">${c.title || c.header || c.key}</th>`
     )
     .join('');
 
@@ -149,9 +171,17 @@ export function generateReportHtml(options: ReportExportOptions): string {
           .map((col) => {
             let v = row[col.key];
             if (v === undefined || v === null) {
-              if (col.key === 'customerName') v = row.customer?.name || row.partyName;
+              if (col.key === 'productName' || col.key === 'name') v = row.productName || row.name || row.item;
+              else if (col.key === 'customerName') v = row.customer?.name || row.partyName;
               else if (col.key === 'supplierName') v = row.supplier?.name || row.partyName;
-              else if (col.key === 'total') v = row.grandTotal || row.amount;
+              else if (col.key === 'total') v = row.grandTotal || row.amount || (Number(row.quantity || 1) * Number(row.unitPrice || 0));
+            }
+            if (col.format && typeof col.format === 'function') {
+              try {
+                v = col.format(v, row);
+              } catch (e) {
+                // ignore
+              }
             }
             return `<td style="padding: 7px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11.5px; color: #1e293b;">${cleanVal(v)}</td>`;
           })
@@ -164,16 +194,59 @@ export function generateReportHtml(options: ReportExportOptions): string {
   // Summary box if provided
   let summaryHtml = '';
   if (summary && typeof summary === 'object') {
-    const summaryItems = Object.entries(summary)
-      .filter(([k, v]) => typeof v === 'number' || (typeof v === 'string' && v.trim() !== ''))
+    const isPartyOrBill = Boolean(
+      partyName ||
+      title.toLowerCase().includes('customer') ||
+      title.toLowerCase().includes('supplier') ||
+      title.toLowerCase().includes('invoice') ||
+      title.toLowerCase().includes('bill')
+    );
+    let rawSummaryEntries = Object.entries(summary).filter(
+      ([k, v]) => {
+        if (typeof v !== 'number' && (typeof v !== 'string' || (v as string).trim() === '')) return false;
+        if (isPartyOrBill) {
+          const lk = k.toLowerCase();
+          // Remove tax related cards for customer/supplier bill/statement sharing
+          if (lk.includes('tax') || lk.includes('gst')) return false;
+        }
+        return true;
+      }
+    );
+
+    // Ensure Total Due or Advance Payment card is added
+    if (isPartyOrBill) {
+      const hasBalanceCard = rawSummaryEntries.some(([k]) => {
+        const lk = k.toLowerCase();
+        return lk.includes('due') || lk === 'outstandingbalance' || lk.includes('advance');
+      });
+      if (!hasBalanceCard) {
+        if ((summary as any).advancePayment && Number((summary as any).advancePayment) > 0) {
+          rawSummaryEntries.push(['advancePayment', (summary as any).advancePayment]);
+        } else {
+          const dueVal = (summary as any).totalDue ?? (summary as any).outstandingBalance ?? (summary as any).due ?? 0;
+          rawSummaryEntries.push(['totalDue', dueVal]);
+        }
+      }
+    }
+
+    const summaryItems = rawSummaryEntries
       .slice(0, 6)
       .map(([k, v]) => {
-        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        let label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        const lk = k.toLowerCase();
+        if (lk === 'outstandingbalance' || lk === 'totaldue' || lk === 'due') {
+          label = 'Total Due';
+        } else if (lk.includes('advance')) {
+          label = 'Advance Payment';
+        }
         const formatted = typeof v === 'number' ? `₹${v.toLocaleString()}` : String(v);
+        const isDue = label.toLowerCase().includes('due');
+        const isAdv = label.toLowerCase().includes('advance');
+        const valColor = isDue && Number(v) > 0 ? '#dc2626' : isAdv && Number(v) > 0 ? '#16a34a' : '#0f172a';
         return `
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 14px; min-width: 130px; flex: 1;">
             <div style="font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase;">${label}</div>
-            <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px;">${formatted}</div>
+            <div style="font-size: 14px; font-weight: 800; color: ${valColor}; margin-top: 2px;">${formatted}</div>
           </div>`;
       })
       .join('');
@@ -282,11 +355,14 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
   const businessPhone = company.phone;
   const businessGstin = company.gstin;
 
-  const { title, dateRangeLabel, startDate, endDate, columns, data, summary, partyName, phone } = options;
+  const { title = 'Document', startDate, endDate, columns = [], data = [], summary } = options;
+  const dateRangeLabel = options.dateRangeLabel || options.dateRange || 'All Time';
+  const partyName = options.partyName || (options as any).customerName || (options as any).supplierName || '';
+  const phone = options.phone || options.phoneNumber || '';
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
 
-  const rangePart = (startDate && endDate ? `${startDate}_to_${endDate}` : dateRangeLabel).toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const rangePart = (startDate && endDate ? `${startDate}_to_${endDate}` : (dateRangeLabel || 'all')).toLowerCase().replace(/[^a-z0-9]/g, '_');
   const fileName = `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${rangePart}.pdf`;
 
   const pdf = new jsPDF({
@@ -357,9 +433,40 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
 
   // Summary box cards if present
   if (summary && typeof summary === 'object') {
-    const summaryEntries = Object.entries(summary)
-      .filter(([_, v]) => typeof v === 'number' || (typeof v === 'string' && (v as string).trim() !== ''))
-      .slice(0, 6);
+    const isPartyOrBill = Boolean(
+      partyName ||
+      title.toLowerCase().includes('customer') ||
+      title.toLowerCase().includes('supplier') ||
+      title.toLowerCase().includes('invoice') ||
+      title.toLowerCase().includes('bill')
+    );
+    let summaryEntries = Object.entries(summary).filter(([k, v]) => {
+      if (typeof v !== 'number' && (typeof v !== 'string' || (v as string).trim() === '')) return false;
+      if (isPartyOrBill) {
+        const lk = k.toLowerCase();
+        // Remove tax related cards for customer/supplier bill/statement sharing
+        if (lk.includes('tax') || lk.includes('gst')) return false;
+      }
+      return true;
+    });
+
+    // Ensure Total Due or Advance Payment card is added
+    if (isPartyOrBill) {
+      const hasBalanceCard = summaryEntries.some(([k]) => {
+        const lk = k.toLowerCase();
+        return lk.includes('due') || lk === 'outstandingbalance' || lk.includes('advance');
+      });
+      if (!hasBalanceCard) {
+        if ((summary as any).advancePayment && Number((summary as any).advancePayment) > 0) {
+          summaryEntries.push(['advancePayment', (summary as any).advancePayment]);
+        } else {
+          const dueVal = (summary as any).totalDue ?? (summary as any).outstandingBalance ?? (summary as any).due ?? 0;
+          summaryEntries.push(['totalDue', dueVal]);
+        }
+      }
+    }
+
+    summaryEntries = summaryEntries.slice(0, 6);
 
     if (summaryEntries.length > 0) {
       const cardGap = 8;
@@ -378,16 +485,30 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
         pdf.setLineWidth(0.75);
         pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 3, 3, 'FD');
 
-        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        let label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        const lk = k.toLowerCase();
+        if (lk === 'outstandingbalance' || lk === 'totaldue' || lk === 'due') {
+          label = 'Total Due';
+        } else if (lk.includes('advance')) {
+          label = 'Advance Payment';
+        }
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7);
         pdf.setTextColor(100, 116, 139);
         pdf.text(label.toUpperCase(), cardX + 6, cardY + 11);
 
-        const formatted = typeof v === 'number' ? `INR ${v.toLocaleString('en-IN')}` : String(v);
+        const formatted = typeof v === 'number' ? `Rs. ${v.toLocaleString('en-IN')}` : sanitizePdfText(v);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(9.5);
-        pdf.setTextColor(15, 23, 42);
+        const isDue = label.toLowerCase().includes('due');
+        const isAdv = label.toLowerCase().includes('advance');
+        if (isDue && Number(v) > 0) {
+          pdf.setTextColor(220, 38, 38); // red for due
+        } else if (isAdv && Number(v) > 0) {
+          pdf.setTextColor(22, 163, 74); // green for advance
+        } else {
+          pdf.setTextColor(15, 23, 42);
+        }
         pdf.text(formatted, cardX + 6, cardY + 24);
       });
 
@@ -399,17 +520,19 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
   // Calculate Column Widths
   const sNoWidth = 26;
   const tableCols = columns.map((c) => {
-    const key = c.key.toLowerCase();
+    const key = (c.key || '').toLowerCase();
+    const title = c.title || c.header || c.key || '';
     let w = c.width || 0;
     if (!w) {
       if (key.includes('date')) w = 62;
-      else if (key.includes('total') || key.includes('amount') || key.includes('paid') || key.includes('due') || key.includes('balance') || key.includes('price')) w = 68;
+      else if (key.includes('total') || key.includes('amount') || key.includes('paid') || key.includes('due') || key.includes('balance') || key.includes('price') || key.includes('rate')) w = 68;
       else if (key.includes('status')) w = 55;
       else if (key.includes('phone') || key.includes('mobile')) w = 70;
       else if (key.includes('invoice') || key.includes('voucher') || key.includes('no') || key.includes('ref') || key.includes('sku')) w = 70;
+      else if (key.includes('product') || key.includes('item') || key.includes('desc') || key.includes('name')) w = 120;
       else w = 90;
     }
-    return { ...c, assignedWidth: w };
+    return { ...c, title, assignedWidth: w };
   });
 
   const totalAssigned = tableCols.reduce((sum, c) => sum + c.assignedWidth, 0);
@@ -442,7 +565,7 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
     hX += sNoWidth;
 
     tableCols.forEach((c) => {
-      pdf.text(c.title.toUpperCase(), hX + 4, y + 12);
+      pdf.text((c.title || '').toUpperCase(), hX + 4, y + 12);
       hX += c.assignedWidth;
     });
 
@@ -497,12 +620,21 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
       tableCols.forEach((c) => {
         let val = row[c.key];
         if (val === undefined || val === null) {
-          if (c.key === 'customerName') val = row.customer?.name || row.partyName;
+          if (c.key === 'productName' || c.key === 'name') val = row.productName || row.name || row.item;
+          else if (c.key === 'customerName') val = row.customer?.name || row.partyName;
           else if (c.key === 'supplierName') val = row.supplier?.name || row.partyName;
-          else if (c.key === 'total') val = row.grandTotal || row.amount;
+          else if (c.key === 'total') val = row.grandTotal || row.amount || (Number(row.quantity || 1) * Number(row.unitPrice || 0));
         }
 
-        let strVal = String(cleanVal(val));
+        if (c.format && typeof c.format === 'function') {
+          try {
+            val = c.format(val, row);
+          } catch (e) {
+            // fallback
+          }
+        }
+
+        let strVal = sanitizePdfText(val);
         const maxTextWidth = c.assignedWidth - 8;
         if (pdf.getTextWidth(strVal) > maxTextWidth) {
           while (strVal.length > 3 && pdf.getTextWidth(strVal + '..') > maxTextWidth) {
@@ -511,7 +643,7 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
           strVal += '..';
         }
 
-        const isNumeric = /^(INR|₹|-?\d+([.,]\d+)?%?)$/.test(strVal.trim());
+        const isNumeric = /^(INR|Rs\.?|-?\d+([.,]\d+)?%?)$/i.test(strVal.trim());
         if (isNumeric && c.assignedWidth > 50) {
           pdf.text(strVal, rX + c.assignedWidth - 4, y + 11.5, { align: 'right' });
         } else {
@@ -534,14 +666,18 @@ export async function generateReportPdfBlob(options: ReportExportOptions): Promi
 /**
  * Directly download report as PDF file
  */
-export async function exportReportToPdf(options: ReportExportOptions) {
+export async function exportReportToPdf(options: ReportExportOptions, customFileName?: string) {
   try {
     const result = await generateReportPdfBlob(options);
+    const fileName = customFileName
+      ? (customFileName.toLowerCase().endsWith('.pdf') ? customFileName : `${customFileName}.pdf`)
+      : result.fileName;
+
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const url = URL.createObjectURL(result.blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = result.fileName;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
@@ -549,6 +685,27 @@ export async function exportReportToPdf(options: ReportExportOptions) {
         URL.revokeObjectURL(url);
       }, 1000);
       return;
+    }
+
+    // Native Mobile (Android / iOS)
+    try {
+      const RNFS = (await import('react-native-fs')).default;
+      const RNShare = (await import('react-native-share')).default;
+      const destPath = `${RNFS.CachesDirectoryPath}/${fileName}`;
+      if (result.dataUri) {
+        const base64Data = result.dataUri.split('base64,')[1] || result.dataUri;
+        await RNFS.writeFile(destPath, base64Data, 'base64');
+        const shareUri = Platform.OS === 'android' ? `file://${destPath}` : destPath;
+        await RNShare.open({
+          title: options.title,
+          url: shareUri,
+          type: 'application/pdf',
+          filename: fileName,
+        });
+        return;
+      }
+    } catch (nativeErr) {
+      console.warn('Native PDF export share failed:', nativeErr);
     }
   } catch (err) {
     console.warn('Direct PDF download fallback to print dialog:', err);
@@ -680,10 +837,13 @@ export function exportReportToExcel(options: ReportExportOptions) {
 /**
  * Convert data to PDF first, then share via WhatsApp / System Share
  */
-export async function shareReportToWhatsApp(options: ReportExportOptions) {
+export async function shareReportToWhatsApp(options: ReportExportOptions, phoneArg?: string) {
   const company = getCompanyProfile();
   const businessName = (options.businessName && options.businessName.trim()) || company.businessName;
-  const { title, dateRangeLabel, startDate, endDate, data, summary, phone = '', partyName } = options;
+  const { title = 'Document', startDate, endDate, data = [], summary } = options;
+  const dateRangeLabel = options.dateRangeLabel || options.dateRange || 'All Time';
+  const partyName = options.partyName || (options as any).customerName || (options as any).supplierName || '';
+  const phone = phoneArg || options.phone || options.phoneNumber || '';
 
   const filteredRows = filterDataByDateRange(data, startDate, endDate);
   const displayRange = startDate && endDate ? `${startDate} to ${endDate}` : dateRangeLabel;
@@ -691,7 +851,7 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
   // 1. MUST convert data to PDF first
   let pdfResult: { blob?: Blob; fileName: string; dataUri?: string } | null = null;
   try {
-    pdfResult = await generateReportPdfBlob({ ...options, businessName, data: filteredRows });
+    pdfResult = await generateReportPdfBlob({ ...options, businessName, data: filteredRows, partyName, phone, dateRangeLabel });
   } catch (err) {
     console.warn('PDF generation before WhatsApp share:', err);
   }
@@ -703,18 +863,31 @@ export async function shareReportToWhatsApp(options: ReportExportOptions) {
   lines.push(`🏢 *${businessName}*`);
   lines.push(`📄 *${title}*`);
   if (partyName) lines.push(`👤 *Party:* ${partyName}`);
-  lines.push(`🗓️ *Period:* ${dateRangeLabel}`);
+  lines.push(`🗓️ *Period:* ${displayRange}`);
   if (startDate && endDate) lines.push(`📅 *Date Range:* ${startDate} to ${endDate}`);
   lines.push(`──────────────────────`);
 
   if (summary && typeof summary === 'object') {
-    if (summary.totalSales !== undefined) lines.push(`• *Total Sales:* ₹${Number(summary.totalSales).toLocaleString()}`);
-    if (summary.totalPurchases !== undefined) lines.push(`• *Total Purchases:* ₹${Number(summary.totalPurchases).toLocaleString()}`);
-    if (summary.totalBilled !== undefined) lines.push(`• *Total Billed:* ₹${Number(summary.totalBilled).toLocaleString()}`);
-    if (summary.totalPaid !== undefined) lines.push(`• *Total Paid:* ₹${Number(summary.totalPaid).toLocaleString()}`);
-    if (summary.totalDue !== undefined) lines.push(`• *Balance Due:* ₹${Number(summary.totalDue).toLocaleString()}`);
-    if (summary.outstandingBalance !== undefined) lines.push(`• *Outstanding Due:* ₹${Number(summary.outstandingBalance).toLocaleString()}`);
-    if (summary.netProfit !== undefined) lines.push(`• *Net Profit:* ₹${Number(summary.netProfit).toLocaleString()}`);
+    const summaryEntries = Object.entries(summary).filter(([k]) => {
+      const lk = k.toLowerCase();
+      return !lk.includes('tax') && !lk.includes('gst');
+    });
+
+    if (summaryEntries.length > 0) {
+      summaryEntries.forEach(([k, v]) => {
+        let label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()).trim();
+        const lk = k.toLowerCase();
+        if (lk === 'outstandingbalance' || lk === 'totaldue' || lk === 'due') {
+          label = 'Total Due';
+        } else if (lk.includes('advance')) {
+          label = 'Advance Payment';
+        }
+        const valStr = typeof v === 'number'
+          ? (lk.includes('item') || lk.includes('count') || lk.includes('qty') ? `${v}` : `₹${v.toLocaleString()}`)
+          : String(v);
+        lines.push(`• *${label}:* ${valStr}`);
+      });
+    }
   }
 
   lines.push(`• *Total Records in Period:* ${filteredRows.length}`);

@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { usePurchase } from '../api/usePurchases';
-import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit } from 'lucide-react-native';
+import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit, MessageCircle, Printer } from 'lucide-react-native';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
+import { supplierRepository } from '../../../core/repositories/SupplierRepository';
+import { shareReportToWhatsApp, printOrSavePdfReport } from '../../reports/utils/reportExportUtils';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
@@ -13,6 +15,56 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const numericId = entityId ? parseInt(String(entityId), 10) : null;
   const { data: purchase, isLoading } = usePurchase(numericId);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [supplierBalance, setSupplierBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (purchase?.supplierId) {
+      supplierRepository.getById(Number(purchase.supplierId)).then((supp) => {
+        if (supp) {
+          setSupplierBalance(Number(supp.outstandingBalance || 0));
+        }
+      }).catch(() => {});
+    }
+  }, [purchase?.supplierId]);
+
+  const handleShareWhatsApp = async () => {
+    if (!purchase) return;
+    const invNo = purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`;
+    const items = (purchase.items || []).map((it: any, idx: number) => ({
+      sNo: idx + 1,
+      name: it.productName || `Item #${idx + 1}`,
+      quantity: it.quantity,
+      unitPrice: Number(it.unitPrice || 0),
+      tax: Number(it.taxAmount || 0),
+      total: Number(it.total || 0),
+    }));
+
+    const summaryObj: any = {
+      totalItems: items.length,
+      grandTotal: purchase.total || 0,
+      paidAmount: purchase.paid || 0,
+      totalDue: Number(purchase.due || 0),
+    };
+    if (purchase.advancePayment && Number(purchase.advancePayment) > 0) {
+      summaryObj.advancePayment = Number(purchase.advancePayment);
+    }
+
+    await shareReportToWhatsApp({
+      title: `Purchase Bill - ${invNo}`,
+      dateRangeLabel: `Date: ${purchase.date || ''}`,
+      partyName: purchase.supplierName || 'Supplier',
+      phone: purchase.supplierPhone || '',
+      columns: [
+        { key: 'name', title: 'Product / Item', flex: 3 },
+        { key: 'quantity', title: 'Qty', width: 60 },
+        { key: 'unitPrice', title: 'Cost (Rs.)', width: 80 },
+        { key: 'tax', title: 'Tax (Rs.)', width: 70 },
+        { key: 'total', title: 'Total (Rs.)', width: 90 },
+      ],
+      data: items,
+      summary: summaryObj,
+    });
+  };
 
   const backLabel = !isMobile ? 'Back to Purchases' : (windowWidth >= 400 ? 'Purchases' : 'Back');
   const editLabel = !isMobile ? 'Edit Purchase' : (windowWidth >= 400 ? 'Edit' : '');
@@ -29,15 +81,25 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
           Purchase Details
         </Text>
         {purchase && (
-          <TouchableOpacity
-            style={[styles.editBtn, { backgroundColor: '#F97316', paddingHorizontal: editLabel ? 12 : 8 }]}
-            onPress={() => setShowEditModal(true)}
-          >
-            <Edit size={16} color="white" />
-            {editLabel ? (
-              <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>{editLabel}</Text>
-            ) : null}
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: '#16A34A', paddingHorizontal: editLabel ? 12 : 8 }]}
+              onPress={handleShareWhatsApp}
+            >
+              <MessageCircle size={16} color="white" />
+              {!isMobile && <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>WhatsApp</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: '#F97316', paddingHorizontal: editLabel ? 12 : 8 }]}
+              onPress={() => setShowEditModal(true)}
+            >
+              <Edit size={16} color="white" />
+              {editLabel ? (
+                <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>{editLabel}</Text>
+              ) : null}
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -177,35 +239,36 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                 <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 16 }}>Grand Total</Text>
                 <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 18 }}>₹{purchase.total?.toFixed(2)}</Text>
               </View>
-              {purchase.showPreviousBalance && (Boolean(purchase.previousDue) || Boolean(purchase.advancePayment)) ? (
-                <>
-                  <View style={[styles.summaryLine, { marginTop: 4 }]}>
-                    <Text style={styles.label}>
-                      {purchase.previousDue ? 'Previous Due' : 'Advance Payment'}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.val,
-                        { color: purchase.previousDue ? '#DC2626' : '#10B981', fontWeight: '600' },
-                      ]}
-                    >
-                      {purchase.previousDue ? '+' : '-'}₹{((purchase.previousDue || purchase.advancePayment) || 0).toFixed(2)}
-                    </Text>
-                  </View>
-                  <View style={[styles.summaryLine, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 6, marginTop: 4 }]}>
-                    <Text style={{ color: theme.colors.text, fontWeight: '700', fontSize: 15 }}>
-                      {purchase.previousDue ? 'Net Payable (with Due)' : 'Net Payable (after Adv)'}
-                    </Text>
-                    <Text style={{ color: '#F97316', fontWeight: '800', fontSize: 17 }}>
-                      ₹{(
-                        purchase.previousDue
-                          ? (purchase.total || 0) + (purchase.previousDue || 0)
-                          : Math.max(0, (purchase.total || 0) - (purchase.advancePayment || 0))
-                      ).toFixed(2)}
-                    </Text>
-                  </View>
-                </>
+
+              <View style={styles.summaryLine}>
+                <Text style={styles.label}>Paid Amount</Text>
+                <Text style={[styles.val, { color: '#10B981', fontWeight: '600' }]}>₹{(purchase.paid || 0).toFixed(2)}</Text>
+              </View>
+
+              {purchase.advancePayment && Number(purchase.advancePayment) > 0 ? (
+                <View style={[styles.summaryLine, { backgroundColor: '#F0FDF4', padding: 6, borderRadius: 4, marginTop: 4 }]}>
+                  <Text style={[styles.label, { color: '#16A34A', fontWeight: 'bold' }]}>Advance Applied:</Text>
+                  <Text style={[styles.val, { color: '#16A34A', fontWeight: 'bold' }]}>
+                    ₹{Number(purchase.advancePayment).toFixed(2)}
+                  </Text>
+                </View>
               ) : null}
+
+              <View style={[styles.summaryLine, { backgroundColor: (purchase.due || 0) > 0 ? '#FEF2F2' : '#F8FAFC', padding: 6, borderRadius: 4, marginTop: 4 }]}>
+                <Text style={[styles.label, { color: (purchase.due || 0) > 0 ? '#DC2626' : theme.colors.text, fontWeight: 'bold' }]}>Bill Due:</Text>
+                <Text style={[styles.val, { color: (purchase.due || 0) > 0 ? '#DC2626' : theme.colors.text, fontWeight: 'bold' }]}>
+                  ₹{(purchase.due || 0).toFixed(2)}
+                </Text>
+              </View>
+
+              {supplierBalance !== null && (
+                <View style={[styles.summaryLine, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.border }]}>
+                  <Text style={[styles.label, { fontSize: 11, color: theme.colors.textSecondary }]}>Supplier Total Balance:</Text>
+                  <Text style={[styles.val, { fontSize: 11, fontWeight: '600', color: supplierBalance > 0 ? '#DC2626' : (supplierBalance < 0 ? '#16A34A' : theme.colors.textSecondary) }]}>
+                    {supplierBalance > 0 ? `₹${supplierBalance.toFixed(2)} (Due)` : (supplierBalance < 0 ? `₹${Math.abs(supplierBalance).toFixed(2)} (Advance)` : '₹0.00')}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         )}

@@ -830,7 +830,7 @@ const styles = StyleSheet.create({
   },
   pageActionsMobile: {
     flexShrink: 0,
-    flexWrap: 'nowrap',
+    maxWidth: '100%',
     gap: 6,
   },
   card: {
