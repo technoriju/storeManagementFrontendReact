@@ -113,6 +113,77 @@ export const outboxRepo = {
         [newId, payload, row.id],
       );
     }
+
+    // Rebase foreign keys in dependent tables & outbox payloads
+    if (entityType === 'suppliers') {
+      try {
+        await db.execute(`UPDATE purchases SET supplierId = ? WHERE supplierId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE payments SET supplierId = ? WHERE supplierId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE purchase_orders SET supplierId = ? WHERE supplierId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE purchase_returns SET supplierId = ? WHERE supplierId = ?`, [newId, oldId]);
+      } catch (e) {
+        console.warn('Failed to update SQLite supplierId references on rebase:', e);
+      }
+
+      try {
+        const depRes = await db.execute(
+          `SELECT id, entityType, payload FROM outbox WHERE entityType IN ('purchases', 'payments', 'purchase_orders', 'purchase_returns')`
+        );
+        const depRows = (depRes.rows as any[]) || [];
+        for (const d of depRows) {
+          if (!d.payload) continue;
+          try {
+            const p = JSON.parse(d.payload);
+            let modified = false;
+            if (p.purchase && Number(p.purchase.supplierId) === Number(oldId)) {
+              p.purchase.supplierId = newId;
+              modified = true;
+            }
+            if (p.supplierId && Number(p.supplierId) === Number(oldId)) {
+              p.supplierId = newId;
+              modified = true;
+            }
+            if (modified) {
+              await db.execute(`UPDATE outbox SET payload = ? WHERE id = ?`, [JSON.stringify(p), d.id]);
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    } else if (entityType === 'customers') {
+      try {
+        await db.execute(`UPDATE sales SET customerId = ? WHERE customerId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE payments SET customerId = ? WHERE customerId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE quotations SET customerId = ? WHERE customerId = ?`, [newId, oldId]);
+        await db.execute(`UPDATE sale_returns SET customerId = ? WHERE customerId = ?`, [newId, oldId]);
+      } catch (e) {
+        console.warn('Failed to update SQLite customerId references on rebase:', e);
+      }
+
+      try {
+        const depRes = await db.execute(
+          `SELECT id, entityType, payload FROM outbox WHERE entityType IN ('sales', 'payments', 'quotations', 'sale_returns')`
+        );
+        const depRows = (depRes.rows as any[]) || [];
+        for (const d of depRows) {
+          if (!d.payload) continue;
+          try {
+            const p = JSON.parse(d.payload);
+            let modified = false;
+            if (p.sale && Number(p.sale.customerId) === Number(oldId)) {
+              p.sale.customerId = newId;
+              modified = true;
+            }
+            if (p.customerId && Number(p.customerId) === Number(oldId)) {
+              p.customerId = newId;
+              modified = true;
+            }
+            if (modified) {
+              await db.execute(`UPDATE outbox SET payload = ? WHERE id = ?`, [JSON.stringify(p), d.id]);
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
   },
 
   removeDeletedInvalidIds: async (entityType: string) => {

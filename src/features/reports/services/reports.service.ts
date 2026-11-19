@@ -1391,6 +1391,23 @@ export class ReportsService {
       } catch {}
 
       if (!custInfo) {
+        try {
+          const cRes = await apiClient.get(`/customers/${custIdStr}`);
+          const cData = cRes.data?.data || cRes.data;
+          if (cData) {
+            custInfo = {
+              id: cData.id,
+              name: cData.name,
+              phone: cData.phone || '',
+              gstin: cData.gstin || '',
+              customerCode: cData.customerCode || `CU-${String(custIdStr).padStart(3, '0')}`,
+              outstandingBalance: Number(cData.outstandingBalance || 0),
+            };
+          }
+        } catch {}
+      }
+
+      if (!custInfo) {
         custInfo = {
           id: custIdStr,
           name: rawSales[0]?.customerName || `Customer #${custIdStr}`,
@@ -1600,6 +1617,23 @@ export class ReportsService {
           };
         }
       } catch {}
+
+      if (!suppInfo) {
+        try {
+          const sRes = await apiClient.get(`/suppliers/${suppIdStr}`);
+          const sData = sRes.data?.data || sRes.data;
+          if (sData) {
+            suppInfo = {
+              id: sData.id,
+              name: sData.name,
+              phone: sData.phone || '',
+              contactName: sData.contactName || '',
+              supplierCode: sData.supplierCode || `SU-${String(suppIdStr).padStart(3, '0')}`,
+              outstandingBalance: Number(sData.outstandingBalance || 0),
+            };
+          }
+        } catch {}
+      }
 
       if (!suppInfo) {
         suppInfo = {

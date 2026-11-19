@@ -172,11 +172,39 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
 
       const items = entity.items || (await this.getItemsForPurchase(entity.id));
-      const supplierId = entity.supplierId && Number(entity.supplierId) > 0 ? Number(entity.supplierId) : 1;
+
+      // Resolve valid supplier ID
+      let supplierId: number | undefined = undefined;
+      const rawSuppId = Number(entity.supplierId);
+      if (!isNaN(rawSuppId) && rawSuppId > 0 && rawSuppId < 1000000000000) {
+        supplierId = rawSuppId;
+      } else {
+        try {
+          let suppRow: any = null;
+          if (!isNaN(rawSuppId) && rawSuppId !== 0) {
+            const sRes = await db.execute(`SELECT id, backendId FROM suppliers WHERE id = ? OR backendId = ? LIMIT 1`, [rawSuppId, rawSuppId]);
+            const rows = this.extractRows(sRes);
+            if (rows.length > 0 && rows[0]) suppRow = rows[0];
+          }
+          if (!suppRow && entity.supplierName) {
+            const sRes = await db.execute(`SELECT id, backendId FROM suppliers WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) LIMIT 1`, [entity.supplierName.trim()]);
+            const rows = this.extractRows(sRes);
+            if (rows.length > 0 && rows[0]) suppRow = rows[0];
+          }
+          if (suppRow) {
+            const bId = Number(suppRow.backendId);
+            const lId = Number(suppRow.id);
+            if (bId > 0 && bId < 1000000000000) supplierId = bId;
+            else if (lId > 0 && lId < 1000000000000) supplierId = lId;
+          }
+        } catch (_) {}
+      }
+
       const apiPayload: any = {
         branchId: 1,
         warehouseId: 1,
-        supplierId,
+        supplierId: supplierId || undefined,
+        supplierName: entity.supplierName || undefined,
         invoiceNumber: entity.invoiceNumber || entity.reference || `PO-${entity.id}`,
         purchaseDate: entity.date ? new Date(entity.date).toISOString() : new Date().toISOString(),
         status: entity.status || 'Received',
@@ -227,6 +255,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         } else {
           await db.execute(`UPDATE purchases SET syncStatus = 'synced' WHERE id = ?`, [entity.id]);
           await db.execute(`UPDATE purchase_items SET syncStatus = 'synced' WHERE purchaseId = ?`, [entity.id]);
+        }
+
+        if (body?.supplier?.id) {
+          try {
+            await db.execute(
+              `UPDATE purchases SET supplierId = ?, supplierName = ? WHERE id = ?`,
+              [Number(body.supplier.id), body.supplier.name || entity.supplierName, returnedId || entity.id]
+            );
+          } catch (_) {}
         }
 
         if (body?.supplier && body.supplier.outstandingBalance !== undefined) {
