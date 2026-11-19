@@ -1248,7 +1248,12 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
             const exTot = Number(exRows[0].total || 0);
             const exPaid = Number(exRows[0].paid || 0);
             const netImpact = exTot - exPaid;
-            suppBal = suppBal - netImpact;
+            // Subtracting the bill's unpaid portion from supplier balance can reduce due, but must never fabricate advance
+            if (suppBal >= netImpact) {
+              suppBal = suppBal - netImpact;
+            } else {
+              suppBal = 0;
+            }
           }
         } catch (_) {}
       }
@@ -1262,11 +1267,11 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
       if (effectiveBal > 0) {
         totalDue = effectiveBal;
-      } else if (effectiveBal < 0) {
+      } else if (effectiveBal < 0 && !excludePurchaseId) {
         advance = Math.abs(effectiveBal);
       }
 
-      if (resolvedLocalId) {
+      if (resolvedLocalId && !excludePurchaseId) {
         try {
           await db.execute('UPDATE suppliers SET outstandingBalance = ? WHERE id = ?', [effectiveBal, resolvedLocalId]);
         } catch (_) {}

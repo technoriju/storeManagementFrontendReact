@@ -39,16 +39,14 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       total: Number(it.total || 0),
     }));
 
-    const bal = supplierBalance !== null ? supplierBalance : Number(purchase.due || 0);
     const summaryObj: any = {
       totalItems: items.length,
       grandTotal: purchase.total || 0,
       paidAmount: purchase.paid || 0,
+      totalDue: Number(purchase.due || 0),
     };
-    if (bal < 0) {
-      summaryObj.advancePayment = Math.abs(bal);
-    } else {
-      summaryObj.totalDue = bal;
+    if (purchase.advancePayment && Number(purchase.advancePayment) > 0) {
+      summaryObj.advancePayment = Number(purchase.advancePayment);
     }
 
     await shareReportToWhatsApp({
@@ -247,18 +245,27 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                 <Text style={[styles.val, { color: '#10B981', fontWeight: '600' }]}>₹{(purchase.paid || 0).toFixed(2)}</Text>
               </View>
 
-              {supplierBalance !== null && supplierBalance < 0 ? (
+              {purchase.advancePayment && Number(purchase.advancePayment) > 0 ? (
                 <View style={[styles.summaryLine, { backgroundColor: '#F0FDF4', padding: 6, borderRadius: 4, marginTop: 4 }]}>
-                  <Text style={[styles.label, { color: '#16A34A', fontWeight: 'bold' }]}>Advance Payment:</Text>
+                  <Text style={[styles.label, { color: '#16A34A', fontWeight: 'bold' }]}>Advance Applied:</Text>
                   <Text style={[styles.val, { color: '#16A34A', fontWeight: 'bold' }]}>
-                    ₹{Math.abs(supplierBalance).toFixed(2)}
+                    ₹{Number(purchase.advancePayment).toFixed(2)}
                   </Text>
                 </View>
-              ) : (
-                <View style={[styles.summaryLine, { backgroundColor: '#FEF2F2', padding: 6, borderRadius: 4, marginTop: 4 }]}>
-                  <Text style={[styles.label, { color: '#DC2626', fontWeight: 'bold' }]}>Total Due:</Text>
-                  <Text style={[styles.val, { color: '#DC2626', fontWeight: 'bold' }]}>
-                    ₹{Math.max(0, supplierBalance !== null ? supplierBalance : Number(purchase.due || 0)).toFixed(2)}
+              ) : null}
+
+              <View style={[styles.summaryLine, { backgroundColor: (purchase.due || 0) > 0 ? '#FEF2F2' : '#F8FAFC', padding: 6, borderRadius: 4, marginTop: 4 }]}>
+                <Text style={[styles.label, { color: (purchase.due || 0) > 0 ? '#DC2626' : theme.colors.text, fontWeight: 'bold' }]}>Bill Due:</Text>
+                <Text style={[styles.val, { color: (purchase.due || 0) > 0 ? '#DC2626' : theme.colors.text, fontWeight: 'bold' }]}>
+                  ₹{(purchase.due || 0).toFixed(2)}
+                </Text>
+              </View>
+
+              {supplierBalance !== null && (
+                <View style={[styles.summaryLine, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.border }]}>
+                  <Text style={[styles.label, { fontSize: 11, color: theme.colors.textSecondary }]}>Supplier Total Balance:</Text>
+                  <Text style={[styles.val, { fontSize: 11, fontWeight: '600', color: supplierBalance > 0 ? '#DC2626' : (supplierBalance < 0 ? '#16A34A' : theme.colors.textSecondary) }]}>
+                    {supplierBalance > 0 ? `₹${supplierBalance.toFixed(2)} (Due)` : (supplierBalance < 0 ? `₹${Math.abs(supplierBalance).toFixed(2)} (Advance)` : '₹0.00')}
                   </Text>
                 </View>
               )}

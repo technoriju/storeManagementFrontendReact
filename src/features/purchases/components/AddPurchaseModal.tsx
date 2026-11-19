@@ -541,28 +541,36 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         setUnpaidPurchasesCount(res.unpaidCount || 0);
         if (res.totalDue > 0) {
           setSupplierRawBalance(res.totalDue);
-          setBalanceType('due');
-          setPreviousBalanceAmount(String(res.totalDue));
-          setShowPreviousBalance(true);
+          if (!editPurchaseId) {
+            setBalanceType('due');
+            setPreviousBalanceAmount(String(res.totalDue));
+            setShowPreviousBalance(true);
+          }
         } else if (res.advance > 0) {
           setSupplierRawBalance(-res.advance);
-          setBalanceType('advance');
-          setPreviousBalanceAmount(String(res.advance));
-          setShowPreviousBalance(true);
+          if (!editPurchaseId) {
+            setBalanceType('advance');
+            setPreviousBalanceAmount(String(res.advance));
+            setShowPreviousBalance(true);
+          }
         } else {
           // Check if supplier has outstandingBalance in supplier record
           const sBal = Number(selectedSupplier?.outstandingBalance || 0);
           if (sBal > 0) {
             setSupplierRawBalance(sBal);
-            setBalanceType('due');
-            setPreviousBalanceAmount(String(sBal));
-            setShowPreviousBalance(true);
+            if (!editPurchaseId) {
+              setBalanceType('due');
+              setPreviousBalanceAmount(String(sBal));
+              setShowPreviousBalance(true);
+            }
           } else if (sBal < 0) {
             const adv = Math.abs(sBal);
             setSupplierRawBalance(-adv);
-            setBalanceType('advance');
-            setPreviousBalanceAmount(String(adv));
-            setShowPreviousBalance(true);
+            if (!editPurchaseId) {
+              setBalanceType('advance');
+              setPreviousBalanceAmount(String(adv));
+              setShowPreviousBalance(true);
+            }
           } else {
             setSupplierRawBalance(0);
             if (!editPurchaseId) {
@@ -804,11 +812,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         else if (finalPaid > 0) effectivePaymentStatus = 'Partial';
         else effectivePaymentStatus = 'Unpaid';
       } else {
-        finalPaid = status === 'Received'
-          ? (showPreviousBalance && balanceType === 'due' ? totalPayableWithDue : grandTotal)
-          : adjustedAdvance;
-        finalDue = status === 'Received' ? 0 : Math.max(0, totalPayableWithDue - finalPaid);
-        effectivePaymentStatus = status === 'Received' ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
+        finalPaid = adjustedAdvance;
+        finalDue = Math.max(0, totalPayableWithDue - finalPaid);
+        effectivePaymentStatus = finalDue === 0 && finalPaid > 0 ? 'Paid' : (finalPaid > 0 ? 'Partial' : 'Unpaid');
       }
 
       let effectiveSupplierId = Number(supplierId);
