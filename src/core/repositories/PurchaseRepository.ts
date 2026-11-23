@@ -4,6 +4,9 @@ import { db } from '../database/db';
 import { apiClient } from '../api/api-client';
 import { API_ENDPOINTS } from '../api/api-urls';
 import { outboxRepo, tombstoneRepo, OutboxItem } from '../sync/outbox';
+import { useProductStore } from '../../features/products/store/productStore';
+import { useUnitStore } from '../../features/units/store/unitStore';
+import { useSubUnitStore } from '../../features/sub_units/store/subUnitStore';
 
 export class PurchaseRepository extends BaseRepository<Purchase> {
   protected tableName = 'purchases';
@@ -79,7 +82,22 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
   public async getItemsForPurchase(purchaseId: number): Promise<PurchaseItem[]> {
     try {
       const res = await db.execute(
-        'SELECT * FROM purchase_items WHERE purchaseId = ?',
+        `SELECT pi.*, 
+                p.name as fallbackProductName, 
+                p.sku as productSku,
+                p.unitId as productUnitId,
+                p.subunitId as productSubunitId,
+                COALESCE(NULLIF(pi.unit, ''), '') as rawUnit,
+                COALESCE(NULLIF(p.brandName, ''), b.name) as fallbackBrandName,
+                su.name as fallbackSubUnitName,
+                u.name as fallbackBaseUnitName
+         FROM purchase_items pi
+         LEFT JOIN products p ON (pi.productId = p.id OR (pi.productId IS NULL AND pi.productName = p.name))
+         LEFT JOIN brands b ON (p.brandId = b.id OR p.brandId = b.backendId)
+         LEFT JOIN sub_units su ON (p.subunitId = su.id OR p.subunitId = su.backendId)
+         LEFT JOIN units u ON (p.unitId = u.id OR p.unitId = u.backendId OR p.baseUnitId = u.id OR p.baseUnitId = u.backendId)
+         WHERE pi.purchaseId = ?
+         ORDER BY pi.id ASC`,
         [purchaseId]
       );
       const items: PurchaseItem[] = [];
@@ -96,27 +114,65 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         }
       }
       for (const row of rawRows) {
-        if (row) {
-          items.push({
-            id: Number(row.id),
-            purchaseId: Number(row.purchaseId),
-            productId: Number(row.productId),
-            productName: row.productName ? String(row.productName) : undefined,
-            quantity: Number(row.quantity || 1),
-            unitPrice: Number(row.unitPrice || 0),
-            discount: Number(row.discount || 0),
-            gst: Number(row.gst || 0),
-            taxAmount: Number(row.taxAmount || 0),
-            unitCost: Number(row.unitCost || 0),
-            unit: row.unit ? String(row.unit) : undefined,
-            unitType: row.unitType || 'base',
-            conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
-            total: Number(row.total || 0),
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            syncStatus: row.syncStatus
-          });
+        if (!row) continue;
+        const pId = Number(row.productId);
+        let subUnit = (row.subUnitName || row.fallbackSubUnitName || '').trim() || undefined;
+        let baseUnit = (row.baseUnitName || row.fallbackBaseUnitName || '').trim() || undefined;
+
+        if (!baseUnit || !subUnit) {
+          try {
+            const storeProd = useProductStore.getState().products?.find((p: any) => Number(p.id) === pId);
+            if (!baseUnit) {
+              if (storeProd?.baseUnitName) {
+                baseUnit = storeProd.baseUnitName;
+              } else if (storeProd?.unitId || storeProd?.baseUnitId) {
+                const uId = String(storeProd.unitId || storeProd.baseUnitId);
+                const storeUnit = useUnitStore.getState().units?.find((u: any) => String(u.id) === uId || String(u.backendId) === uId);
+                if (storeUnit?.name) baseUnit = storeUnit.name;
+              }
+            }
+            if (!subUnit) {
+              if (storeProd?.subUnitName) {
+                subUnit = storeProd.subUnitName;
+              } else if (storeProd?.subunitId || storeProd?.subUnitId) {
+                const suId = String(storeProd.subunitId || storeProd.subUnitId);
+                const storeSub = useSubUnitStore.getState().subUnits?.find((s: any) => String(s.id) === suId || String(s.backendId) === suId);
+                if (storeSub?.name) subUnit = storeSub.name;
+              }
+            }
+          } catch (_) {}
         }
+
+        const unitType = row.unitType || 'base';
+        const rawUnit = row.unit ? String(row.unit).trim() : undefined;
+        let resolvedUnit = rawUnit;
+        if (!resolvedUnit || resolvedUnit.toLowerCase() === 'unit') {
+          resolvedUnit = unitType === 'sub' ? (subUnit || 'Pcs') : (baseUnit || 'Unit');
+        }
+
+        items.push({
+          id: Number(row.id),
+          purchaseId: Number(row.purchaseId),
+          productId: pId,
+          productName: row.productName ? String(row.productName) : (row.fallbackProductName ? String(row.fallbackProductName) : undefined),
+          quantity: Number(row.quantity || 1),
+          unitPrice: Number(row.unitPrice || 0),
+          discount: Number(row.discount || 0),
+          gst: Number(row.gst || 0),
+          taxAmount: Number(row.taxAmount || 0),
+          unitCost: Number(row.unitCost || 0),
+          unit: resolvedUnit,
+          unitName: resolvedUnit,
+          baseUnitName: baseUnit,
+          subUnit: subUnit,
+          subUnitName: subUnit,
+          unitType,
+          conversionRate: row.conversionRate ? Number(row.conversionRate) : 1,
+          total: Number(row.total || 0),
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          syncStatus: row.syncStatus
+        } as any);
       }
       return items;
     } catch (e) {
@@ -219,15 +275,17 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         previousDue: entity.previousDue !== undefined ? Number(entity.previousDue) : 0,
         advancePayment: entity.advancePayment !== undefined ? Number(entity.advancePayment) : 0,
         showPreviousBalance: Boolean(entity.showPreviousBalance),
-        items: items.map((it) => ({
+        items: items.map((it: any) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
           unitPrice: Number(it.unitPrice),
           discount: Number(it.discount || 0),
           taxAmount: Number(it.taxAmount || 0),
           total: Number(it.total),
-          unitType: it.unitType,
+          unitType: it.unitType || 'base',
           conversionRate: Number(it.conversionRate || 1),
+          unit: it.unit || (it.unitType === 'sub' ? it.subUnitName : it.baseUnitName),
+          unitName: it.unit || (it.unitType === 'sub' ? it.subUnitName : it.baseUnitName),
         })),
       };
 
@@ -371,6 +429,42 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
+        let baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName)
+          ? it.baseUnitName
+          : (it.product?.baseUnitName || it.product?.baseUnit?.name || undefined);
+        let subUnitName = (typeof it.subUnitName === 'string' && it.subUnitName)
+          ? it.subUnitName
+          : (it.product?.subUnitName || it.product?.subUnit?.name || it.product?.subunit?.name || undefined);
+
+        if (!baseUnitName || !subUnitName) {
+          try {
+            const storeProd = useProductStore.getState().products?.find((prod: any) => Number(prod.id) === Number(it.productId));
+            if (!baseUnitName) {
+              if (storeProd?.baseUnitName) {
+                baseUnitName = storeProd.baseUnitName;
+              } else if (storeProd?.unitId || storeProd?.baseUnitId) {
+                const uId = String(storeProd.unitId || storeProd.baseUnitId);
+                const storeUnit = useUnitStore.getState().units?.find((u: any) => String(u.id) === uId || String(u.backendId) === uId);
+                if (storeUnit?.name) baseUnitName = storeUnit.name;
+              }
+            }
+            if (!subUnitName) {
+              if (storeProd?.subUnitName) {
+                subUnitName = storeProd.subUnitName;
+              } else if (storeProd?.subunitId || storeProd?.subUnitId) {
+                const suId = String(storeProd.subunitId || storeProd.subUnitId);
+                const storeSub = useSubUnitStore.getState().subUnits?.find((s: any) => String(s.id) === suId || String(s.backendId) === suId);
+                if (storeSub?.name) subUnitName = storeSub.name;
+              }
+            }
+          } catch (_) {}
+        }
+
+        let resolvedUnit = it.unit || it.unitName;
+        if (!resolvedUnit || String(resolvedUnit).toLowerCase() === 'unit') {
+          resolvedUnit = unitType === 'sub' ? (subUnitName || 'Pcs') : (baseUnitName || 'Unit');
+        }
+
         let itemGst = Number(it.gst || 0);
         const netItemSubtotal = Math.max(0, quantity * unitPrice - discount);
         if (!itemGst && taxAmount > 0 && netItemSubtotal > 0) {
@@ -391,14 +485,18 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           gst: itemGst,
           taxAmount,
           unitCost: Number(it.unitCost || unitPrice),
-          unit: it.unit ? String(it.unit) : undefined,
+          unit: resolvedUnit,
+          unitName: resolvedUnit,
+          baseUnitName,
+          subUnit: subUnitName,
+          subUnitName,
           unitType,
           conversionRate,
           total: itemTotal,
           createdAt: it.createdAt ? String(it.createdAt) : new Date().toISOString(),
           updatedAt: it.updatedAt ? String(it.updatedAt) : new Date().toISOString(),
           syncStatus: 'synced',
-        });
+        } as any);
       }
     }
 

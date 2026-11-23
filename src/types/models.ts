@@ -106,7 +106,9 @@ export interface Product extends BaseEntity {
   unitId?: number;
   baseUnitId?: number;
   baseUnit?: { id?: number; name?: string; shortName?: string };
+  baseUnitName?: string;
   subUnit?: { id?: number; name?: string };
+  subUnitName?: string;
   subunitId?: number;
   subUnitId?: number | string;
   conversionRate?: number;
