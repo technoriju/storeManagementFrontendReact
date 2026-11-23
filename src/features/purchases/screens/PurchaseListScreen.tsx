@@ -12,7 +12,7 @@ import { purchaseRepository } from '../../../core/repositories/PurchaseRepositor
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../../pos/components/ReceiptPrintPreviewModal';
 import { SharePurchaseModal } from '../components/SharePurchaseModal';
-import { enrichSaleItemsWithProductMeta } from '../../pos/utils/enrichSaleItems';
+import { resolveRealPurchaseUnit, resolveRealPurchaseSubUnit, resolveActivePurchaseUnit } from '../utils/purchaseUnitUtils';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -206,7 +206,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
     }
 
     const filtered = Array.from(itemsMap.values());
-    return await enrichSaleItemsWithProductMeta(filtered);
+    return filtered;
   };
 
   const handleOpenPrintPreview = async (purchase: any) => {
@@ -226,29 +226,36 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
     }
 
     const itemsForPrint = purItems && purItems.length > 0
-      ? purItems.map((i: any) => ({
-          productId: i.productId,
-          productName: i.productName || `Product #${i.productId || 1}`,
-          sku: i.sku,
-          brand: i.brand || i.brandName || i.product?.brandName,
-          brandName: i.brandName || i.brand || i.product?.brandName,
-          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
-          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
-          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : undefined),
-          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
-          unitType: i.unitType || 'base',
-          quantity: Number(i.quantity) || 1,
-          unitPrice: Number(i.unitPrice || i.unitCost || 0),
-          discount: Number(i.discount) || 0,
-          gst: Number(i.gst) || 0,
-          taxAmount: Number(i.taxAmount) || 0,
-          total: Number(i.total) || 0,
-          unit: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unit || i.unitName || i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || 'Unit'),
-          unitName: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unitName || i.unit || i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || 'Unit'),
-          product: i.product,
-          productUnit: i.productUnit,
-          hsn: i.hsn || '',
-        }))
+      ? purItems.map((i: any) => {
+          const realBase = resolveRealPurchaseUnit(i, i.product);
+          const realSub = resolveRealPurchaseSubUnit(i, i.product);
+          const isSub = i.unitType === 'sub';
+          const displayUnit = isSub ? realSub : resolveActivePurchaseUnit(i, i.product);
+
+          return {
+            productId: i.productId,
+            productName: i.productName || `Product #${i.productId || 1}`,
+            sku: i.sku,
+            brand: i.brand || i.brandName || i.product?.brandName,
+            brandName: i.brandName || i.brand || i.product?.brandName,
+            subUnit: realSub,
+            subUnitName: realSub,
+            conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : undefined),
+            baseUnitName: realBase,
+            unitType: i.unitType || 'base',
+            quantity: Number(i.quantity) || 1,
+            unitPrice: Number(i.unitPrice || i.unitCost || 0),
+            discount: Number(i.discount) || 0,
+            gst: Number(i.gst) || 0,
+            taxAmount: Number(i.taxAmount) || 0,
+            total: Number(i.total) || 0,
+            unit: displayUnit,
+            unitName: displayUnit,
+            product: i.product,
+            productUnit: i.productUnit,
+            hsn: i.hsn || '',
+          };
+        })
       : [
           {
             productName: 'General Goods / Services',
@@ -257,7 +264,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
             discount: 0,
             gst: 0,
             total: Number(purchase.total || purchase.grandTotal || 0),
-            unit: 'Unit',
+            unit: 'Pcs',
           },
         ];
 
@@ -306,13 +313,20 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       } catch (_) {}
     }
 
+    const cleanPurItems = (purItems || []).map((it: any) => ({
+      ...it,
+      baseUnitName: resolveRealPurchaseUnit(it, it.product),
+      unit: resolveActivePurchaseUnit(it, it.product),
+      unitName: resolveActivePurchaseUnit(it, it.product),
+    }));
+
     setSharePurchaseData({
       ...purchase,
       supplierPhone: supplierDetails?.phone || purchase.supplierPhone,
       supplierEmail: supplierDetails?.email || purchase.supplierEmail,
       supplierAddress: supplierDetails?.address || purchase.supplierAddress,
       supplierGstin: supplierDetails?.taxNumber || supplierDetails?.gstin || purchase.supplierGstin,
-      items: purItems,
+      items: cleanPurItems,
     });
     setShowShareModal(true);
   };
@@ -320,7 +334,13 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const handleViewPurchase = async (purchase: any) => {
     if (!purchase) return;
     const purItems = await loadPurchaseItems(purchase);
-    setSelectedPurchase({ ...purchase, items: purItems });
+    const cleanPurItems = (purItems || []).map((it: any) => ({
+      ...it,
+      baseUnitName: resolveRealPurchaseUnit(it, it.product),
+      unit: resolveActivePurchaseUnit(it, it.product),
+      unitName: resolveActivePurchaseUnit(it, it.product),
+    }));
+    setSelectedPurchase({ ...purchase, items: cleanPurItems });
   };
 
   const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {

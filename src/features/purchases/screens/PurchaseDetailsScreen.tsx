@@ -11,6 +11,7 @@ import { purchaseRepository } from '../../../core/repositories/PurchaseRepositor
 import { shareReportToWhatsApp } from '../../reports/utils/reportExportUtils';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../../pos/components/ReceiptPrintPreviewModal';
 import { SharePurchaseModal } from '../components/SharePurchaseModal';
+import { resolveRealPurchaseUnit, resolveRealPurchaseSubUnit, resolveActivePurchaseUnit } from '../utils/purchaseUnitUtils';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
@@ -46,10 +47,10 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
     }
     const invNo = purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`;
     const itemsForPrint = (itemsToPrint || []).map((it: any, idx: number) => {
-      const baseUnit = it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || (it.unit && it.unit.toLowerCase() !== 'unit' ? it.unit : undefined) || 'Unit';
-      const subUnit = it.subUnit || it.subUnitName || it.product?.subUnitName;
+      const realBase = resolveRealPurchaseUnit(it, it.product);
+      const realSub = resolveRealPurchaseSubUnit(it, it.product);
       const uType = it.unitType || 'base';
-      const displayUnit = (uType === 'sub' && subUnit) ? subUnit : (it.unit || it.unitName || baseUnit);
+      const displayUnit = (uType === 'sub' && realSub) ? realSub : (it.unit && it.unit.toLowerCase() !== 'unit' ? it.unit : realBase);
       return {
         productId: it.productId,
         productName: it.productName || `Item #${idx + 1}`,
@@ -58,9 +59,9 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
         brandName: it.brandName || it.brand || it.product?.brandName,
         unit: displayUnit,
         unitName: displayUnit,
-        baseUnitName: baseUnit,
-        subUnit: subUnit,
-        subUnitName: subUnit,
+        baseUnitName: realBase,
+        subUnit: realSub,
+        subUnitName: realSub,
         unitType: uType,
         conversionRate: it.conversionRate !== undefined ? Number(it.conversionRate) : (it.product?.conversionRate ? Number(it.product.conversionRate) : undefined),
         quantity: Number(it.quantity) || 1,
@@ -106,7 +107,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
         discount: 0,
         gst: 0,
         total: Number(purchase.total || 0),
-        unit: 'Unit',
+        unit: 'Pcs',
       }],
     };
 
@@ -306,7 +307,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                           {item.productName || `Product #${item.productId}`}
                         </Text>
                         <Text style={[styles.td, { width: 80 }]}>
-                          {item.quantity}{item.unit && item.unit !== 'Unit' ? ` ${item.unit}` : ''}
+                          {item.quantity} {resolveActivePurchaseUnit(item, item.product)}
                         </Text>
                         <Text style={[styles.td, { width: 100 }]}>₹{item.unitPrice?.toFixed(2)}</Text>
                         <Text style={[styles.td, { width: 90 }]}>₹{item.discount?.toFixed(2)}</Text>
