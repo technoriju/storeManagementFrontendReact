@@ -244,6 +244,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
           taxAmount: Number(i.taxAmount) || 0,
           total: Number(i.total) || 0,
           unit: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unit || i.unitName || i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || 'Unit'),
+          unitName: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unitName || i.unit || i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || 'Unit'),
           product: i.product,
           productUnit: i.productUnit,
           hsn: i.hsn || '',

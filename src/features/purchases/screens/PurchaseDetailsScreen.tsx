@@ -35,20 +35,33 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const handleOpenPrintPreview = () => {
     if (!purchase) return;
     const invNo = purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`;
-    const itemsForPrint = (purchase.items || []).map((it: any, idx: number) => ({
-      productId: it.productId,
-      productName: it.productName || `Item #${idx + 1}`,
-      sku: it.sku,
-      brand: it.brand || it.brandName,
-      unit: it.unit || 'Unit',
-      quantity: Number(it.quantity) || 1,
-      unitPrice: Number(it.unitPrice || 0),
-      discount: Number(it.discount || 0),
-      gst: Number(it.gst || 0),
-      taxAmount: Number(it.taxAmount || 0),
-      total: Number(it.total || 0),
-      hsn: it.hsn || '',
-    }));
+    const itemsForPrint = (purchase.items || []).map((it: any, idx: number) => {
+      const baseUnit = it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || it.unit || 'Unit';
+      const subUnit = it.subUnit || it.subUnitName || it.product?.subUnitName;
+      const uType = it.unitType || 'base';
+      const displayUnit = (uType === 'sub' && subUnit) ? subUnit : (it.unit || it.unitName || baseUnit);
+      return {
+        productId: it.productId,
+        productName: it.productName || `Item #${idx + 1}`,
+        sku: it.sku,
+        brand: it.brand || it.brandName || it.product?.brandName,
+        brandName: it.brandName || it.brand || it.product?.brandName,
+        unit: displayUnit,
+        unitName: displayUnit,
+        baseUnitName: baseUnit,
+        subUnit: subUnit,
+        subUnitName: subUnit,
+        unitType: uType,
+        conversionRate: it.conversionRate !== undefined ? Number(it.conversionRate) : (it.product?.conversionRate ? Number(it.product.conversionRate) : undefined),
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unitPrice || 0),
+        discount: Number(it.discount || 0),
+        gst: Number(it.gst || 0),
+        taxAmount: Number(it.taxAmount || 0),
+        total: Number(it.total || 0),
+        hsn: it.hsn || '',
+      };
+    });
 
     const rData: ReceiptPrintData = {
       invoiceNumber: invNo,
@@ -59,7 +72,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       customerAddress: (purchase as any).supplierAddress || '',
       customerGstin: (purchase as any).supplierGstin || '',
       customerType: 'wholesale',
-      biller: purchase.biller || 'Purchase Officer',
+      biller: (purchase as any).biller || 'Purchase Officer',
       subtotal: Number(purchase.subtotal || purchase.total || 0),
       discount: Number(purchase.discount || 0),
       gst: Number(purchase.gst || purchase.orderTax || 0),
@@ -67,7 +80,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       total: Number(purchase.total || 0),
       paid: Number(purchase.paid !== undefined ? purchase.paid : (purchase.total || 0)),
       due: Number(purchase.due !== undefined ? purchase.due : 0),
-      paymentMethod: purchase.paymentMethod || 'Cash',
+      paymentMethod: (purchase as any).paymentMethod || 'Cash',
       notes: purchase.notes,
       previousDue: supplierBalance !== null ? supplierBalance : (purchase.previousDue ? Number(purchase.previousDue) : undefined),
       advancePayment: purchase.advancePayment ? Number(purchase.advancePayment) : undefined,
@@ -280,7 +293,9 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                         <Text style={[styles.td, { width: 200, fontWeight: '600' }]} numberOfLines={1}>
                           {item.productName || `Product #${item.productId}`}
                         </Text>
-                        <Text style={[styles.td, { width: 80 }]}>{item.quantity}</Text>
+                        <Text style={[styles.td, { width: 80 }]}>
+                          {item.quantity}{item.unit && item.unit !== 'Unit' ? ` ${item.unit}` : ''}
+                        </Text>
                         <Text style={[styles.td, { width: 100 }]}>₹{item.unitPrice?.toFixed(2)}</Text>
                         <Text style={[styles.td, { width: 90 }]}>₹{item.discount?.toFixed(2)}</Text>
                         <Text style={[styles.td, { width: 80 }]}>{item.gst}%</Text>
