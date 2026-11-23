@@ -102,8 +102,15 @@ export const usePurchase = (id: number | null | undefined) => {
     queryKey: [...PURCHASE_QUERY_KEY, id],
     queryFn: async () => {
       if (!id) return null;
-      const local = await purchaseRepository.getById(id);
-      if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+      let local = await purchaseRepository.getById(id);
+      if (!local || !local.items || local.items.length === 0) {
+        if (/^\d+$/.test(String(id)) && Number(id) > 0) {
+          try {
+            const fresh = await purchaseRepository.fetchByIdFromApi(id);
+            if (fresh) return fresh;
+          } catch (_) {}
+        }
+      } else if (/^\d+$/.test(String(id)) && Number(id) > 0) {
         void purchaseRepository
           .fetchByIdFromApi(id)
           .then((fresh) => {

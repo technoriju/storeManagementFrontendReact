@@ -277,11 +277,12 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                     (prod?.subunitId && (String(s.id) === String(prod?.subunitId) || String(s.backendId) === String(prod?.subunitId)))
                   );
 
-                  const resolvedBaseUnitName = (item.baseUnitName && item.baseUnitName !== 'Box')
-                    ? item.baseUnitName
-                    : (baseUnit?.name || baseUnit?.shortName || (prod as any)?.baseUnitName || (prod as any)?.unit || (prod as any)?.unitName || (item.unit && item.unit !== 'Box' && item.unit !== 'Pcs' ? item.unit : 'Unit'));
+                  const rawBase = (item.baseUnitName || item.unitName || item.unit || '').trim();
+                  const resolvedBaseUnitName = (rawBase && rawBase.toLowerCase() !== 'unit')
+                    ? rawBase
+                    : (baseUnit?.name || baseUnit?.shortName || (prod as any)?.baseUnitName || (prod as any)?.unit || (prod as any)?.unitName || 'Unit');
 
-                  const resolvedSubUnitName = item.subUnitName || subUnit?.name || (subUnit as any)?.shortName || (prod as any)?.subUnitName || prod?.subUnit?.name || 'Pcs';
+                  const resolvedSubUnitName = item.subUnitName || subUnit?.name || (subUnit as any)?.shortName || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
                   const fallbackSubName = resolvedSubUnitName || 'Pcs';
 
                   const rawItemUnit = (item.unit || '').trim().toLowerCase();
