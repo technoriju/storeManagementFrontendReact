@@ -46,6 +46,7 @@ import {
   exportReportToPdf,
 } from '../../reports/utils/reportExportUtils';
 import { customerRepository } from '../../../core/repositories/CustomerRepository';
+import { supplierRepository } from '../../../core/repositories/SupplierRepository';
 import {
   ReceiptPrintData,
   ReceiptPaperFormat,
@@ -55,7 +56,7 @@ import {
 } from './ReceiptPrintPreviewModal';
 
 function toReceiptPrintData(sale: any): ReceiptPrintData {
-  const invNumber = sale.invoiceNumber || sale.reference || `INV-${sale.id || ''}`;
+  const invNumber = sale.invoiceNumber || sale.reference || (sale.supplierName ? `PUR-${sale.id || ''}` : `INV-${sale.id || ''}`);
   const invDate = getLocalDateString(sale.date || (sale as any).createdAt);
   const subtotal = Number(sale.subtotal || sale.grandTotal || sale.total || 0);
   const total = Number(sale.grandTotal || sale.total || 0);
@@ -76,12 +77,12 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
         baseUnitName: it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || it.unit,
         unitType: it.unitType,
         quantity: Number(it.quantity) || 1,
-        unitPrice: Number(it.unitPrice || it.price || 0),
+        unitPrice: Number(it.unitPrice || it.unitCost || it.price || 0),
         unit: (it.unitType === 'sub' && (it.subUnit || it.subUnitName)) ? (it.subUnit || it.subUnitName) : (it.unit || it.product?.unitName || it.product?.baseUnitName || 'Pcs'),
         discount: Number(it.discount || 0),
         gst: Number(it.gst || 0),
         taxAmount: Number(it.taxAmount || 0),
-        total: Number(it.total || (Number(it.quantity) || 1) * (Number(it.unitPrice || it.price || 0))),
+        total: Number(it.total || (Number(it.quantity) || 1) * (Number(it.unitPrice || it.unitCost || it.price || 0))),
         hsn: it.hsn || '',
       }))
     : [
@@ -94,17 +95,24 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
         },
       ];
 
+  const isPurchase = Boolean(sale.supplierName || sale.supplierId || sale.docTitle?.includes('PURCHASE'));
+  const partyName = (sale as any).customer?.name || sale.customerName || (sale as any).supplier?.name || sale.supplierName || (isPurchase ? 'Supplier' : 'Walk-in Customer');
+  const partyPhone = (sale as any).customer?.phone || sale.customerPhone || (sale as any).supplier?.phone || sale.supplierPhone || '';
+  const partyEmail = (sale as any).customer?.email || (sale as any).customerEmail || (sale as any).supplier?.email || sale.supplierEmail || '';
+  const partyAddress = (sale as any).customer?.address || sale.customerAddress || (sale as any).supplier?.address || sale.supplierAddress || '';
+  const partyGstin = (sale as any).customer?.taxNumber || (sale as any).customer?.taxId || (sale as any).customer?.gstin || sale.customerGstin || (sale as any).supplier?.taxNumber || (sale as any).supplier?.taxId || (sale as any).supplier?.gstin || sale.supplierGstin || '';
+
   return {
     invoiceNumber: invNumber,
     reference: sale.reference,
     date: invDate,
-    customerName: (sale as any).customer?.name || sale.customerName || 'Walk-in Customer',
-    customerPhone: (sale as any).customer?.phone || sale.customerPhone || '',
-    customerEmail: (sale as any).customer?.email || (sale as any).customerEmail || '',
-    customerAddress: (sale as any).customer?.address || sale.customerAddress || '',
-    customerGstin: (sale as any).customer?.taxNumber || (sale as any).customer?.taxId || (sale as any).customer?.gstin || sale.customerGstin || '',
-    customerType: ((sale as any).customer?.taxNumber || (sale as any).customer?.gstin || sale.customerGstin) ? 'wholesale' : 'retail',
-    biller: sale.biller || 'Cashier',
+    customerName: partyName,
+    customerPhone: partyPhone,
+    customerEmail: partyEmail,
+    customerAddress: partyAddress,
+    customerGstin: partyGstin,
+    customerType: (partyGstin || isPurchase) ? 'wholesale' : 'retail',
+    biller: sale.biller || (isPurchase ? 'Purchase Officer' : 'Cashier'),
     subtotal,
     discount,
     gst,
@@ -118,6 +126,8 @@ function toReceiptPrintData(sale: any): ReceiptPrintData {
     previousDue: Number(sale.previousDue || 0),
     advancePayment: Number(sale.advancePayment || 0),
     showPreviousBalance: Boolean(sale.showPreviousBalance),
+    docTitle: sale.docTitle || (isPurchase ? 'PURCHASE BILL' : undefined),
+    partyTitle: sale.partyTitle || (isPurchase ? 'SUPPLIER DETAILS' : undefined),
     items,
   };
 }
@@ -158,20 +168,36 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
   React.useEffect(() => {
     if (sale) {
-      setCustomerPhone(sale.customerPhone || (sale as any).customer?.phone || '');
-      setCustomerEmail((sale as any).customerEmail || (sale as any).customer?.email || '');
+      const isPurchase = Boolean(sale.supplierName || sale.supplierId || sale.docTitle?.includes('PURCHASE'));
+      setCustomerPhone(sale.customerPhone || (sale as any).customer?.phone || sale.supplierPhone || (sale as any).supplier?.phone || '');
+      setCustomerEmail((sale as any).customerEmail || (sale as any).customer?.email || (sale as any).supplierEmail || (sale as any).supplier?.email || '');
 
-      const custId = sale.customerId || (sale as any).customer?.id;
-      if (custId) {
-        customerRepository.getById(Number(custId)).then((cust) => {
-          if (cust) {
-            setCustomerBalance(Number(cust.currentBalance ?? cust.balance ?? 0));
-          }
-        }).catch((err) => console.warn('Could not fetch customer balance', err));
-      } else if ((sale as any).customer?.currentBalance !== undefined) {
-        setCustomerBalance(Number((sale as any).customer.currentBalance));
+      if (isPurchase) {
+        const suppId = sale.supplierId || (sale as any).supplier?.id;
+        if (suppId) {
+          supplierRepository.getById(Number(suppId)).then((supp) => {
+            if (supp) {
+              setCustomerBalance(Number(supp.outstandingBalance ?? 0));
+            }
+          }).catch((err) => console.warn('Could not fetch supplier balance', err));
+        } else if ((sale as any).supplier?.outstandingBalance !== undefined) {
+          setCustomerBalance(Number((sale as any).supplier.outstandingBalance));
+        } else {
+          setCustomerBalance(null);
+        }
       } else {
-        setCustomerBalance(null);
+        const custId = sale.customerId || (sale as any).customer?.id;
+        if (custId) {
+          customerRepository.getById(Number(custId)).then((cust) => {
+            if (cust) {
+              setCustomerBalance(Number((cust as any).currentBalance ?? (cust as any).balance ?? 0));
+            }
+          }).catch((err) => console.warn('Could not fetch customer balance', err));
+        } else if ((sale as any).customer?.currentBalance !== undefined) {
+          setCustomerBalance(Number((sale as any).customer.currentBalance));
+        } else {
+          setCustomerBalance(null);
+        }
       }
     }
   }, [sale]);
@@ -276,9 +302,10 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
         },
       ];
 
+      const isPurchase = Boolean(sale?.supplierName || sale?.supplierId || receiptData?.docTitle?.includes('PURCHASE'));
       const reportOptions: any = {
-        title: `Sales Invoice #${invNumber}`,
-        partyName: receiptData.customerName || 'Walk-in Customer',
+        title: isPurchase ? `Purchase Bill #${invNumber}` : `Sales Invoice #${invNumber}`,
+        partyName: receiptData.customerName || (isPurchase ? 'Supplier' : 'Walk-in Customer'),
         phone: targetPhone,
         dateRangeLabel: `Date: ${receiptData.date}`,
         columns,
@@ -290,7 +317,7 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
       if (target === 'whatsapp') {
         await shareReportToWhatsApp(reportOptions, targetPhone);
       } else {
-        await exportReportToPdf(reportOptions, `Invoice-${invNumber}`);
+        await exportReportToPdf(reportOptions, isPurchase ? `Purchase-${invNumber}` : `Invoice-${invNumber}`);
       }
     } catch (err: any) {
       console.error('Invoice PDF share error:', err);
@@ -448,7 +475,10 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
         msgStatus = netDue === 0 ? 'PAID' : 'DUE ₹' + netDue.toFixed(2);
       }
 
-      const msg = `🧾 *Invoice #${invNumber}*\nStore: *${business.businessName}*\n${totalLine}\nStatus: *${msgStatus}*`;
+      const isPurchase = Boolean(sale?.supplierName || sale?.supplierId || receiptData?.docTitle?.includes('PURCHASE'));
+      const msg = isPurchase
+        ? `🧾 *Purchase Bill #${invNumber}*\nSupplier: *${receiptData.customerName || 'Supplier'}*\nStore: *${business.businessName}*\n${totalLine}\nStatus: *${msgStatus}*`
+        : `🧾 *Invoice #${invNumber}*\nStore: *${business.businessName}*\n${totalLine}\nStatus: *${msgStatus}*`;
       const waUrl = cleanPhone
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
         : `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -465,8 +495,11 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
 
   // 4. Share to Email
   const handleEmail = async () => {
+    const isPurchase = Boolean(sale?.supplierName || sale?.supplierId || receiptData?.docTitle?.includes('PURCHASE'));
     const targetEmail = customerEmail.trim() || receiptData.customerEmail || '';
-    const subject = `Invoice ${invNumber} - ${business.businessName}`;
+    const subject = isPurchase
+      ? `Purchase Bill ${invNumber} - ${business.businessName}`
+      : `Invoice ${invNumber} - ${business.businessName}`;
     let emailSummary = `Total Amount: ₹${receiptData.total.toFixed(2)}`;
     let emailStatus = (receiptData.due ?? 0) === 0 ? 'Paid' : 'Due ₹' + (receiptData.due ?? 0).toFixed(2);
 
@@ -478,7 +511,9 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
       emailStatus = netDue === 0 ? 'Paid' : 'Due ₹' + netDue.toFixed(2);
     }
 
-    const body = `Please find invoice #${invNumber} from ${business.businessName}.\n\n${emailSummary}\nDate: ${receiptData.date}\nPayment Status: ${emailStatus}\n\nThank you for your business!`;
+    const body = isPurchase
+      ? `Please find purchase bill #${invNumber} for ${business.businessName}.\n\n${emailSummary}\nDate: ${receiptData.date}\nPayment Status: ${emailStatus}`
+      : `Please find invoice #${invNumber} from ${business.businessName}.\n\n${emailSummary}\nDate: ${receiptData.date}\nPayment Status: ${emailStatus}\n\nThank you for your business!`;
     const mailtoUrl = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
     if (Platform.OS === 'web') {
@@ -519,13 +554,15 @@ export const ShareSaleModal: React.FC<ShareSaleModalProps> = ({
               </View>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={[styles.title, { color: theme.colors.text }]}>Share Print Preview</Text>
+                  <Text style={[styles.title, { color: theme.colors.text }]}>
+                    Share {Boolean(sale?.supplierName || sale?.supplierId || receiptData?.docTitle?.includes('PURCHASE')) ? 'Purchase Bill' : 'Print Preview'}
+                  </Text>
                   <View style={styles.invoiceBadge}>
                     <Text style={styles.invoiceBadgeText}>{invNumber}</Text>
                   </View>
                 </View>
                 <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                  Visual printable invoice • ₹{receiptData.total.toFixed(2)}
+                  Visual printable {Boolean(sale?.supplierName || sale?.supplierId || receiptData?.docTitle?.includes('PURCHASE')) ? 'purchase bill' : 'invoice'} • ₹{receiptData.total.toFixed(2)}
                 </Text>
               </View>
             </View>
