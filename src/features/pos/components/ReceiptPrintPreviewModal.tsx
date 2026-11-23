@@ -210,6 +210,8 @@ export interface ReceiptPrintData {
   previousDue?: number;
   advancePayment?: number;
   showPreviousBalance?: boolean;
+  docTitle?: string;
+  partyTitle?: string;
 }
 
 export type ReceiptPaperFormat = '80mm' | '140x210mm' | 'halfA4Landscape';
@@ -485,6 +487,8 @@ export function generateReceiptHtml({
   showTerms: boolean;
   showSignatures: boolean;
   showPreviousBalance?: boolean;
+  docTitle?: string;
+  partyTitle?: string;
 }): string {
   const isThermal = paperFormat === '80mm';
   const isWholesale = customerType === 'wholesale';
@@ -601,7 +605,7 @@ export function generateReceiptHtml({
   <div class="dashed-line"></div>
 
   <div class="receipt-title">
-    ${isWholesale ? '*** WHOLESALE TAX INVOICE ***' : '*** RETAIL CASH RECEIPT ***'}
+    ${data.docTitle ? `*** ${data.docTitle.toUpperCase()} ***` : (isWholesale ? '*** WHOLESALE TAX INVOICE ***' : '*** RETAIL CASH RECEIPT ***')}
   </div>
 
   <div class="meta-row">
@@ -614,7 +618,7 @@ export function generateReceiptHtml({
   </div>
 
   <div class="customer-box">
-    <div><strong>Customer:</strong> ${custName}</div>
+    <div><strong>${data.partyTitle || 'Customer'}:</strong> ${custName}</div>
     ${custPhone ? `<div><strong>Phone:</strong> ${custPhone}</div>` : ''}
     ${isWholesale && custGstin ? `<div><strong>Cust GSTIN:</strong> ${custGstin}</div>` : ''}
     ${isWholesale && custAddress ? `<div><strong>Address:</strong> ${custAddress}</div>` : ''}
@@ -1043,7 +1047,7 @@ ${pages.map((page, pageIdx) => {
         </td>
         <td style="vertical-align: top; width: 38%; text-align: right;">
           <div class="inv-badge">
-            ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+            ${data.docTitle || (isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE')}
           </div>
           <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
           <table style="margin-top: 2px; width: 100%; text-align: right;">
@@ -1066,7 +1070,7 @@ ${pages.map((page, pageIdx) => {
 
     <div class="parties-grid">
       <div class="party-col">
-        <div class="section-title">${isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}</div>
+        <div class="section-title">${data.partyTitle ? `${data.partyTitle.toUpperCase()}:` : (isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:')}</div>
         <div class="cust-name">${custName}</div>
         ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
         ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
@@ -1494,7 +1498,7 @@ ${pagesLs.map((page, pageIdx) => {
         </td>
         <td style="vertical-align: top; width: 40%; text-align: right;">
           <div class="inv-badge">
-            ${isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
+            ${data.docTitle || (isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO')}
           </div>
           <div class="copy-text">ORIGINAL FOR RECIPIENT</div>
           <table style="margin-top: 4px; width: 100%; text-align: right;">
@@ -1521,7 +1525,7 @@ ${pagesLs.map((page, pageIdx) => {
 
     <div class="parties-grid">
       <div class="party-col">
-        <div class="section-title">${isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}</div>
+        <div class="section-title">${data.partyTitle ? `${data.partyTitle.toUpperCase()}:` : (isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:')}</div>
         <div class="cust-name">${custName}</div>
         ${custPhone ? `<div class="party-sub">Mobile: ${custPhone}</div>` : ''}
         ${custAddress ? `<div class="party-sub">Address: ${custAddress}</div>` : ''}
@@ -2145,7 +2149,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <View style={[styles.p140Badge, { backgroundColor: isWholesale ? '#1E293B' : '#047857' }]}>
                     <Text style={styles.p140BadgeText}>
-                      {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE'}
+                      {data.docTitle || (isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE')}
                     </Text>
                   </View>
                   <Text style={styles.p140Original}>ORIGINAL FOR RECIPIENT</Text>
@@ -2175,7 +2179,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
               <View style={styles.p140PartiesRow}>
                 <View style={{ flex: 1.4 }}>
                   <Text style={styles.p140SectionHead}>
-                    {isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:'}
+                    {data.partyTitle ? `${data.partyTitle.toUpperCase()}:` : (isWholesale ? 'BILLED TO (BUYER):' : 'CUSTOMER:')}
                   </Text>
                   <Text style={styles.p140CustName}>{custName}</Text>
                   {custPhone ? <Text style={styles.p140PartySub}>Phone: {custPhone}</Text> : null}
@@ -2491,7 +2495,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     ]}
                   >
                     <Text style={styles.lsInvoiceTypeBadgeText}>
-                      {isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO'}
+                      {data.docTitle || (isWholesale ? 'TAX INVOICE' : 'RETAIL INVOICE / CASH MEMO')}
                     </Text>
                   </View>
                   <Text style={styles.lsOriginalCopyText}>ORIGINAL FOR RECIPIENT</Text>
@@ -2521,7 +2525,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
               <View style={styles.lsPartiesSection}>
                 <View style={styles.lsPartyCol}>
                   <Text style={styles.lsSectionHeader}>
-                    {isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:'}
+                    {data.partyTitle ? `${data.partyTitle.toUpperCase()}:` : (isWholesale ? 'DETAILS OF BUYER / BILLED TO:' : 'CUSTOMER DETAILS:')}
                   </Text>
                   <Text style={styles.lsCustomerName}>{custName}</Text>
                   {!!custPhone && <Text style={styles.lsPartyText}>Mobile: {custPhone}</Text>}
@@ -2901,7 +2905,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.modalTitleMobile} numberOfLines={1}>Print Preview</Text>
+                    <Text style={styles.modalTitleMobile} numberOfLines={1}>{data?.docTitle ? `${data.docTitle} Preview` : 'Print Preview'}</Text>
                     <View style={styles.invoiceBadge}>
                       <Text style={styles.invoiceBadgeText} numberOfLines={1}>{invNumber}</Text>
                     </View>
@@ -2936,7 +2940,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Text style={styles.modalTitle}>Receipt Print Preview</Text>
+                    <Text style={styles.modalTitle}>{data?.docTitle ? `${data.docTitle} Print Preview` : 'Receipt Print Preview'}</Text>
                     <View style={styles.invoiceBadge}>
                       <Text style={styles.invoiceBadgeText}>{invNumber}</Text>
                     </View>
@@ -3054,7 +3058,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
                     {/* Receipt Title & Meta */}
                     <View style={styles.thermalBadgeBox}>
                       <Text style={styles.thermalBadgeTitle}>
-                        {isWholesale ? '*** WHOLESALE TAX INVOICE ***' : '*** RETAIL CASH RECEIPT ***'}
+                        {data.docTitle ? `*** ${data.docTitle.toUpperCase()} ***` : (isWholesale ? '*** WHOLESALE TAX INVOICE ***' : '*** RETAIL CASH RECEIPT ***')}
                       </Text>
                     </View>
 
@@ -3069,7 +3073,7 @@ export const ReceiptPrintPreviewModal: React.FC<ReceiptPrintPreviewModalProps> =
 
                     {/* Customer Info */}
                     <View style={styles.thermalCustomerBox}>
-                      <Text style={styles.thermalMonoBold}>Customer: {custName}</Text>
+                      <Text style={styles.thermalMonoBold}>{data.partyTitle || 'Customer'}: {custName}</Text>
                       {!!custPhone && <Text style={styles.thermalMono}>Phone: {custPhone}</Text>}
                       {isWholesale && !!custGstin && (
                         <Text style={styles.thermalMonoBold}>Cust GSTIN: {custGstin}</Text>

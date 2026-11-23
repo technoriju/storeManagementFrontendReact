@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useTheme } from '../../../shared/theme/theme';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { usePurchase } from '../api/usePurchases';
-import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit, MessageCircle, Printer } from 'lucide-react-native';
+import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit, MessageCircle, Printer, Share2 } from 'lucide-react-native';
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
-import { shareReportToWhatsApp, printOrSavePdfReport } from '../../reports/utils/reportExportUtils';
+import { shareReportToWhatsApp } from '../../reports/utils/reportExportUtils';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../../pos/components/ReceiptPrintPreviewModal';
+import { SharePurchaseModal } from '../components/SharePurchaseModal';
 
 export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const theme = useTheme();
@@ -16,6 +18,9 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
   const { data: purchase, isLoading } = usePurchase(numericId);
   const [showEditModal, setShowEditModal] = useState(false);
   const [supplierBalance, setSupplierBalance] = useState<number | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [printPurchaseData, setPrintPurchaseData] = useState<ReceiptPrintData | null>(null);
 
   useEffect(() => {
     if (purchase?.supplierId) {
@@ -26,6 +31,63 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       }).catch(() => {});
     }
   }, [purchase?.supplierId]);
+
+  const handleOpenPrintPreview = () => {
+    if (!purchase) return;
+    const invNo = purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`;
+    const itemsForPrint = (purchase.items || []).map((it: any, idx: number) => ({
+      productId: it.productId,
+      productName: it.productName || `Item #${idx + 1}`,
+      sku: it.sku,
+      brand: it.brand || it.brandName,
+      unit: it.unit || 'Unit',
+      quantity: Number(it.quantity) || 1,
+      unitPrice: Number(it.unitPrice || 0),
+      discount: Number(it.discount || 0),
+      gst: Number(it.gst || 0),
+      taxAmount: Number(it.taxAmount || 0),
+      total: Number(it.total || 0),
+      hsn: it.hsn || '',
+    }));
+
+    const rData: ReceiptPrintData = {
+      invoiceNumber: invNo,
+      reference: purchase.reference,
+      date: purchase.date || '',
+      customerName: purchase.supplierName || 'Supplier',
+      customerPhone: (purchase as any).supplierPhone || '',
+      customerAddress: (purchase as any).supplierAddress || '',
+      customerGstin: (purchase as any).supplierGstin || '',
+      customerType: 'wholesale',
+      biller: purchase.biller || 'Purchase Officer',
+      subtotal: Number(purchase.subtotal || purchase.total || 0),
+      discount: Number(purchase.discount || 0),
+      gst: Number(purchase.gst || purchase.orderTax || 0),
+      shipping: Number(purchase.shipping || 0),
+      total: Number(purchase.total || 0),
+      paid: Number(purchase.paid !== undefined ? purchase.paid : (purchase.total || 0)),
+      due: Number(purchase.due !== undefined ? purchase.due : 0),
+      paymentMethod: purchase.paymentMethod || 'Cash',
+      notes: purchase.notes,
+      previousDue: supplierBalance !== null ? supplierBalance : (purchase.previousDue ? Number(purchase.previousDue) : undefined),
+      advancePayment: purchase.advancePayment ? Number(purchase.advancePayment) : undefined,
+      showPreviousBalance: purchase.showPreviousBalance !== undefined ? Boolean(purchase.showPreviousBalance) : false,
+      docTitle: 'PURCHASE BILL',
+      partyTitle: 'SUPPLIER DETAILS',
+      items: itemsForPrint.length > 0 ? itemsForPrint : [{
+        productName: 'General Goods / Services',
+        quantity: 1,
+        unitPrice: Number(purchase.total || 0),
+        discount: 0,
+        gst: 0,
+        total: Number(purchase.total || 0),
+        unit: 'Unit',
+      }],
+    };
+
+    setPrintPurchaseData(rData);
+    setShowPrintModal(true);
+  };
 
   const handleShareWhatsApp = async () => {
     if (!purchase) return;
@@ -53,9 +115,9 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       title: `Purchase Bill - ${invNo}`,
       dateRangeLabel: `Date: ${purchase.date || ''}`,
       partyName: purchase.supplierName || 'Supplier',
-      phone: purchase.supplierPhone || '',
+      phone: (purchase as any).supplierPhone || '',
       columns: [
-        { key: 'name', title: 'Product / Item', flex: 3 },
+        { key: 'name', title: 'Product / Item', width: 140 },
         { key: 'quantity', title: 'Qty', width: 60 },
         { key: 'unitPrice', title: 'Cost (Rs.)', width: 80 },
         { key: 'tax', title: 'Tax (Rs.)', width: 70 },
@@ -82,6 +144,22 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
         </Text>
         {purchase && (
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: '#2563EB', paddingHorizontal: isMobile ? 8 : 12 }]}
+              onPress={handleOpenPrintPreview}
+            >
+              <Printer size={16} color="white" />
+              {!isMobile && <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>Print</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.editBtn, { backgroundColor: '#10B981', paddingHorizontal: isMobile ? 8 : 12 }]}
+              onPress={() => setShowShareModal(true)}
+            >
+              <Share2 size={16} color="white" />
+              {!isMobile && <Text style={{ color: 'white', fontWeight: '600', marginLeft: 6 }}>Share</Text>}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.editBtn, { backgroundColor: '#16A34A', paddingHorizontal: editLabel ? 12 : 8 }]}
               onPress={handleShareWhatsApp}
@@ -278,6 +356,25 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
         visible={showEditModal}
         editPurchaseId={numericId}
         onClose={() => setShowEditModal(false)}
+      />
+
+      <ReceiptPrintPreviewModal
+        visible={showPrintModal}
+        data={printPurchaseData}
+        onClose={() => {
+          setShowPrintModal(false);
+          setPrintPurchaseData(null);
+        }}
+      />
+
+      <SharePurchaseModal
+        visible={showShareModal}
+        purchase={purchase}
+        onClose={() => setShowShareModal(false)}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview();
+        }}
       />
     </View>
   );

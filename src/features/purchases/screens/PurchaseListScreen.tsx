@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, StyleSheet, Text, Pressable, Alert, Platform } from 'react-native';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { View, StyleSheet, Text, Pressable, Alert, Platform, Modal, ScrollView } from 'react-native';
 import { useTheme } from '../../../shared/theme/theme';
 import { PurchaseScreenType } from '../PurchasesModule';
 import { AdvancedTable } from '../../../shared/components/data-display/AdvancedTable';
@@ -8,6 +8,11 @@ import { useSyncStore } from '../../../core/sync/useSyncStore';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { ImportPurchaseModal } from '../components/ImportPurchaseModal';
 import { useDeletePurchase, fetchPaginatedPurchases } from '../api/usePurchases';
+import { purchaseRepository } from '../../../core/repositories/PurchaseRepository';
+import { supplierRepository } from '../../../core/repositories/SupplierRepository';
+import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../../pos/components/ReceiptPrintPreviewModal';
+import { SharePurchaseModal } from '../components/SharePurchaseModal';
+import { enrichSaleItemsWithProductMeta } from '../../pos/utils/enrichSaleItems';
 import { SweetConfirmModal } from '../../../shared/components/feedback/SweetConfirmModal';
 import { useResponsive } from '../../../shared/hooks/useResponsive';
 import { AppSelect } from '../../../shared/components/forms/AppSelect';
@@ -22,12 +27,113 @@ import {
   Edit, 
   Trash2, 
   ChevronDown,
-  X 
+  X,
+  Printer,
+  Share2,
+  MoreVertical,
+  ExternalLink
 } from 'lucide-react-native';
 
 interface Props {
   onNavigate: (screen: PurchaseScreenType, id?: string) => void;
 }
+
+const MenuItem = ({ icon, label, onPress }: any) => (
+  <Pressable style={styles.menuItem} onPress={onPress}>
+    {icon}
+    <Text style={styles.menuItemText}>{label}</Text>
+  </Pressable>
+);
+
+const ActionMenu = ({
+  item,
+  theme,
+  onDelete,
+  onEdit,
+  onView,
+  onPrint,
+  onShare,
+}: {
+  item: any;
+  theme: any;
+  onDelete: (item: any) => void;
+  onEdit: (item: any) => void;
+  onView: (item: any) => void;
+  onPrint: (item: any) => void;
+  onShare: (item: any) => void;
+}) => {
+  const [visible, setVisible] = useState(false);
+  const [layout, setLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const buttonRef = useRef<any>(null);
+
+  const openMenu = () => {
+    buttonRef.current?.measureInWindow((x: number, y: number, width: number, height: number) => {
+      setLayout({ x, y, width, height });
+      setVisible(true);
+    });
+  };
+
+  return (
+    <>
+      <View ref={buttonRef} collapsable={false}>
+        <Pressable style={{ padding: 4 }} onPress={openMenu}>
+          <MoreVertical size={20} color={theme.colors.textSecondary} />
+        </Pressable>
+      </View>
+      <Modal visible={visible} transparent={true} animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setVisible(false)}>
+          <View style={[styles.popover, { 
+            top: layout.y + layout.height,
+            left: layout.x - 160 + layout.width,
+            backgroundColor: theme.colors.surface || 'white',
+            borderColor: theme.colors.border,
+          }]}>
+            <MenuItem
+              icon={<Eye size={16} color={theme.colors.primary} />}
+              label="View Purchase"
+              onPress={() => {
+                setVisible(false);
+                onView(item);
+              }}
+            />
+            <MenuItem
+              icon={<Printer size={16} color="#2563EB" />}
+              label="Print Bill"
+              onPress={() => {
+                setVisible(false);
+                onPrint(item);
+              }}
+            />
+            <MenuItem
+              icon={<Share2 size={16} color="#10B981" />}
+              label="Share Purchase"
+              onPress={() => {
+                setVisible(false);
+                onShare(item);
+              }}
+            />
+            <MenuItem
+              icon={<Edit size={16} color="#F59E0B" />}
+              label="Edit Purchase"
+              onPress={() => {
+                setVisible(false);
+                onEdit(item);
+              }}
+            />
+            <MenuItem
+              icon={<Trash2 size={16} color="#EF4444" />}
+              label="Delete Purchase"
+              onPress={() => {
+                setVisible(false);
+                onDelete(item);
+              }}
+            />
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+};
 
 export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const theme = useTheme();
@@ -48,8 +154,173 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  const [selectedPurchase, setSelectedPurchase] = useState<any | null>(null);
+  const [printPurchaseData, setPrintPurchaseData] = useState<ReceiptPrintData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [sharePurchaseData, setSharePurchaseData] = useState<any | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+
   const deletePurchaseMutation = useDeletePurchase();
   const lastSyncedAt = useSyncStore((s) => s.lastSyncedAt);
+
+  const loadPurchaseItems = async (purchase: any) => {
+    if (!purchase) return [];
+    let purItems: any[] = [];
+
+    // 1. If server ID, fetch fresh verified items from API
+    if (/^\d+$/.test(String(purchase.id)) && Number(purchase.id) > 0 && Number(purchase.id) < 1000000000000) {
+      try {
+        const serverPurchase = await purchaseRepository.fetchByIdFromApi(Number(purchase.id));
+        if (serverPurchase?.items && serverPurchase.items.length > 0) {
+          purItems = serverPurchase.items;
+        }
+      } catch (err) {
+        console.warn('Server fetch items fallback to local:', err);
+      }
+    }
+
+    // 2. Fallback to purchase.items
+    if ((!purItems || purItems.length === 0) && purchase.items && purchase.items.length > 0) {
+      purItems = purchase.items;
+    }
+
+    // 3. Fallback to local DB getItemsForPurchase
+    if ((!purItems || purItems.length === 0) && purchase.id) {
+      purItems = await purchaseRepository.getItemsForPurchase(Number(purchase.id));
+    }
+
+    // 4. Strict filter: must belong to this purchase, quantity > 0, deduplicate
+    const itemsMap = new Map<string, any>();
+    for (const it of (purItems || [])) {
+      if (!it) continue;
+      if (it.purchaseId !== undefined && it.purchaseId !== null && purchase.id && Number(it.purchaseId) !== Number(purchase.id)) {
+        continue;
+      }
+      const qty = Number(it.quantity) || 0;
+      if (qty <= 0) continue;
+
+      const pKey = String(it.productId || it.productName);
+      if (!itemsMap.has(pKey) || (Number(it.total) > 0 && Number(itemsMap.get(pKey).total) === 0)) {
+        itemsMap.set(pKey, it);
+      }
+    }
+
+    const filtered = Array.from(itemsMap.values());
+    return await enrichSaleItemsWithProductMeta(filtered);
+  };
+
+  const handleOpenPrintPreview = async (purchase: any) => {
+    if (!purchase) return;
+    const purItems = await loadPurchaseItems(purchase);
+
+    let supplierDetails: any = null;
+    if (purchase.supplierId) {
+      try {
+        supplierDetails = await supplierRepository.getById(Number(purchase.supplierId));
+      } catch (_) {}
+    } else if (purchase.supplierName) {
+      try {
+        const allSupps = await supplierRepository.getAll();
+        supplierDetails = allSupps.find((s) => s.name?.toLowerCase().trim() === purchase.supplierName?.toLowerCase().trim());
+      } catch (_) {}
+    }
+
+    const itemsForPrint = purItems && purItems.length > 0
+      ? purItems.map((i: any) => ({
+          productId: i.productId,
+          productName: i.productName || `Product #${i.productId || 1}`,
+          sku: i.sku,
+          brand: i.brand || i.brandName || i.product?.brandName,
+          brandName: i.brandName || i.brand || i.product?.brandName,
+          subUnit: i.subUnit || i.subUnitName || i.product?.subUnitName,
+          subUnitName: i.subUnitName || i.subUnit || i.product?.subUnitName,
+          conversionRate: i.conversionRate !== undefined ? Number(i.conversionRate) : (i.product?.conversionRate ? Number(i.product.conversionRate) : undefined),
+          baseUnitName: i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || i.unit,
+          unitType: i.unitType || 'base',
+          quantity: Number(i.quantity) || 1,
+          unitPrice: Number(i.unitPrice || i.unitCost || 0),
+          discount: Number(i.discount) || 0,
+          gst: Number(i.gst) || 0,
+          taxAmount: Number(i.taxAmount) || 0,
+          total: Number(i.total) || 0,
+          unit: (i.unitType === 'sub' && (i.subUnit || i.subUnitName)) ? (i.subUnit || i.subUnitName) : (i.unit || i.unitName || i.baseUnitName || i.product?.baseUnitName || i.product?.unitName || 'Unit'),
+          product: i.product,
+          productUnit: i.productUnit,
+          hsn: i.hsn || '',
+        }))
+      : [
+          {
+            productName: 'General Goods / Services',
+            quantity: 1,
+            unitPrice: Number(purchase.total || purchase.grandTotal || 0),
+            discount: 0,
+            gst: 0,
+            total: Number(purchase.total || purchase.grandTotal || 0),
+            unit: 'Unit',
+          },
+        ];
+
+    const rData: ReceiptPrintData = {
+      invoiceNumber: purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`,
+      reference: purchase.reference,
+      date: purchase.date,
+      customerName: supplierDetails?.name || purchase.supplierName || 'Supplier',
+      customerPhone: supplierDetails?.phone || purchase.supplierPhone || '',
+      customerAddress: supplierDetails?.address || purchase.supplierAddress || '',
+      customerGstin: supplierDetails?.taxNumber || supplierDetails?.gstin || purchase.supplierGstin || '',
+      customerType: 'wholesale',
+      biller: purchase.biller || 'Purchase Officer',
+      subtotal: Number(purchase.subtotal || purchase.total || 0),
+      discount: Number(purchase.discount || 0),
+      gst: Number(purchase.gst || purchase.orderTax || 0),
+      shipping: Number(purchase.shipping || 0),
+      total: Number(purchase.total || purchase.grandTotal || 0),
+      paid: Number(purchase.paid !== undefined ? purchase.paid : (purchase.total || 0)),
+      due: Number(purchase.due !== undefined ? purchase.due : 0),
+      paymentMethod: purchase.paymentMethod || 'Cash',
+      previousDue: purchase.previousDue !== undefined ? Number(purchase.previousDue) : (supplierDetails ? Number(supplierDetails.outstandingBalance || 0) : undefined),
+      advancePayment: purchase.advancePayment !== undefined ? Number(purchase.advancePayment) : undefined,
+      showPreviousBalance: purchase.showPreviousBalance !== undefined ? Boolean(purchase.showPreviousBalance) : (Number(purchase.previousDue || 0) > 0 || Number(purchase.advancePayment || 0) > 0),
+      docTitle: 'PURCHASE BILL',
+      partyTitle: 'SUPPLIER DETAILS',
+      items: itemsForPrint,
+    };
+
+    setPrintPurchaseData(rData);
+    setShowPrintModal(true);
+  };
+
+  const handleOpenShare = async (purchase: any) => {
+    if (!purchase) return;
+    const purItems = await loadPurchaseItems(purchase);
+    let supplierDetails: any = null;
+    if (purchase.supplierId) {
+      try {
+        supplierDetails = await supplierRepository.getById(Number(purchase.supplierId));
+      } catch (_) {}
+    } else if (purchase.supplierName) {
+      try {
+        const allSupps = await supplierRepository.getAll();
+        supplierDetails = allSupps.find((s) => s.name?.toLowerCase().trim() === purchase.supplierName?.toLowerCase().trim());
+      } catch (_) {}
+    }
+
+    setSharePurchaseData({
+      ...purchase,
+      supplierPhone: supplierDetails?.phone || purchase.supplierPhone,
+      supplierEmail: supplierDetails?.email || purchase.supplierEmail,
+      supplierAddress: supplierDetails?.address || purchase.supplierAddress,
+      supplierGstin: supplierDetails?.taxNumber || supplierDetails?.gstin || purchase.supplierGstin,
+      items: purItems,
+    });
+    setShowShareModal(true);
+  };
+
+  const handleViewPurchase = async (purchase: any) => {
+    if (!purchase) return;
+    const purItems = await loadPurchaseItems(purchase);
+    setSelectedPurchase({ ...purchase, items: purItems });
+  };
 
   const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
     setIsLoadingData(true);
@@ -63,14 +334,30 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
         .filter((p) => !dismissedPurchaseIds.includes(String(p.id)))
         .map((p) => ({
           id: String(p.id),
+          supplierId: p.supplierId || (p as any).supplier?.id,
           supplierName: p.supplierName || (p as any).supplier?.name || 'Unknown Supplier',
+          supplierPhone: (p as any).supplierPhone || (p as any).supplier?.phone || '',
+          supplierEmail: (p as any).supplierEmail || (p as any).supplier?.email || '',
+          supplierAddress: (p as any).supplierAddress || (p as any).supplier?.address || '',
+          supplierGstin: (p as any).supplierGstin || (p as any).supplier?.taxNumber || (p as any).supplier?.taxId || (p as any).supplier?.gstin || '',
           reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
+          invoiceNumber: p.invoiceNumber || p.reference || `PO-${p.id}`,
           date: p.date || (p as any).purchaseDate?.split('T')[0] || p.createdAt?.split('T')[0] || '',
           status: p.status || 'Received',
+          subtotal: Number(p.subtotal || 0),
+          discount: Number(p.discount || 0),
+          gst: Number(p.gst || 0),
+          orderTax: Number(p.orderTax || 0),
+          shipping: Number(p.shipping || 0),
           total: Number((p as any).grandTotal ?? p.total ?? 0),
           paid: Number(p.paid || 0),
           due: Number(p.due || 0),
           paymentStatus: p.paymentStatus || 'Unpaid',
+          paymentMethod: (p as any).paymentMethod || 'Cash',
+          items: p.items || [],
+          previousDue: p.previousDue !== undefined ? Number(p.previousDue) : 0,
+          advancePayment: p.advancePayment !== undefined ? Number(p.advancePayment) : 0,
+          showPreviousBalance: p.showPreviousBalance !== undefined ? Boolean(p.showPreviousBalance) : false,
           syncStatus: p.syncStatus || 'synced',
         }));
       setTablePurchases(mapped);
@@ -320,23 +607,18 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   );
 
   const renderRowActions = (item: any) => (
-    <>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
-        <Eye size={16} color={theme.colors.textSecondary} />
-      </Pressable>
-      <Pressable
-        style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
-        onPress={() => {
-          setEditPurchaseId(item.id);
-          setShowAddModal(true);
-        }}
-      >
-        <Edit size={16} color="#F59E0B" />
-      </Pressable>
-      <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => handleDelete(item)}>
-        <Trash2 size={16} color="#EF4444" />
-      </Pressable>
-    </>
+    <ActionMenu
+      item={item}
+      theme={theme}
+      onDelete={handleDelete}
+      onEdit={(purchase) => {
+        setEditPurchaseId(purchase.id);
+        setShowAddModal(true);
+      }}
+      onView={handleViewPurchase}
+      onPrint={handleOpenPrintPreview}
+      onShare={handleOpenShare}
+    />
   );
 
   const renderPurchaseCard = (item: any) => {
@@ -378,21 +660,18 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
             </Text>
           </View>
           <View style={styles.cardActions}>
-            <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => onNavigate('details', item.id)}>
-              <Eye size={15} color={theme.colors.textSecondary} />
-            </Pressable>
-            <Pressable
-              style={[styles.rowActionBtn, { borderColor: theme.colors.border }]}
-              onPress={() => {
-                setEditPurchaseId(item.id);
+            <ActionMenu
+              item={item}
+              theme={theme}
+              onDelete={handleDelete}
+              onEdit={(purchase) => {
+                setEditPurchaseId(purchase.id);
                 setShowAddModal(true);
               }}
-            >
-              <Edit size={15} color="#F59E0B" />
-            </Pressable>
-            <Pressable style={[styles.rowActionBtn, { borderColor: theme.colors.border }]} onPress={() => handleDelete(item)}>
-              <Trash2 size={15} color="#EF4444" />
-            </Pressable>
+              onView={handleViewPurchase}
+              onPrint={handleOpenPrintPreview}
+              onShare={handleOpenShare}
+            />
           </View>
         </View>
       </View>
@@ -429,6 +708,151 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
           setPage(1);
         }}
       />
+
+      {selectedPurchase && (
+        <Modal visible={!!selectedPurchase} transparent animationType="fade">
+          <View style={[styles.modalOverlayCenter, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <View style={[styles.modalBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Purchase #{selectedPurchase.reference}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Supplier: {selectedPurchase.supplierName}</Text>
+                </View>
+                <Pressable onPress={() => setSelectedPurchase(null)}>
+                  <X size={20} color={theme.colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <ScrollView style={{ padding: 16, maxHeight: 400 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <Text style={{ color: theme.colors.textSecondary }}>Date: {selectedPurchase.date}</Text>
+                  <Text style={{ color: theme.colors.textSecondary }}>Status: {selectedPurchase.status}</Text>
+                </View>
+
+                {selectedPurchase.items && selectedPurchase.items.length > 0 && (
+                  <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10 }}>
+                    <Text style={{ color: theme.colors.text, fontWeight: '600', marginBottom: 6 }}>Purchased Items:</Text>
+                    {selectedPurchase.items.map((i: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 2 }}>{i.productName || `Product #${i.productId}`}</Text>
+                        <Text style={{ color: theme.colors.textSecondary, flex: 1 }}>{i.quantity}x @ ₹{Number(i.unitPrice || i.unitCost || 0).toFixed(2)}</Text>
+                        <Text style={{ color: theme.colors.text, fontWeight: '500' }}>₹{Number(i.total).toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 10, gap: 4 }}>
+                  {Number(selectedPurchase.subtotal || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Subtotal:</Text>
+                      <Text style={{ color: theme.colors.text }}>₹{Number(selectedPurchase.subtotal).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedPurchase.discount || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Discount:</Text>
+                      <Text style={{ color: '#EF4444' }}>-₹{Number(selectedPurchase.discount).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedPurchase.gst || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Taxes & GST:</Text>
+                      <Text style={{ color: theme.colors.text }}>₹{Number(selectedPurchase.gst).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {Number(selectedPurchase.shipping || 0) > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: theme.colors.textSecondary }}>Shipping:</Text>
+                      <Text style={{ color: theme.colors.text }}>+₹{Number(selectedPurchase.shipping).toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: theme.colors.textSecondary }}>Grand Total:</Text>
+                    <Text style={{ color: theme.colors.primary, fontWeight: '700', fontSize: 16 }}>₹{Number(selectedPurchase.total).toFixed(2)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: '#10B981', fontWeight: '500' }}>Paid:</Text>
+                    <Text style={{ color: '#10B981', fontWeight: '500' }}>₹{Number(selectedPurchase.paid).toFixed(2)}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: selectedPurchase.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>Due:</Text>
+                    <Text style={{ color: selectedPurchase.due > 0 ? '#EF4444' : theme.colors.textSecondary, fontWeight: '500' }}>₹{Number(selectedPurchase.due).toFixed(2)}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              {/* Modal Footer with Full Details, Share and Print Actions */}
+              <View style={[
+                { flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: 10, padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border },
+                isMobile && { alignItems: 'stretch' }
+              ]}>
+                <Pressable
+                  style={[
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
+                    isMobile && { width: '100%' }
+                  ]}
+                  onPress={() => {
+                    const id = selectedPurchase.id;
+                    setSelectedPurchase(null);
+                    onNavigate('details', id);
+                  }}
+                >
+                  <ExternalLink size={15} color={theme.colors.textSecondary} />
+                  <Text style={{ color: theme.colors.text, fontWeight: '600' }}>Full Details</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#10B981' },
+                    isMobile && { width: '100%' }
+                  ]}
+                  onPress={() => {
+                    handleOpenShare(selectedPurchase);
+                  }}
+                >
+                  <Share2 size={16} color="white" />
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Share</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2563EB' },
+                    isMobile && { width: '100%' }
+                  ]}
+                  onPress={() => {
+                    handleOpenPrintPreview(selectedPurchase);
+                  }}
+                >
+                  <Printer size={16} color="white" />
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Print Bill</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      <ReceiptPrintPreviewModal
+        visible={showPrintModal}
+        data={printPurchaseData}
+        onClose={() => {
+          setShowPrintModal(false);
+          setPrintPurchaseData(null);
+        }}
+      />
+
+      <SharePurchaseModal
+        visible={showShareModal}
+        purchase={sharePurchaseData}
+        onClose={() => {
+          setShowShareModal(false);
+          setSharePurchaseData(null);
+        }}
+        onOpenFullPreview={() => {
+          setShowShareModal(false);
+          handleOpenPrintPreview(sharePurchaseData);
+        }}
+      />
+
       <AddPurchaseModal
         visible={showAddModal}
         editPurchaseId={editPurchaseId}
@@ -482,6 +906,31 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
 };
 
 const styles = StyleSheet.create({
+  modalOverlay: { flex: 1 },
+  modalOverlayCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  modalBox: { width: '90%', maxWidth: 500, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold' },
+  popover: {
+    position: 'absolute',
+    width: 160,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  menuItemText: { fontSize: 13, color: '#1E293B' },
   container: { flex: 1 },
   headerActionsWrapper: {
     flexDirection: 'row',
