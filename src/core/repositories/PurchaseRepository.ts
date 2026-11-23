@@ -145,12 +145,12 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
         const unitType = row.unitType || 'base';
         const rawUnit = row.unit ? String(row.unit).trim() : undefined;
-        let resolvedUnit = rawUnit;
-        if (!resolvedUnit || resolvedUnit.toLowerCase() === 'unit') {
-          resolvedUnit = unitType === 'sub' ? (subUnit || 'Pcs') : (baseUnit || 'Unit');
+        let resolvedUnit = (rawUnit && rawUnit.toLowerCase() !== 'unit') ? rawUnit : undefined;
+        if (!resolvedUnit) {
+          resolvedUnit = unitType === 'sub' ? (subUnit || 'Pcs') : (baseUnit || 'Pcs');
         }
 
-        const effectiveBaseUnit = baseUnit || (unitType === 'base' && resolvedUnit && resolvedUnit.toLowerCase() !== 'unit' ? resolvedUnit : undefined);
+        const effectiveBaseUnit = baseUnit || (unitType === 'base' && resolvedUnit ? resolvedUnit : undefined);
 
         items.push({
           id: Number(row.id),
@@ -431,40 +431,53 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         const itemTotal = Number(it.total || quantity * unitPrice - discount + taxAmount);
         const productName = it.product?.name || it.productName || undefined;
 
-        let baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName)
-          ? it.baseUnitName
-          : (it.product?.baseUnitName || it.product?.baseUnit?.name || undefined);
-        let subUnitName = (typeof it.subUnitName === 'string' && it.subUnitName)
-          ? it.subUnitName
-          : (it.product?.subUnitName || it.product?.subUnit?.name || it.product?.subunit?.name || undefined);
+        let baseUnitName = (typeof it.baseUnitName === 'string' && it.baseUnitName.trim() && it.baseUnitName.toLowerCase() !== 'unit')
+          ? it.baseUnitName.trim()
+          : (it.product?.baseUnitName && it.product.baseUnitName.toLowerCase() !== 'unit'
+              ? it.product.baseUnitName
+              : (it.product?.baseUnit?.name && it.product.baseUnit.name.toLowerCase() !== 'unit'
+                  ? it.product.baseUnit.name
+                  : (it.product?.unitName && it.product.unitName.toLowerCase() !== 'unit'
+                      ? it.product.unitName
+                      : undefined)));
+        let subUnitName = (typeof it.subUnitName === 'string' && it.subUnitName.trim() && it.subUnitName.toLowerCase() !== 'unit')
+          ? it.subUnitName.trim()
+          : (it.product?.subUnitName && it.product.subUnitName.toLowerCase() !== 'unit'
+              ? it.product.subUnitName
+              : (it.product?.subUnit?.name && it.product.subUnit.name.toLowerCase() !== 'unit'
+                  ? it.product.subUnit.name
+                  : (it.product?.subunit?.name && it.product.subunit.name.toLowerCase() !== 'unit'
+                      ? it.product.subunit.name
+                      : undefined)));
 
         if (!baseUnitName || !subUnitName) {
           try {
             const storeProd = useProductStore.getState().products?.find((prod: any) => Number(prod.id) === Number(it.productId));
             if (!baseUnitName) {
-              if (storeProd?.baseUnitName) {
+              if (storeProd?.baseUnitName && storeProd.baseUnitName.toLowerCase() !== 'unit') {
                 baseUnitName = storeProd.baseUnitName;
               } else if (storeProd?.unitId || storeProd?.baseUnitId) {
                 const uId = String(storeProd.unitId || storeProd.baseUnitId);
                 const storeUnit = useUnitStore.getState().units?.find((u: any) => String(u.id) === uId || String(u.backendId) === uId);
-                if (storeUnit?.name) baseUnitName = storeUnit.name;
+                if (storeUnit?.name && storeUnit.name.toLowerCase() !== 'unit') baseUnitName = storeUnit.name;
               }
             }
             if (!subUnitName) {
-              if (storeProd?.subUnitName) {
+              if (storeProd?.subUnitName && storeProd.subUnitName.toLowerCase() !== 'unit') {
                 subUnitName = storeProd.subUnitName;
               } else if (storeProd?.subunitId || storeProd?.subUnitId) {
                 const suId = String(storeProd.subunitId || storeProd.subUnitId);
                 const storeSub = useSubUnitStore.getState().subUnits?.find((s: any) => String(s.id) === suId || String(s.backendId) === suId);
-                if (storeSub?.name) subUnitName = storeSub.name;
+                if (storeSub?.name && storeSub.name.toLowerCase() !== 'unit') subUnitName = storeSub.name;
               }
             }
           } catch (_) {}
         }
 
-        let resolvedUnit = it.unit || it.unitName;
-        if (!resolvedUnit || String(resolvedUnit).toLowerCase() === 'unit') {
-          resolvedUnit = unitType === 'sub' ? (subUnitName || 'Pcs') : (baseUnitName || 'Unit');
+        let rawUnit = (it.unit || it.unitName || '').trim();
+        let resolvedUnit = (rawUnit && rawUnit.toLowerCase() !== 'unit') ? rawUnit : undefined;
+        if (!resolvedUnit) {
+          resolvedUnit = unitType === 'sub' ? (subUnitName || 'Pcs') : (baseUnitName || 'Pcs');
         }
 
         let itemGst = Number(it.gst || 0);
@@ -489,7 +502,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           unitCost: Number(it.unitCost || unitPrice),
           unit: resolvedUnit,
           unitName: resolvedUnit,
-          baseUnitName: baseUnitName || (resolvedUnit && String(resolvedUnit).toLowerCase() !== 'unit' ? resolvedUnit : undefined),
+          baseUnitName: baseUnitName || (unitType === 'base' ? resolvedUnit : undefined),
           subUnit: subUnitName,
           subUnitName,
           unitType,

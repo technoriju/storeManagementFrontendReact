@@ -38,6 +38,7 @@ import { purchaseRepository } from '../../../core/repositories/PurchaseRepositor
 import { productRepository } from '../../../core/repositories/ProductRepository';
 import { useUnits } from '../../units/api/useUnit';
 import { useSubUnits } from '../../sub_units/api/useSubUnit';
+import { resolveRealPurchaseUnit, resolveRealPurchaseSubUnit, resolveActivePurchaseUnit } from '../utils/purchaseUnitUtils';
 import { useBrands } from '../../brands/api/useBrand';
 import { Product } from '../../products/types';
 
@@ -254,7 +255,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               if (existingItems && existingItems.length > 0) {
                 const latestProds = useProductStore.getState().products;
                 const mappedItems: PurchaseItemRow[] = existingItems.map((item: any) => {
-                  const prod = latestProds.find((p) => p.id === Number(item.productId)) || products.find((p) => p.id === Number(item.productId));
+                  const prod = latestProds.find((p) => p.id === Number(item.productId)) ||
+                               products.find((p) => p.id === Number(item.productId)) ||
+                               item.product;
                   const cRate = item.conversionRate && Number(item.conversionRate) > 0 ? Number(item.conversionRate) : (prod?.conversionRate ? Number(prod.conversionRate) : 1);
                   const q = Number(item.quantity || 1);
                   const p = Number(item.unitPrice || 0);
@@ -271,28 +274,23 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   const baseUnit = (unitList || []).find((u: any) =>
                     String(u.id) === String(prod?.unitId || prod?.baseUnitId) ||
                     String(u.backendId) === String(prod?.unitId || prod?.baseUnitId)
-                  );
+                  ) || prod?.baseUnit || item?.product?.baseUnit;
                   const subUnit = (subUnitList || []).find((s: any) =>
                     (prod?.subUnitId && (String(s.id) === String(prod?.subUnitId) || String(s.backendId) === String(prod?.subUnitId))) ||
                     (prod?.subunitId && (String(s.id) === String(prod?.subunitId) || String(s.backendId) === String(prod?.subunitId)))
-                  );
+                  ) || prod?.subUnit || item?.product?.subUnit;
 
-                  const rawBase = (item.baseUnitName || item.unitName || item.unit || '').trim();
-                  const resolvedBaseUnitName = (rawBase && rawBase.toLowerCase() !== 'unit')
-                    ? rawBase
-                    : (baseUnit?.name || baseUnit?.shortName || (prod as any)?.baseUnitName || (prod as any)?.unit || (prod as any)?.unitName || 'Unit');
-
-                  const resolvedSubUnitName = item.subUnitName || subUnit?.name || (subUnit as any)?.shortName || (prod as any)?.subUnitName || prod?.subUnit?.name || undefined;
-                  const fallbackSubName = resolvedSubUnitName || 'Pcs';
+                  const resolvedBaseUnitName = resolveRealPurchaseUnit(item, prod, baseUnit);
+                  const resolvedSubUnitName = resolveRealPurchaseSubUnit(item, prod, subUnit);
 
                   const rawItemUnit = (item.unit || '').trim().toLowerCase();
                   const isSubByName = Boolean(rawItemUnit && (
-                    (resolvedSubUnitName && rawItemUnit === resolvedSubUnitName.toLowerCase()) ||
+                    rawItemUnit === resolvedSubUnitName.toLowerCase() ||
                     (subUnit?.name && rawItemUnit === subUnit.name.toLowerCase()) ||
                     ((subUnit as any)?.shortName && rawItemUnit === (subUnit as any).shortName.toLowerCase())
                   ));
                   const isBaseByName = Boolean(rawItemUnit && (
-                    (resolvedBaseUnitName && rawItemUnit === resolvedBaseUnitName.toLowerCase()) ||
+                    rawItemUnit === resolvedBaseUnitName.toLowerCase() ||
                     (baseUnit?.name && rawItemUnit === baseUnit.name.toLowerCase()) ||
                     (baseUnit?.shortName && rawItemUnit === baseUnit.shortName.toLowerCase())
                   ));
@@ -308,7 +306,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                     effectiveUnitType = 'base';
                   }
 
-                  const effectiveUnit = effectiveUnitType === 'sub' ? fallbackSubName : resolvedBaseUnitName;
+                  const effectiveUnit = effectiveUnitType === 'sub' ? resolvedSubUnitName : resolvedBaseUnitName;
 
                   return {
                     productId: Number(item.productId),
@@ -321,7 +319,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                     unit: effectiveUnit,
                     unitType: effectiveUnitType,
                     baseUnitName: resolvedBaseUnitName,
-                    subUnitName: fallbackSubName,
+                    subUnitName: resolvedSubUnitName,
                     conversionRate: cRate,
                     basePrice: effectiveUnitType === 'base' ? p : Number((p * cRate).toFixed(2)),
                     subPrice: effectiveUnitType === 'sub' ? p : (cRate > 0 ? Number((p / cRate).toFixed(2)) : p),
@@ -689,11 +687,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
     const cRate = product.conversionRate && Number(product.conversionRate) > 0 ? Number(product.conversionRate) : 1;
     const subPrice = cRate > 0 ? Number((basePrice / cRate).toFixed(2)) : basePrice;
 
-    const baseUnit = (unitList || []).find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId));
-    const subUnit = (subUnitList || []).find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId));
+    const baseUnit = (unitList || []).find((u: any) => String(u.id) === String(product.unitId || product.baseUnitId) || String(u.backendId) === String(product.unitId || product.baseUnitId)) || (product as any).baseUnit;
+    const subUnit = (subUnitList || []).find((s: any) => String(s.id) === String(product.subUnitId || product.subunitId) || String(s.backendId) === String(product.subUnitId || product.subunitId)) || (product as any).subUnit;
 
-    const baseUnitName = baseUnit?.name || baseUnit?.shortName || (product as any).baseUnitName || (product as any).unit || (product as any).unitName || 'Unit';
-    const subUnitName = subUnit?.name || (product as any).subUnitName || (product as any).subUnit?.name || 'Pcs';
+    const baseUnitName = resolveRealPurchaseUnit(product, product, baseUnit);
+    const subUnitName = resolveRealPurchaseSubUnit(product, product, subUnit);
 
     setItems((prev) => {
       const existingIndex = prev.findIndex((i) => Number(i.productId) === Number(product.id));
@@ -735,7 +733,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const handleToggleUnit = (index: number) => {
     const item = items[index];
     const nextType: 'base' | 'sub' = item.unitType === 'base' ? 'sub' : 'base';
-    const nextUnit = nextType === 'base' ? (item.baseUnitName || 'Unit') : (item.subUnitName || 'Pcs');
+    const nextUnit = nextType === 'base'
+      ? (item.baseUnitName || resolveRealPurchaseUnit(item))
+      : (item.subUnitName || resolveRealPurchaseSubUnit(item));
     const nextPrice = nextType === 'base' ? (item.basePrice || Number(item.unitPrice)) : (item.subPrice || Number(((parseFloat(String(item.unitPrice)) || 0) / (item.conversionRate || 1)).toFixed(2)));
     const updated = [...items];
     updated[index] = {
@@ -1296,11 +1296,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                               onPress={() => handleToggleUnit(index)}
                             >
                               <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>
-                                {item.unit || item.baseUnitName || 'Unit'} ⇄
+                                {item.unit || item.baseUnitName || 'Pcs'} ⇄
                               </Text>
                               {item.conversionRate && item.conversionRate > 1 ? (
                                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 9 }}>
-                                  1 {item.baseUnitName || 'Unit'} = {item.conversionRate} {item.subUnitName || 'Pcs'}
+                                  1 {item.baseUnitName || 'Pcs'} = {item.conversionRate} {item.subUnitName || 'Pcs'}
                                 </Text>
                               ) : null}
                             </TouchableOpacity>
