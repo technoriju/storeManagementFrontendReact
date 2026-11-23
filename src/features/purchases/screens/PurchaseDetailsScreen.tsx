@@ -7,6 +7,7 @@ import { ArrowLeft, PackageCheck, User, Calendar, FileText, DollarSign, Edit, Me
 import { SyncBadge } from '../../../shared/components/data-display/SyncBadge';
 import { AddPurchaseModal } from '../components/AddPurchaseModal';
 import { supplierRepository } from '../../../core/repositories/SupplierRepository';
+import { purchaseRepository } from '../../../core/repositories/PurchaseRepository';
 import { shareReportToWhatsApp } from '../../reports/utils/reportExportUtils';
 import { ReceiptPrintPreviewModal, ReceiptPrintData } from '../../pos/components/ReceiptPrintPreviewModal';
 import { SharePurchaseModal } from '../components/SharePurchaseModal';
@@ -32,11 +33,20 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
     }
   }, [purchase?.supplierId]);
 
-  const handleOpenPrintPreview = () => {
+  const handleOpenPrintPreview = async () => {
     if (!purchase) return;
+    let itemsToPrint = purchase.items || [];
+    if ((!itemsToPrint || itemsToPrint.length === 0) && purchase.id) {
+      try {
+        const fresh = await purchaseRepository.fetchByIdFromApi(purchase.id);
+        if (fresh?.items && fresh.items.length > 0) {
+          itemsToPrint = fresh.items;
+        }
+      } catch (_) {}
+    }
     const invNo = purchase.reference || purchase.invoiceNumber || `PUR-${purchase.id}`;
-    const itemsForPrint = (purchase.items || []).map((it: any, idx: number) => {
-      const baseUnit = it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || it.unit || 'Unit';
+    const itemsForPrint = (itemsToPrint || []).map((it: any, idx: number) => {
+      const baseUnit = it.baseUnitName || it.product?.baseUnitName || it.product?.unitName || (it.unit && it.unit.toLowerCase() !== 'unit' ? it.unit : undefined) || 'Unit';
       const subUnit = it.subUnit || it.subUnitName || it.product?.subUnitName;
       const uType = it.unitType || 'base';
       const displayUnit = (uType === 'sub' && subUnit) ? subUnit : (it.unit || it.unitName || baseUnit);
@@ -59,6 +69,8 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
         gst: Number(it.gst || 0),
         taxAmount: Number(it.taxAmount || 0),
         total: Number(it.total || 0),
+        product: it.product,
+        productUnit: it.productUnit,
         hsn: it.hsn || '',
       };
     });

@@ -150,6 +150,8 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           resolvedUnit = unitType === 'sub' ? (subUnit || 'Pcs') : (baseUnit || 'Unit');
         }
 
+        const effectiveBaseUnit = baseUnit || (unitType === 'base' && resolvedUnit && resolvedUnit.toLowerCase() !== 'unit' ? resolvedUnit : undefined);
+
         items.push({
           id: Number(row.id),
           purchaseId: Number(row.purchaseId),
@@ -163,7 +165,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           unitCost: Number(row.unitCost || 0),
           unit: resolvedUnit,
           unitName: resolvedUnit,
-          baseUnitName: baseUnit,
+          baseUnitName: effectiveBaseUnit,
           subUnit: subUnit,
           subUnitName: subUnit,
           unitType,
@@ -487,12 +489,14 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
           unitCost: Number(it.unitCost || unitPrice),
           unit: resolvedUnit,
           unitName: resolvedUnit,
-          baseUnitName,
+          baseUnitName: baseUnitName || (resolvedUnit && String(resolvedUnit).toLowerCase() !== 'unit' ? resolvedUnit : undefined),
           subUnit: subUnitName,
           subUnitName,
           unitType,
           conversionRate,
           total: itemTotal,
+          product: it.product,
+          productUnit: it.productUnit,
           createdAt: it.createdAt ? String(it.createdAt) : new Date().toISOString(),
           updatedAt: it.updatedAt ? String(it.updatedAt) : new Date().toISOString(),
           syncStatus: 'synced',
@@ -713,7 +717,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         }
       }
 
-      return await this.getById(purchase.id);
+      return { ...purchase, items: items.length > 0 ? items : (existing?.items || []) };
     } catch (e) {
       console.warn(`[PurchaseRepository] fetchByIdFromApi(${id}) error:`, e);
       if (typeof id === 'number' || /^\d+$/.test(String(id))) {
