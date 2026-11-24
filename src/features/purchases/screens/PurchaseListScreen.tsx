@@ -343,8 +343,64 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
     setSelectedPurchase({ ...purchase, items: cleanPurItems });
   };
 
+  const mapPurchaseToRow = useCallback((p: any) => ({
+    id: String(p.id),
+    supplierId: p.supplierId || p.supplier?.id,
+    supplierName: p.supplierName || p.supplier?.name || 'Unknown Supplier',
+    supplierPhone: p.supplierPhone || p.supplier?.phone || '',
+    supplierEmail: p.supplierEmail || p.supplier?.email || '',
+    supplierAddress: p.supplierAddress || p.supplier?.address || '',
+    supplierGstin: p.supplierGstin || p.supplier?.taxNumber || p.supplier?.taxId || p.supplier?.gstin || '',
+    reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
+    invoiceNumber: p.invoiceNumber || p.reference || `PO-${p.id}`,
+    date: p.date || p.purchaseDate?.split('T')[0] || p.createdAt?.split('T')[0] || '',
+    createdAt: p.createdAt || p.purchaseDate || p.date || '',
+    status: p.status || 'Received',
+    subtotal: Number(p.subtotal || 0),
+    discount: Number(p.discount || 0),
+    gst: Number(p.gst || 0),
+    orderTax: Number(p.orderTax || 0),
+    shipping: Number(p.shipping || 0),
+    total: Number(p.grandTotal ?? p.total ?? 0),
+    paid: Number(p.paid || 0),
+    due: Number(p.due || 0),
+    paymentStatus: p.paymentStatus || 'Unpaid',
+    paymentMethod: p.paymentMethod || 'Cash',
+    items: p.items || [],
+    previousDue: p.previousDue !== undefined ? Number(p.previousDue) : 0,
+    advancePayment: p.advancePayment !== undefined ? Number(p.advancePayment) : 0,
+    showPreviousBalance: p.showPreviousBalance !== undefined ? Boolean(p.showPreviousBalance) : false,
+    syncStatus: p.syncStatus || 'synced',
+  }), []);
+
   const loadData = useCallback(async (targetPage: number, targetLimit: number, targetSearch: string) => {
-    setIsLoadingData(true);
+    // 1. Instant local cache render on page 1 for zero-wait display after submit
+    if (targetPage === 1) {
+      try {
+        const localQuick = await purchaseRepository.getPaginated({ page: 1, limit: targetLimit, search: targetSearch });
+        if (localQuick?.data && localQuick.data.length > 0) {
+          const mappedLocal = localQuick.data
+            .filter((p) => !dismissedPurchaseIds.includes(String(p.id)))
+            .map(mapPurchaseToRow)
+            .sort((a, b) => {
+              const timeA = new Date(a.date || a.createdAt || 0).getTime();
+              const timeB = new Date(b.date || b.createdAt || 0).getTime();
+              if (timeB !== timeA) return timeB - timeA;
+              const cA = new Date(a.createdAt || 0).getTime();
+              const cB = new Date(b.createdAt || 0).getTime();
+              if (cB !== cA) return cB - cA;
+              return Number(b.id || 0) - Number(a.id || 0);
+            });
+          setTablePurchases(mappedLocal);
+          setTotalItems(localQuick.total);
+          setTotalPages(localQuick.totalPages);
+        }
+      } catch (_) {}
+    } else {
+      setIsLoadingData(true);
+    }
+
+    // 2. Fetch latest server/sync paginated data
     try {
       const res = await fetchPaginatedPurchases({
         page: targetPage,
@@ -353,34 +409,16 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
       });
       const mapped = res.data
         .filter((p) => !dismissedPurchaseIds.includes(String(p.id)))
-        .map((p) => ({
-          id: String(p.id),
-          supplierId: p.supplierId || (p as any).supplier?.id,
-          supplierName: p.supplierName || (p as any).supplier?.name || 'Unknown Supplier',
-          supplierPhone: (p as any).supplierPhone || (p as any).supplier?.phone || '',
-          supplierEmail: (p as any).supplierEmail || (p as any).supplier?.email || '',
-          supplierAddress: (p as any).supplierAddress || (p as any).supplier?.address || '',
-          supplierGstin: (p as any).supplierGstin || (p as any).supplier?.taxNumber || (p as any).supplier?.taxId || (p as any).supplier?.gstin || '',
-          reference: p.reference || p.invoiceNumber || `PO-${p.id}`,
-          invoiceNumber: p.invoiceNumber || p.reference || `PO-${p.id}`,
-          date: p.date || (p as any).purchaseDate?.split('T')[0] || p.createdAt?.split('T')[0] || '',
-          status: p.status || 'Received',
-          subtotal: Number(p.subtotal || 0),
-          discount: Number(p.discount || 0),
-          gst: Number(p.gst || 0),
-          orderTax: Number(p.orderTax || 0),
-          shipping: Number(p.shipping || 0),
-          total: Number((p as any).grandTotal ?? p.total ?? 0),
-          paid: Number(p.paid || 0),
-          due: Number(p.due || 0),
-          paymentStatus: p.paymentStatus || 'Unpaid',
-          paymentMethod: (p as any).paymentMethod || 'Cash',
-          items: p.items || [],
-          previousDue: p.previousDue !== undefined ? Number(p.previousDue) : 0,
-          advancePayment: p.advancePayment !== undefined ? Number(p.advancePayment) : 0,
-          showPreviousBalance: p.showPreviousBalance !== undefined ? Boolean(p.showPreviousBalance) : false,
-          syncStatus: p.syncStatus || 'synced',
-        }));
+        .map(mapPurchaseToRow)
+        .sort((a, b) => {
+          const timeA = new Date(a.date || a.createdAt || 0).getTime();
+          const timeB = new Date(b.date || b.createdAt || 0).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          const cA = new Date(a.createdAt || 0).getTime();
+          const cB = new Date(b.createdAt || 0).getTime();
+          if (cB !== cA) return cB - cA;
+          return Number(b.id || 0) - Number(a.id || 0);
+        });
       setTablePurchases(mapped);
       setTotalItems(res.total);
       setTotalPages(res.totalPages);
@@ -389,7 +427,7 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
     } finally {
       setIsLoadingData(false);
     }
-  }, [dismissedPurchaseIds]);
+  }, [dismissedPurchaseIds, mapPurchaseToRow]);
 
   useEffect(() => {
     loadData(page, rowsPerPage, searchQuery);
@@ -524,10 +562,21 @@ export const PurchaseListScreen: React.FC<Props> = ({ onNavigate }) => {
   const importBtnLabel = !isMobile ? 'Import Purchase' : (windowWidth >= 480 ? 'Import Purchase' : 'Import');
 
   const filteredPurchases = useMemo(() => {
-    if (!selectedPaymentStatus) return tablePurchases;
-    return tablePurchases.filter(
-      (p) => p.paymentStatus?.toLowerCase() === selectedPaymentStatus.toLowerCase()
-    );
+    let list = tablePurchases;
+    if (selectedPaymentStatus) {
+      list = list.filter(
+        (p) => p.paymentStatus?.toLowerCase() === selectedPaymentStatus.toLowerCase()
+      );
+    }
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.date || a.createdAt || 0).getTime();
+      const timeB = new Date(b.date || b.createdAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      const cA = new Date(a.createdAt || 0).getTime();
+      const cB = new Date(b.createdAt || 0).getTime();
+      if (cB !== cA) return cB - cA;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
   }, [tablePurchases, selectedPaymentStatus]);
 
   const paymentStatusOptions = [

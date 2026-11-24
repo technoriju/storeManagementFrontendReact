@@ -35,38 +35,64 @@ export const fetchPaginatedPurchases = async (params: {
     });
 
     const raw = response.data;
+    let serverData: Purchase[] = [];
+    let serverTotal = 0;
+    let serverTotalPages = 1;
+
     if (raw?.data && typeof raw.data === 'object' && Array.isArray(raw.data.data)) {
       const p = raw.data;
-      return {
-        data: p.data,
-        total: Number(p.total ?? p.data.length),
-        page: Number(p.page ?? page),
-        limit: Number(p.limit ?? limit),
-        totalPages: Number(p.totalPages ?? Math.max(1, Math.ceil((p.total ?? p.data.length) / limit))),
-      };
+      serverData = p.data;
+      serverTotal = Number(p.total ?? p.data.length);
+      serverTotalPages = Number(p.totalPages ?? Math.max(1, Math.ceil(serverTotal / limit)));
+    } else if (raw && typeof raw === 'object' && Array.isArray(raw.data) && (raw.total !== undefined || raw.totalPages !== undefined)) {
+      serverData = raw.data;
+      serverTotal = Number(raw.total ?? raw.data.length);
+      serverTotalPages = Number(raw.totalPages ?? Math.max(1, Math.ceil(serverTotal / limit)));
+    } else {
+      const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
+      if (Array.isArray(list)) {
+        const offset = (page - 1) * limit;
+        serverData = list.slice(offset, offset + limit);
+        serverTotal = list.length;
+        serverTotalPages = Math.max(1, Math.ceil(list.length / limit));
+      }
     }
 
-    if (raw && typeof raw === 'object' && Array.isArray(raw.data) && (raw.total !== undefined || raw.totalPages !== undefined)) {
-      return {
-        data: raw.data,
-        total: Number(raw.total ?? raw.data.length),
-        page: Number(raw.page ?? page),
-        limit: Number(raw.limit ?? limit),
-        totalPages: Number(raw.totalPages ?? Math.max(1, Math.ceil((raw.total ?? raw.data.length) / limit))),
-      };
-    }
+    // Merge any local pending purchases that aren't on the server yet
+    try {
+      const localPending = await purchaseRepository.getPendingPurchases(search);
+      if (localPending.length > 0) {
+        const existingRefs = new Set(
+          serverData.map((p: any) => String(p.invoiceNumber || p.reference || p.id).toUpperCase())
+        );
+        const missingLocals = localPending.filter(
+          (p: any) => !existingRefs.has(String(p.invoiceNumber || p.reference || p.id).toUpperCase())
+        );
+        if (missingLocals.length > 0) {
+          serverData = [...missingLocals, ...serverData];
+          serverTotal += missingLocals.length;
+          serverTotalPages = Math.max(1, Math.ceil(serverTotal / limit));
+        }
+      }
+    } catch (_) {}
 
-    const list = Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw) ? raw : null);
-    if (Array.isArray(list)) {
-      const offset = (page - 1) * limit;
-      return {
-        data: list.slice(offset, offset + limit),
-        total: list.length,
-        page,
-        limit,
-        totalPages: Math.max(1, Math.ceil(list.length / limit)),
-      };
-    }
+    serverData.sort((a: any, b: any) => {
+      const timeA = new Date(a.date || a.purchaseDate || a.createdAt || 0).getTime();
+      const timeB = new Date(b.date || b.purchaseDate || b.createdAt || 0).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      const cA = new Date(a.createdAt || 0).getTime();
+      const cB = new Date(b.createdAt || 0).getTime();
+      if (cB !== cA) return cB - cA;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
+
+    return {
+      data: serverData,
+      total: serverTotal,
+      page,
+      limit,
+      totalPages: serverTotalPages,
+    };
   } catch (err: any) {
     console.warn('[fetchPaginatedPurchases] API failed, falling back to SQLite:', err.message);
   }
