@@ -177,10 +177,26 @@ export const useCreatePurchase = () => {
         );
         return [newPurchase, ...filtered];
       });
-      queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
+      // Update only modified items in product store in memory (avoids heavy 1,200+ product SQLite resync)
       try {
-        useProductStore.getState().fetchProducts().catch(() => {});
+        const store = useProductStore.getState();
+        if (newPurchase.items && Array.isArray(newPurchase.items)) {
+          for (const it of newPurchase.items) {
+            const pId = Number(it.productId);
+            const found = store.products.find((p) => Number(p.id) === pId);
+            if (found) {
+              const conversion = Number(it.conversionRate || 1);
+              const addedQty = it.unitType === 'base'
+                ? Number(it.quantity || 0) * conversion
+                : Number(it.quantity || 0);
+              store.updateProduct({
+                ...found,
+                stockQuantity: Number(found.stockQuantity || 0) + addedQty,
+              });
+            }
+          }
+        }
       } catch (_) {}
     },
   });
@@ -206,11 +222,7 @@ export const useUpdatePurchase = () => {
         if (!old) return [updatedPurchase];
         return old.map((item) => (item.id === updatedPurchase.id ? { ...item, ...updatedPurchase } : item));
       });
-      queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
-      try {
-        useProductStore.getState().fetchProducts().catch(() => {});
-      } catch (_) {}
     },
   });
 };
@@ -227,11 +239,7 @@ export const useDeletePurchase = () => {
       queryClient.setQueryData(PURCHASE_QUERY_KEY, (old: Purchase[] | undefined) => {
         return old ? old.filter((item) => item.id !== deletedId) : [];
       });
-      queryClient.invalidateQueries({ queryKey: PURCHASE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: SUPPLIER_QUERY_KEY });
-      try {
-        useProductStore.getState().fetchProducts().catch(() => {});
-      } catch (_) {}
     },
   });
 };
