@@ -4,6 +4,8 @@
  */
 
 export function resolveRealPurchaseUnit(item: any, prod?: any, baseUnit?: any): string {
+  const officialBase = prod?.baseUnit?.name || prod?.baseUnitName || prod?.unitName || baseUnit?.name || item?.baseUnitName || item?.product?.baseUnit?.name || item?.product?.baseUnitName || item?.product?.unitName;
+
   const candidates = [
     item?.unit,
     item?.unitName,
@@ -25,11 +27,16 @@ export function resolveRealPurchaseUnit(item: any, prod?: any, baseUnit?: any): 
     baseUnit?.shortName,
   ];
 
+  const hasPices = typeof officialBase === 'string' && officialBase.trim().toLowerCase() === 'pices';
+
   for (const c of candidates) {
     if (typeof c === 'string' && c.trim()) {
       const val = c.trim();
       const lower = val.toLowerCase();
       if (lower !== 'unit' && lower !== 'n/a' && lower !== 'null' && lower !== 'undefined') {
+        if (lower === 'piece' && (hasPices || candidates.some(cand => typeof cand === 'string' && cand.trim().toLowerCase() === 'pices'))) {
+          return 'PICES';
+        }
         return val;
       }
     }

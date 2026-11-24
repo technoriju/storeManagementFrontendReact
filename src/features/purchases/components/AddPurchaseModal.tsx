@@ -284,12 +284,13 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
                   const resolvedSubUnitName = resolveRealPurchaseSubUnit(item, prod, subUnit);
 
                   const rawItemUnit = (item.unit || '').trim().toLowerCase();
-                  const isSubByName = Boolean(rawItemUnit && (
+                  const isPieceMismatch = rawItemUnit === 'piece' && resolvedBaseUnitName.toLowerCase() === 'pices';
+                  const isSubByName = !isPieceMismatch && Boolean(rawItemUnit && (
                     rawItemUnit === resolvedSubUnitName.toLowerCase() ||
                     (subUnit?.name && rawItemUnit === subUnit.name.toLowerCase()) ||
                     ((subUnit as any)?.shortName && rawItemUnit === (subUnit as any).shortName.toLowerCase())
                   ));
-                  const isBaseByName = Boolean(rawItemUnit && (
+                  const isBaseByName = isPieceMismatch || Boolean(rawItemUnit && (
                     rawItemUnit === resolvedBaseUnitName.toLowerCase() ||
                     (baseUnit?.name && rawItemUnit === baseUnit.name.toLowerCase()) ||
                     (baseUnit?.shortName && rawItemUnit === baseUnit.shortName.toLowerCase())

@@ -50,7 +50,8 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
       const realBase = resolveRealPurchaseUnit(it, it.product);
       const realSub = resolveRealPurchaseSubUnit(it, it.product);
       const uType = it.unitType || 'base';
-      const displayUnit = (uType === 'sub' && realSub) ? realSub : (it.unit && it.unit.toLowerCase() !== 'unit' ? it.unit : realBase);
+      const cleanRawUnit = (it.unit && it.unit.toLowerCase() !== 'unit' && it.unit.toLowerCase() !== 'piece') ? it.unit : realBase;
+      const displayUnit = (uType === 'sub' && realSub) ? realSub : cleanRawUnit;
       return {
         productId: it.productId,
         productName: it.productName || `Item #${idx + 1}`,
@@ -307,7 +308,7 @@ export const PurchaseDetailsScreen = ({ onNavigate, entityId }: any) => {
                           {item.productName || `Product #${item.productId}`}
                         </Text>
                         <Text style={[styles.td, { width: 80 }]}>
-                          {item.quantity} {resolveActivePurchaseUnit(item, item.product)}
+                          {item.quantity} {resolveActivePurchaseUnit(item, (item as any).product)}
                         </Text>
                         <Text style={[styles.td, { width: 100 }]}>₹{item.unitPrice?.toFixed(2)}</Text>
                         <Text style={[styles.td, { width: 90 }]}>₹{item.discount?.toFixed(2)}</Text>

@@ -192,7 +192,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
 
   public override async getAll(): Promise<Purchase[]> {
     try {
-      const res = await db.execute(`SELECT * FROM ${this.tableName} ORDER BY id DESC`);
+      const res = await db.execute(`SELECT * FROM ${this.tableName} ORDER BY date DESC, createdAt DESC, id DESC`);
       const items: Purchase[] = [];
       let rawRows: any[] = [];
       if (res.rows && Array.isArray(res.rows)) {
@@ -915,9 +915,17 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // Always queue in outbox for reliable auto-sync
+    // Queue in outbox first so we never lose data if network fails
     await outboxRepo.add(this.tableName, purchaseId, 'CREATE', { purchase, items: fullItems });
-    this.requestSync();
+
+    // Perform direct API sync immediately if online
+    try {
+      await this.syncWithApi({ ...purchase, items: fullItems }, 'insert');
+      await outboxRepo.removeForEntity(this.tableName, purchaseId);
+    } catch (e) {
+      console.warn('Direct API purchase create error (will sync via outbox):', e);
+      this.requestSync();
+    }
 
     return { ...purchase, items: fullItems };
   }
@@ -1102,31 +1110,16 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
     }
 
     // 6. Outbox & API sync
+    // Queue in outbox first so we never lose data if network fails
     await outboxRepo.add(this.tableName, purchaseId, 'UPDATE', { purchase: updatedPurchase, items: fullItems });
-    this.requestSync();
 
+    // Perform direct API sync immediately if online
     try {
-      const targetServerId = updatedPurchase.invoiceNumber || updatedPurchase.reference || purchaseId;
-      const apiPayload = {
-        ...updatedPurchase,
-        subTotal: Number(updatedPurchase.subtotal || 0),
-        taxTotal: Number((updatedPurchase.orderTax || 0) + (updatedPurchase.gst || 0)),
-        discountTotal: Number(updatedPurchase.discount || 0),
-        grandTotal: Number(updatedPurchase.total || 0),
-        items: fullItems.map((it) => ({
-          productId: String(it.productId),
-          quantity: Number(it.quantity),
-          unitPrice: Number(it.unitPrice),
-          discount: Number(it.discount || 0),
-          taxAmount: Number(it.taxAmount || 0),
-          total: Number(it.total),
-          unitType: it.unitType,
-          conversionRate: Number(it.conversionRate || 1),
-        })),
-      };
-      await apiClient.put(API_ENDPOINTS.PURCHASES.BY_ID(targetServerId), apiPayload);
+      await this.syncWithApi({ ...updatedPurchase, items: fullItems, id: purchaseId } as Purchase, 'update');
+      await outboxRepo.removeForEntity(this.tableName, purchaseId);
     } catch (e) {
       console.warn('Direct API purchase update error (will sync via outbox):', e);
+      this.requestSync();
     }
 
     return { ...updatedPurchase, items: fullItems };
@@ -1431,7 +1424,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
 
       const dataRes = await db.execute(
-        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY date DESC, createdAt DESC, id DESC LIMIT ? OFFSET ?`,
         [...queryParams, limit, offset]
       );
       const rows = this.extractRows(dataRes);
@@ -1459,6 +1452,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
             (p.paymentStatus && p.paymentStatus.toLowerCase().includes(s))
         );
       }
+      filtered.sort((a, b) => {
+        const timeA = new Date(a.date || a.createdAt || 0).getTime();
+        const timeB = new Date(b.date || b.createdAt || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        const cA = new Date(a.createdAt || 0).getTime();
+        const cB = new Date(b.createdAt || 0).getTime();
+        if (cB !== cA) return cB - cA;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
       const total = filtered.length;
       return {
         data: filtered.slice(offset, offset + limit),
@@ -1467,6 +1469,23 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         limit,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       };
+    }
+  }
+
+  public async getPendingPurchases(search?: string): Promise<Purchase[]> {
+    try {
+      const s = (search || '').trim();
+      const whereClause = s ? `AND (invoiceNumber LIKE ? OR reference LIKE ? OR supplierName LIKE ?)` : '';
+      const params = s ? [`%${s}%`, `%${s}%`, `%${s}%`] : [];
+      const res = await db.execute(
+        `SELECT * FROM ${this.tableName} WHERE (syncStatus != 'synced' OR syncStatus IS NULL) ${whereClause} ORDER BY date DESC, createdAt DESC, id DESC`,
+        params
+      );
+      const rows = this.extractRows(res);
+      return rows.map((r) => this.fromRow(r));
+    } catch (e) {
+      console.warn('Failed to get pending purchases:', e);
+      return [];
     }
   }
 
