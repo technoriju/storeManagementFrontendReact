@@ -88,6 +88,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
   const [orderDiscount, setOrderDiscount] = useState<string>('0');
   const [shipping, setShipping] = useState<string>('0');
   const [description, setDescription] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Quick Add Supplier State
   const [showAddSupplierModal, setShowAddSupplierModal] = useState<boolean>(false);
@@ -813,6 +814,9 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
 
   // Submit Handler
   const handleSubmit = async () => {
+    if (isSubmitting || createPurchaseMutation.isPending || updatePurchaseMutation.isPending) {
+      return;
+    }
     setErrorMessage(null);
     if (!supplierId) {
       setErrorMessage('Please select a supplier.');
@@ -823,6 +827,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const parsedBalanceAmt = Math.abs(parseFloat(previousBalanceAmount) || 0);
       const prevDueVal = showPreviousBalance && balanceType === 'due' ? parsedBalanceAmt : 0;
@@ -873,9 +878,11 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
         }
       }
 
+      const clientRequestId = `req_pur_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
       const purchasePayload = {
         invoiceNumber: reference || `PO-${Date.now().toString().slice(-6)}`,
         reference: reference || `PO-${Date.now().toString().slice(-6)}`,
+        clientRequestId,
         supplierId: effectiveSupplierId,
         supplierName: suppName || 'Unknown Supplier',
         date: date || getLocalDateString(),
@@ -939,6 +946,8 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
       Alert.alert('Success', editPurchaseId ? 'Purchase updated successfully!' : 'Purchase created successfully!');
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to save purchase.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1709,7 +1718,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
             />
             <AppButton
               title={
-                createPurchaseMutation.isPending || updatePurchaseMutation.isPending
+                isSubmitting || createPurchaseMutation.isPending || updatePurchaseMutation.isPending
                   ? 'Saving...'
                   : editPurchaseId
                   ? 'Update Purchase'
@@ -1717,7 +1726,7 @@ export const AddPurchaseModal: React.FC<Props> = ({ visible, onClose, editPurcha
               }
               size="small"
               onPress={handleSubmit}
-              disabled={createPurchaseMutation.isPending || updatePurchaseMutation.isPending}
+              disabled={isSubmitting || createPurchaseMutation.isPending || updatePurchaseMutation.isPending}
               style={[{ backgroundColor: '#F97316', borderWidth: 0, minWidth: isMobile ? 120 : 120, height: 34 }, isMobile && { width: '100%' }]}
               textStyle={{ fontSize: 13 }}
             />

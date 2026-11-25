@@ -12,15 +12,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
   protected tableName = 'purchases';
 
   protected getInsertColumns(): string {
-    return 'id, invoiceNumber, reference, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, notes, previousDue, advancePayment, showPreviousBalance, createdAt, updatedAt, syncStatus';
+    return 'id, invoiceNumber, reference, supplierId, supplierName, date, subtotal, discount, orderTax, shipping, gst, total, paid, due, status, paymentStatus, notes, previousDue, advancePayment, showPreviousBalance, clientRequestId, createdAt, updatedAt, syncStatus';
   }
 
   protected getInsertPlaceholders(): string {
-    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    return '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
   }
 
   protected getUpdateSet(): string {
-    return 'invoiceNumber = ?, reference = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, notes = ?, previousDue = ?, advancePayment = ?, showPreviousBalance = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
+    return 'invoiceNumber = ?, reference = ?, supplierId = ?, supplierName = ?, date = ?, subtotal = ?, discount = ?, orderTax = ?, shipping = ?, gst = ?, total = ?, paid = ?, due = ?, status = ?, paymentStatus = ?, notes = ?, previousDue = ?, advancePayment = ?, showPreviousBalance = ?, clientRequestId = ?, createdAt = ?, updatedAt = ?, syncStatus = ?';
   }
 
   protected toRow(entity: Purchase): any[] {
@@ -45,6 +45,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       entity.previousDue || 0,
       entity.advancePayment || 0,
       entity.showPreviousBalance ? 1 : 0,
+      entity.clientRequestId || null,
       entity.createdAt,
       entity.updatedAt,
       entity.syncStatus || 'synced'
@@ -73,6 +74,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       previousDue: Number(row.previousDue || 0),
       advancePayment: Number(row.advancePayment || 0),
       showPreviousBalance: Boolean(row.showPreviousBalance),
+      clientRequestId: row.clientRequestId ? String(row.clientRequestId) : undefined,
       createdAt: String(row.createdAt || new Date().toISOString()),
       updatedAt: String(row.updatedAt || new Date().toISOString()),
       syncStatus: (row.syncStatus as any) || 'synced'
@@ -277,6 +279,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         previousDue: entity.previousDue !== undefined ? Number(entity.previousDue) : 0,
         advancePayment: entity.advancePayment !== undefined ? Number(entity.advancePayment) : 0,
         showPreviousBalance: Boolean(entity.showPreviousBalance),
+        clientRequestId: entity.clientRequestId || undefined,
         items: items.map((it: any) => ({
           productId: Number(it.productId),
           quantity: Number(it.quantity),
@@ -308,8 +311,15 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
         const body = response?.data?.data || response?.data || {};
         const returnedId = Number(body.id || body._id);
         if (returnedId && returnedId !== entity.id && Number(entity.id) > 1000000000000) {
-          await db.execute(`UPDATE purchases SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
-          await db.execute(`UPDATE purchase_items SET purchaseId = ?, syncStatus = 'synced' WHERE purchaseId = ?`, [returnedId, entity.id]);
+          const existingRow = await db.execute(`SELECT id FROM purchases WHERE id = ? LIMIT 1`, [returnedId]);
+          const existingRows = this.extractRows(existingRow);
+          if (existingRows.length > 0) {
+            await db.execute(`DELETE FROM purchases WHERE id = ?`, [entity.id]);
+            await db.execute(`DELETE FROM purchase_items WHERE purchaseId = ?`, [entity.id]);
+          } else {
+            await db.execute(`UPDATE purchases SET id = ?, syncStatus = 'synced' WHERE id = ?`, [returnedId, entity.id]);
+            await db.execute(`UPDATE purchase_items SET purchaseId = ?, syncStatus = 'synced' WHERE purchaseId = ?`, [returnedId, entity.id]);
+          }
           await db.execute(`UPDATE purchase_returns SET purchaseId = ? WHERE purchaseId = ?`, [returnedId, entity.id]);
           await outboxRepo.rebaseEntity(this.tableName, entity.id, returnedId, returnedId);
         } else {
@@ -774,10 +784,12 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
   ): Promise<Purchase> {
     const now = new Date().toISOString();
     const purchaseId = Date.now() + Math.floor(Math.random() * 1000);
+    const clientRequestId = purchaseData.clientRequestId || `pur_req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     const purchase: Purchase = {
       ...purchaseData,
       id: purchaseId,
+      clientRequestId,
       createdAt: now,
       updatedAt: now,
       syncStatus: 'pending_insert'
@@ -915,8 +927,9 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       }
     }
 
-    // Queue in outbox first so we never lose data if network fails
-    await outboxRepo.add(this.tableName, purchaseId, 'CREATE', { purchase, items: fullItems });
+    // Queue in outbox as IN_FLIGHT so background SyncEngine does not process it concurrently with direct API sync
+    const outboxItem = await outboxRepo.add(this.tableName, purchaseId, 'CREATE', { purchase, items: fullItems });
+    await outboxRepo.updateStatus(outboxItem.id, 'IN_FLIGHT');
 
     // Perform direct API sync immediately if online
     try {
@@ -924,6 +937,7 @@ export class PurchaseRepository extends BaseRepository<Purchase> {
       await outboxRepo.removeForEntity(this.tableName, purchaseId);
     } catch (e) {
       console.warn('Direct API purchase create error (will sync via outbox):', e);
+      await outboxRepo.updateStatus(outboxItem.id, 'PENDING');
       this.requestSync();
     }
 

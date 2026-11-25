@@ -201,6 +201,7 @@ export interface Purchase extends BaseEntity {
   previousDue?: number;
   advancePayment?: number;
   showPreviousBalance?: boolean;
+  clientRequestId?: string;
   items?: PurchaseItem[];
 }
 
