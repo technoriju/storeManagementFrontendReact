@@ -214,6 +214,8 @@ export const initializeDatabase = () => {
       'ALTER TABLE purchases ADD COLUMN previousDue REAL DEFAULT 0',
       'ALTER TABLE purchases ADD COLUMN advancePayment REAL DEFAULT 0',
       'ALTER TABLE purchases ADD COLUMN showPreviousBalance INTEGER DEFAULT 0',
+      'ALTER TABLE purchases ADD COLUMN clientRequestId TEXT',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_purchases_client_request_id ON purchases(clientRequestId)',
       'ALTER TABLE sale_items ADD COLUMN brandName TEXT',
       'ALTER TABLE sale_items ADD COLUMN subUnitName TEXT',
       'ALTER TABLE expenses ADD COLUMN backendId INTEGER',
@@ -345,6 +347,7 @@ export const initializeDatabase = () => {
         previousDue REAL DEFAULT 0,
         advancePayment REAL DEFAULT 0,
         showPreviousBalance INTEGER DEFAULT 0,
+        clientRequestId TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
@@ -397,6 +400,7 @@ export const initializeDatabase = () => {
         previousDue REAL DEFAULT 0,
         advancePayment REAL DEFAULT 0,
         showPreviousBalance INTEGER DEFAULT 0,
+        clientRequestId TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
         syncStatus TEXT DEFAULT 'synced'
